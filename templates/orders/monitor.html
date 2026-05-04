@@ -1,0 +1,2326 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#f1f5f9">
+    <title>Monitor de Pedidos - Control Tower SGA</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/monitor.css') }}">
+    <script defer src="{{ url_for('static', filename='js/alpine.min.js') }}"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
+
+    <style>
+        body {
+            overflow: hidden;
+            margin: 0;
+            font-family: 'Fira Sans', sans-serif;
+        }
+
+        /* ── Cards ───────────────────────────────────── */
+        .order-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            transition: all 0.25s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .order-card:hover {
+            border-color: #cbd5e1;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+            transform: translateY(-1px);
+        }
+
+        .order-client-block {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 10px 12px;
+            margin-bottom: 10px;
+        }
+
+        .order-meta-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            color: #64748b;
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .order-action-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            transition: color 0.2s ease;
+        }
+
+        .order-action-arrow {
+            transition: transform 0.2s ease;
+        }
+
+        .delivery-highlight {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 12px;
+            margin-bottom: 10px;
+            border-radius: 12px;
+            border: 1px solid #cbd5e1;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        }
+
+        .delivery-label {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: #94a3b8;
+        }
+
+        .delivery-date {
+            font-size: 16px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            color: #334155;
+            line-height: 1;
+        }
+
+        .card-meta-label {
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: #94a3b8;
+        }
+
+        /* Status accent — left bar */
+        .order-card .accent-bar {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            border-radius: 12px 0 0 12px;
+        }
+
+        .accent-yellow {
+            background: #f59e0b;
+        }
+
+        .accent-blue {
+            background: #3b82f6;
+        }
+
+        .accent-green {
+            background: #22c55e;
+        }
+
+        /* ── Header bar ───────────────────────────────── */
+        .header-bar {
+            background: #ffffff;
+            border-bottom: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        }
+
+        /* ── Scrollbar ────────────────────────────────── */
+        .clean-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .clean-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .clean-scroll::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+
+        .clean-scroll::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* ── Divider ──────────────────────────────────── */
+        .col-divider {
+            width: 1px;
+            background: #e2e8f0;
+        }
+
+        /* ── Card entrance animation ─────────────────── */
+        @keyframes cardIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .card-animate {
+            animation: cardIn 0.3s ease-out both;
+        }
+
+        /* ── NEW ORDER — slide-in from top + glow ─────── */
+        @keyframes newOrderIn {
+            0% {
+                opacity: 0;
+                transform: translateY(-40px) scale(0.96);
+            }
+
+            50% {
+                opacity: 1;
+                transform: translateY(4px) scale(1.01);
+            }
+
+            100% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        @keyframes glowPulse {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+            }
+
+            30% {
+                box-shadow: 0 0 20px 4px rgba(59, 130, 246, 0.25);
+            }
+
+            60% {
+                box-shadow: 0 0 10px 2px rgba(59, 130, 246, 0.10);
+            }
+        }
+
+        .new-order-enter {
+            animation: newOrderIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both,
+                glowPulse 2s ease-in-out;
+            border-color: #3b82f6 !important;
+        }
+
+        .new-order-enter .accent-bar {
+            background: #3b82f6 !important;
+            width: 6px !important;
+        }
+
+        /* ── Toast notification ───────────────────────── */
+        @keyframes toastSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes toastSlideOut {
+            from {
+                opacity: 1;
+                transform: translateY(0);
+            }
+
+            to {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+        }
+
+        .toast-enter {
+            animation: toastSlideIn 0.35s ease-out both;
+        }
+
+        .toast-exit {
+            animation: toastSlideOut 0.3s ease-in both;
+        }
+
+        /* ── Diagrama de Relaciones SAP ── */
+        .sap-node {
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 14px 24px;
+            min-width: 150px;
+            text-align: center;
+            position: relative;
+            z-index: 2;
+        }
+
+        .sap-node.active {
+            border-color: #3b82f6;
+            background: #eff6ff;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+        }
+
+        .sap-edge {
+            flex: 1;
+            height: 2px;
+            background: #e2e8f0;
+            position: relative;
+            z-index: 1;
+            min-width: 40px;
+        }
+
+        .sap-edge::after {
+            content: '▶';
+            position: absolute;
+            right: -2px;
+            top: -10px;
+            color: #cbd5e1;
+            font-size: 14px;
+        }
+
+        .sap-edge.active {
+            background: #3b82f6;
+        }
+
+        .sap-edge.active::after {
+            color: #3b82f6;
+        }
+
+        .relationship-map-inline {
+            margin-bottom: 14px;
+            padding: 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            background: linear-gradient(180deg, #fbfdff 0%, #f8fafc 100%);
+        }
+
+        .relationship-map-row {
+            display: flex;
+            align-items: center;
+            min-width: max-content;
+            gap: 0;
+            overflow-x: auto;
+            padding-bottom: 2px;
+        }
+
+        .sap-node--mini {
+            min-width: 120px;
+            padding: 10px 12px;
+            border-width: 1px;
+            border-radius: 12px;
+            box-shadow: none;
+        }
+
+        .sap-node--mini .sap-node-kicker {
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #94a3b8;
+            margin-bottom: 6px;
+        }
+
+        .sap-node--mini .sap-node-title {
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        .sap-node--mini .sap-node-meta {
+            margin-top: 8px;
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            color: #334155;
+        }
+
+        .sap-edge--mini {
+            min-width: 34px;
+            height: 1px;
+        }
+
+        .sap-edge--mini::after {
+            top: -9px;
+            font-size: 12px;
+        }
+
+        /* ── Status badges ────────────────────────────── */
+        .badge-pending {
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fcd34d;
+        }
+
+        .badge-picking {
+            background: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #93c5fd;
+        }
+
+        .badge-ready {
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #86efac;
+        }
+
+        .badge-prepared {
+            background: #e0f2fe;
+            color: #0369a1;
+            border: 1px solid #bae6fd;
+        }
+
+        .badge-shipped {
+            background: #ccfbf1;
+            color: #0f766e;
+            border: 1px solid #99f6e4;
+        }
+
+        /* ── Modal overlay ────────────────────────────── */
+        .modal-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+        }
+
+        [x-cloak] {
+            display: none !important;
+        }
+
+        /* ── Violet utilities (not in compiled CSS) ── */
+        .bg-violet-50 {
+            background-color: #f5f3ff;
+        }
+
+        .bg-violet-100 {
+            background-color: #ede9fe;
+        }
+
+        .bg-violet-500 {
+            background-color: #8b5cf6;
+        }
+
+        .text-violet-600 {
+            color: #7c3aed;
+        }
+
+        .text-violet-700 {
+            color: #6d28d9;
+        }
+
+        .border-violet-200 {
+            border-color: #ddd6fe;
+        }
+
+        .border-violet-300 {
+            border-color: #c4b5fd;
+        }
+
+        /* ── Missing emerald utilities ── */
+        .bg-emerald-100 {
+            background-color: #d1fae5;
+        }
+
+        .border-emerald-200 {
+            border-color: #a7f3d0;
+        }
+
+        .border-emerald-300 {
+            border-color: #6ee7b7;
+        }
+
+        .text-emerald-600 {
+            color: #059669;
+        }
+
+        .text-emerald-700 {
+            color: #047857;
+        }
+
+        /* ── Missing amber utilities ── */
+        .bg-amber-500 {
+            background-color: #f59e0b;
+        }
+
+        .text-amber-500 {
+            color: #f59e0b;
+        }
+
+        .text-amber-600 {
+            color: #d97706;
+        }
+
+        .border-amber-200 {
+            border-color: #fde68a;
+        }
+
+        .border-amber-300 {
+            border-color: #fcd34d;
+        }
+
+        /* ── Missing blue/sky utilities ── */
+        .bg-sky-50 {
+            background-color: #f0f9ff;
+        }
+
+        .bg-sky-100 {
+            background-color: #e0f2fe;
+        }
+
+        .bg-sky-500 {
+            background-color: #0ea5e9;
+        }
+
+        .text-sky-600 {
+            color: #0284c7;
+        }
+
+        .text-sky-700 {
+            color: #0369a1;
+        }
+
+        .border-sky-200 {
+            border-color: #bae6fd;
+        }
+
+        .border-sky-300 {
+            border-color: #7dd3fc;
+        }
+
+        /* ── Missing teal utilities ── */
+        .bg-teal-50 {
+            background-color: #f0fdfa;
+        }
+
+        .bg-teal-100 {
+            background-color: #ccfbf1;
+        }
+
+        .bg-teal-500 {
+            background-color: #14b8a6;
+        }
+
+        .text-teal-600 {
+            color: #0d9488;
+        }
+
+        .text-teal-700 {
+            color: #0f766e;
+        }
+
+        .border-teal-200 {
+            border-color: #99f6e4;
+        }
+
+        .border-teal-300 {
+            border-color: #5eead4;
+        }
+
+        /* ── Collapsed status rails ──────────────────── */
+        .status-rail--pink {
+            border-color: #fbcfe8;
+            background: linear-gradient(180deg, #fdf2f8 0%, #fce7f3 100%);
+        }
+
+        .bg-pink-50 {
+            background-color: #fdf2f8;
+        }
+
+        .bg-pink-100 {
+            background-color: #fce7f3;
+        }
+
+        .bg-pink-500 {
+            background-color: #ec4899;
+        }
+
+        .text-pink-600 {
+            color: #db2777;
+        }
+
+        .text-pink-700 {
+            color: #be185d;
+        }
+
+        .border-pink-200 {
+            border-color: #fbcfe8;
+        }
+
+        .border-pink-300 {
+            border-color: #f9a8d4;
+        }
+
+        .status-rail--blue {
+            border-color: #bfdbfe;
+            background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+        }
+
+        .bg-blue-50 {
+            background-color: #eff6ff;
+        }
+
+        .bg-blue-100 {
+            background-color: #dbeafe;
+        }
+
+        .bg-blue-500 {
+            background-color: #3b82f6;
+        }
+
+        .text-blue-600 {
+            color: #2563eb;
+        }
+
+        .text-blue-700 {
+            color: #1d4ed8;
+        }
+
+        .border-blue-200 {
+            border-color: #bfdbfe;
+        }
+
+        .border-blue-300 {
+            border-color: #93c5fd;
+        }
+
+        .status-rail--pink {
+            border-color: #fbcfe8;
+            background: linear-gradient(180deg, #fdf2f8 0%, #fce7f3 100%);
+        }
+
+        .bg-pink-50 {
+            background-color: #fdf2f8;
+        }
+
+        .bg-pink-100 {
+            background-color: #fce7f3;
+        }
+
+        .bg-pink-500 {
+            background-color: #ec4899;
+        }
+
+        .text-pink-600 {
+            color: #db2777;
+        }
+
+        .text-pink-700 {
+            color: #be185d;
+        }
+
+        .border-pink-200 {
+            border-color: #fbcfe8;
+        }
+
+        .border-pink-300 {
+            border-color: #f9a8d4;
+        }
+
+        .status-rail--blue {
+            border-color: #bfdbfe;
+            background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+        }
+
+        .bg-blue-50 {
+            background-color: #eff6ff;
+        }
+
+        .bg-blue-100 {
+            background-color: #dbeafe;
+        }
+
+        .bg-blue-500 {
+            background-color: #3b82f6;
+        }
+
+        .text-blue-600 {
+            color: #2563eb;
+        }
+
+        .text-blue-700 {
+            color: #1d4ed8;
+        }
+
+        .border-blue-200 {
+            border-color: #bfdbfe;
+        }
+
+        .border-blue-300 {
+            border-color: #93c5fd;
+        }
+
+        .status-rail {
+            width: 68px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 6px;
+            border-radius: 24px;
+            border: 1px solid #e2e8f0;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+        }
+
+        .status-rail--amber {
+            border-color: #fde68a;
+            background: linear-gradient(180deg, #fffdf4 0%, #fffbeb 100%);
+        }
+
+        .status-rail--violet {
+            border-color: #ddd6fe;
+            background: linear-gradient(180deg, #faf7ff 0%, #f5f3ff 100%);
+        }
+
+        .status-rail--emerald {
+            border-color: #a7f3d0;
+            background: linear-gradient(180deg, #f4fff9 0%, #ecfdf5 100%);
+        }
+
+        .status-rail--sky {
+            border-color: #bae6fd;
+            background: linear-gradient(180deg, #f0f9ff 0%, #e0f2fe 100%);
+        }
+
+        .status-rail--teal {
+            border-color: #99f6e4;
+            background: linear-gradient(180deg, #f0fdfa 0%, #ccfbf1 100%);
+        }
+
+        .status-rail-count {
+            min-width: 34px;
+            height: 34px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 8px;
+            border-radius: 9999px;
+            font-size: 13px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .status-rail-label {
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.24em;
+            text-transform: uppercase;
+            user-select: none;
+        }
+
+        .status-rail-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 9999px;
+            display: block;
+        }
+
+        .status-rail-toggle {
+            width: 38px;
+            height: 38px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 14px;
+            border: 1px solid #cbd5e1;
+            background: #ffffff;
+            color: #64748b;
+            transition: all 0.2s ease;
+        }
+
+        .status-rail-toggle:hover {
+            border-color: #94a3b8;
+            color: #334155;
+            transform: translateY(-1px);
+        }
+
+        .status-column-header {
+            position: sticky;
+            top: 0;
+            z-index: 15;
+            padding-bottom: 12px;
+            background: linear-gradient(180deg, rgba(241, 245, 249, 0.98) 0%, rgba(241, 245, 249, 0.94) 78%, rgba(241, 245, 249, 0) 100%);
+            backdrop-filter: blur(10px);
+        }
+
+        .status-column-trigger {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        /* ── Aging badge ─────────────────────────────── */
+        .aging-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            font-size: 10px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .aging-ok {
+            background: #f0fdf4;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+        }
+
+        .aging-warn {
+            background: #fefce8;
+            color: #854d0e;
+            border: 1px solid #fde68a;
+        }
+
+        .aging-danger {
+            background: #fef2f2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+        /* ── Inline detail expand ────────────────────── */
+        .detail-panel {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .detail-panel.open {
+            max-height: 500px;
+        }
+
+        .item-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .item-row:last-child {
+            border-bottom: none;
+        }
+
+        /* ── Skeleton loading ────────────────────────── */
+        @keyframes shimmer {
+            0% {
+                background-position: -200px 0;
+            }
+
+            100% {
+                background-position: calc(200px + 100%) 0;
+            }
+        }
+
+        .skeleton {
+            background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+            background-size: 200px 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+
+<body class="h-screen flex flex-col overflow-hidden text-slate-800" style="background: #f1f5f9;"
+    x-data="orderMonitor()">
+
+    <!-- ═══════ MAIN — 3-column layout ═══════ -->
+    <main class="flex-1 flex overflow-hidden relative z-10 pt-3">
+
+        <!-- ▸ COL 1: PENDIENTES -->
+        <div class="flex flex-col min-w-0 pt-4 pb-3 overflow-y-auto clean-scroll transition-all duration-300 ease-in-out"
+            :class="isCol1Expanded ? 'flex-1 px-4' : 'flex-none px-2'" :style="isCol1Expanded ? '' : 'width:84px'"
+            x-show="true">
+            <div x-show="isCol1Expanded" @click="toggleColumn(1)" title="Clic para colapsar"
+                class="status-column-header status-column-trigger flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-amber-50 border border-amber-200">
+                    <div class="w-2.5 h-2.5 rounded-full bg-amber-500"
+                        :class="filteredPendingOrders.length > 0 ? 'animate-pulse' : ''"></div>
+                    <span class="text-sm font-bold text-amber-700 uppercase tracking-wider">Pendientes</span>
+                    <span
+                        class="ml-1 px-2 py-0.5 text-xs font-mono font-bold text-amber-700 bg-amber-100 rounded-full border border-amber-300"
+                        x-text="filteredPendingOrders.length">0</span>
+                </div>
+                <button class="p-2 rounded-lg hover:bg-slate-100 transition-colors group z-20 pointer-events-none"
+                    :title="isCol1Expanded ? 'Clic para colapsar' : 'Clic para expandir'">
+                    <svg class="w-5 h-5 text-slate-400 group-hover:text-slate-600 transition-transform"
+                        :class="isCol1Expanded ? '' : '-rotate-90'" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </button>
+            </div>
+
+            <div x-show="!isCol1Expanded" class="flex-1 flex items-stretch justify-center">
+                <div @click="toggleColumn(1)" title="Clic para expandir"
+                    class="status-rail status-rail--amber status-column-trigger">
+                    <div class="flex flex-col items-center gap-2">
+                        <span class="status-rail-dot bg-amber-500"
+                            :class="filteredPendingOrders.length > 0 ? 'animate-pulse' : ''"></span>
+                        <span class="status-rail-count text-amber-700 bg-amber-100 border border-amber-300"
+                            x-text="filteredPendingOrders.length">0</span>
+                    </div>
+                    <span class="status-rail-label text-amber-700">Pendientes</span>
+                    <button class="status-rail-toggle pointer-events-none" title="Clic para expandir">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div x-show="isCol1Expanded" class="flex-1 space-y-3 pr-1">
+                <template x-if="firstLoad">
+                    <div class="space-y-3">
+                        <template x-for="i in 3" :key="'skel-p-'+i">
+                            <div class="order-card p-4 pl-6">
+                                <div class="skeleton h-5 w-24 mb-3"></div>
+                                <div class="skeleton h-4 w-40 mb-2"></div>
+                                <div class="skeleton h-3 w-28"></div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <template x-for="(order, idx) in filteredPendingOrders" :key="order.order_id">
+                    <div class="order-card p-4 pl-6 card-animate"
+                        :class="newOrderIds.has(order.order_id) ? 'new-order-enter' : ''"
+                        :style="newOrderIds.has(order.order_id) ? '' : 'animation-delay:' + (idx * 0.04) + 's'">
+                        <div class="accent-bar accent-yellow"></div>
+
+                        <div class="flex justify-between items-start gap-3 mb-3">
+                            <div class="min-w-0">
+                                <span
+                                    class="text-[9px] font-bold text-slate-400 uppercase tracking-[0.15em]">Pedido</span>
+                                <div class="text-2xl font-bold font-mono text-slate-800 tracking-tight leading-none mt-0.5"
+                                    x-text="order.order_id"></div>
+                            </div>
+                            <div class="flex flex-col items-end gap-2 flex-shrink-0">
+                                <span class="card-meta-label">Antiguedad</span>
+                                <span class="aging-badge" :class="getAgingClass(order)"
+                                    x-text="getAgingText(order)"></span>
+                                <span
+                                    class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider badge-pending">Pendiente</span>
+                            </div>
+                        </div>
+
+                        <div class="delivery-highlight">
+                            <div class="delivery-label">Entrega</div>
+                            <div class="flex items-center gap-2 text-slate-500">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <span class="delivery-date" x-text="formatDate(order.delivery_date)"></span>
+                            </div>
+                        </div>
+
+                        <div class="order-client-block">
+                            <span class="text-[11px] font-mono text-slate-500" x-text="order.customer_code"></span>
+                            <div class="text-[15px] font-semibold text-slate-700 leading-snug mt-1 break-words pb-2"
+                                x-text="order.customer_name"></div>
+                        </div>
+
+                        <!-- MAPA DE RELACIONES FUERA DEL DETALLE -->
+                        <div
+                            class="relationship-map-inline mt-1 mb-2 bg-slate-50/50 p-2 rounded-lg border border-slate-100">
+                            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Mapa de
+                                Relaciones</div>
+                            <div class="relationship-map-row clean-scroll pb-1">
+                                <!-- Nodo Actual -->
+                                <div class="sap-node sap-node--mini active !p-2 bg-white">
+                                    <div class="sap-node-kicker"
+                                        x-text="order.status === 'Pendiente' ? 'Documento Base' : (order.status === 'En Proceso' ? 'Etiquetas' : (order.status === 'Preparando' ? 'Preparacion' : 'Envio'))">
+                                    </div>
+                                    <div class="sap-node-title"
+                                        :class="order.status === 'Pendiente' ? 'text-blue-600' : (order.status === 'En Proceso' ? 'text-violet-600' : (order.status === 'Preparando' ? 'text-blue-600' : 'text-emerald-600'))"
+                                        x-text="order.status === 'Pendiente' ? 'Orden de Venta' : (order.status === 'En Proceso' ? 'En Proceso' : (order.status === 'Preparando' ? 'En Preparacion' : 'Entregado a almacen'))">
+                                    </div>
+                                    <div class="sap-node-meta mt-1" x-text="order.order_id || 'N/A'"></div>
+                                </div>
+
+                                <!-- Flecha y Nodo Siguiente -->
+                                <template x-if="order.status !== 'Entregado a almacen'">
+                                    <div class="flex items-center shrink-0">
+                                        <div class="sap-edge sap-edge--mini"></div>
+                                        <div class="sap-node sap-node--mini !p-2 opacity-75">
+                                            <div class="sap-node-kicker"
+                                                x-text="order.status === 'Pendiente' ? 'Etiquetas' : (order.status === 'En Proceso' ? 'Preparacion' : 'Envio')">
+                                            </div>
+                                            <div class="sap-node-title text-slate-500"
+                                                x-text="order.status === 'Pendiente' ? 'En Proceso' : (order.status === 'En Proceso' ? 'En Preparacion' : 'Entregado a almacen')">
+                                            </div>
+                                            <div class="sap-node-meta mt-1 text-slate-400">Pendiente</div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <div class="mt-2 pt-3 border-t border-slate-100 flex justify-between items-center gap-3">
+                            <div class="order-meta-pill" x-text="(order.items ? order.items.length : 0) + ' articulos'">
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <template x-if="order.status === 'Pendiente'">
+                                    <button @click="updateOrderStatus(order.order_id, 'En Proceso')"
+                                        class="px-2.5 py-1 bg-violet-100 text-violet-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-violet-200 hover:bg-violet-200 transition-colors shadow-sm">▶
+                                        Iniciar Proceso</button>
+                                </template>
+                                <template x-if="order.status === 'En Proceso'">
+                                    <button @click="updateOrderStatus(order.order_id, 'Preparando')"
+                                        class="px-2.5 py-1 bg-sky-100 text-sky-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-sky-200 hover:bg-sky-200 transition-colors shadow-sm">▶
+                                        Preparar</button>
+                                </template>
+                                <template x-if="order.status === 'Preparando'">
+                                    <button @click="updateOrderStatus(order.order_id, 'Entregado a almacen')"
+                                        class="px-2.5 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-emerald-200 hover:bg-emerald-200 transition-colors shadow-sm">▶
+                                        Entregar</button>
+                                </template>
+                                <template x-if="order.status === 'Entregado a almacen'">
+                                    <button @click="updateOrderStatus(order.order_id, 'Enviado al cliente')"
+                                        class="px-2.5 py-1 bg-teal-100 text-teal-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-teal-200 hover:bg-teal-200 transition-colors shadow-sm">▶
+                                        Enviar al cliente</button>
+                                </template>
+                                <template x-if="order.status === 'Enviado al cliente'">
+                                    <button @click="updateOrderStatus(order.order_id, 'Recibido por cliente')"
+                                        class="px-2.5 py-1 bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-blue-200 hover:bg-blue-200 transition-colors shadow-sm">▶
+                                        Entregado</button>
+                                </template>
+                                <button @click="toggleExpand(order.order_id)"
+                                    class="order-action-link text-slate-500 hover:text-slate-700">
+                                    Detalle
+                                    <svg class="w-3.5 h-3.5 order-action-arrow"
+                                        :class="expandedOrder === order.order_id ? 'rotate-90' : ''" fill="none"
+                                        stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M9 5l7 7-7 7" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="detail-panel" :class="expandedOrder === order.order_id ? 'open' : ''">
+                            <div class="mt-3 pt-3 border-t border-slate-100">
+
+                                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                                    Articulos del Pedido</div>
+                                <template x-if="order.items && order.items.length > 0">
+                                    <div>
+                                        <template x-for="item in order.items" :key="item.item_code || item.ItemCode">
+                                            <div class="item-row">
+                                                <div class="flex-1 min-w-0">
+                                                    <div class="text-[11px] font-semibold text-slate-700 truncate"
+                                                        x-text="item.item_name || item.ItemName || item.Dscription || '-'">
+                                                    </div>
+                                                    <div class="text-[10px] font-mono text-slate-400"
+                                                        x-text="item.item_code || item.ItemCode || ''"></div>
+                                                </div>
+                                                <div class="text-right ml-3 flex-shrink-0">
+                                                    <div class="text-[11px] font-bold font-mono text-slate-700"
+                                                        x-text="formatItemQuantity(item)"></div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+                                <template x-if="!order.items || order.items.length === 0">
+                                    <div class="text-[11px] text-slate-400 italic py-2">Sin detalle de artículos</div>
+                                </template>
+                                <div class="mt-3 pt-2 border-t border-slate-50 grid grid-cols-2 gap-2">
+                                    <div>
+                                        <div class="text-[9px] text-slate-400 uppercase tracking-wider">Fecha Creación
+                                        </div>
+                                        <div class="text-[11px] font-mono text-slate-600"
+                                            x-text="formatDate(order.created_at || order.order_date)"></div>
+                                    </div>
+                                    <div>
+                                        <div class="text-[9px] text-slate-400 uppercase tracking-wider">Fecha Entrega
+                                        </div>
+                                        <div class="text-[11px] font-mono text-slate-600"
+                                            x-text="formatDate(order.delivery_date)"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <div x-show="!firstLoad && filteredPendingOrders.length === 0"
+                    class="flex flex-col items-center justify-center pt-24 text-slate-300">
+                    <svg class="w-14 h-14 mb-3" style="width: 56px; height: 56px;" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span class="text-sm">Sin pedidos pendientes</span>
+                </div>
+            </div>
+        </div>
+
+
+        <div class="col-divider my-6 flex-shrink-0" x-show="isCol1Expanded || isCol2Expanded"></div>
+        <!-- ▸ COL 2: EN PROCESO -->
+        <div class="flex flex-col min-w-0 pt-4 pb-3 overflow-y-auto clean-scroll transition-all duration-300 ease-in-out"
+            :class="isCol2Expanded ? 'flex-1 px-4' : 'flex-none px-2'" :style="isCol2Expanded ? '' : 'width:84px'"
+            x-show="true">
+            <div x-show="isCol2Expanded" @click="toggleColumn(2)" title="Clic para colapsar"
+                class="status-column-header status-column-trigger flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-violet-50 border border-violet-200">
+                    <div class="w-2.5 h-2.5 rounded-full bg-violet-500"
+                        :class="filteredInProgressOrders.length > 0 ? 'animate-pulse' : ''"></div>
+                    <span class="text-sm font-bold text-violet-700 uppercase tracking-wider">En Proceso</span>
+                    <span
+                        class="ml-1 px-2 py-0.5 text-xs font-mono font-bold text-violet-700 bg-violet-100 rounded-full border border-violet-300"
+                        x-text="filteredInProgressOrders.length">0</span>
+                </div>
+                <button class="p-2 rounded-lg hover:bg-slate-100 transition-colors group z-20 pointer-events-none"
+                    :title="isCol2Expanded ? 'Clic para colapsar' : 'Clic para expandir'">
+                    <svg class="w-5 h-5 text-slate-400 group-hover:text-slate-600 transition-transform"
+                        :class="isCol2Expanded ? '' : '-rotate-90'" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </button>
+            </div>
+
+            <div x-show="!isCol2Expanded" class="flex-1 flex items-stretch justify-center">
+                <div @click="toggleColumn(2)" title="Clic para expandir"
+                    class="status-rail status-rail--violet status-column-trigger">
+                    <div class="flex flex-col items-center gap-2">
+                        <span class="status-rail-dot bg-violet-500"
+                            :class="filteredInProgressOrders.length > 0 ? 'animate-pulse' : ''"></span>
+                        <span class="status-rail-count text-violet-700 bg-violet-100 border border-violet-300"
+                            x-text="filteredInProgressOrders.length">0</span>
+                    </div>
+                    <span class="status-rail-label text-violet-700">En proceso</span>
+                    <button class="status-rail-toggle pointer-events-none" title="Clic para expandir">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div x-show="isCol2Expanded" class="flex-1 space-y-3 pr-1">
+                <template x-if="firstLoad">
+                    <div class="space-y-3">
+                        <template x-for="i in 3" :key="'skel-ip-'+i">
+                            <div class="order-card p-4 pl-6">
+                                <div class="skeleton h-5 w-24 mb-3"></div>
+                                <div class="skeleton h-4 w-40 mb-2"></div>
+                                <div class="skeleton h-3 w-28"></div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <template x-for="(order, idx) in filteredInProgressOrders" :key="order.order_id">
+                    <div class="order-card p-4 pl-6 card-animate"
+                        :class="newOrderIds.has(order.order_id) ? 'new-order-enter' : ''"
+                        :style="newOrderIds.has(order.order_id) ? '' : 'animation-delay:' + (idx * 0.04) + 's'">
+                        <div class="accent-bar" style="background: #8b5cf6;"></div>
+
+                        <div class="flex justify-between items-start gap-3 mb-3">
+                            <div class="min-w-0">
+                                <span
+                                    class="text-[9px] font-bold text-slate-400 uppercase tracking-[0.15em]">Pedido</span>
+                                <div class="text-2xl font-bold font-mono text-slate-800 tracking-tight leading-none mt-0.5"
+                                    x-text="order.order_id"></div>
+                            </div>
+                            <div class="flex flex-col items-end gap-2 flex-shrink-0">
+                                <span class="card-meta-label">Antiguedad</span>
+                                <span class="aging-badge" :class="getAgingClass(order)"
+                                    x-text="getAgingText(order)"></span>
+                                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider"
+                                    style="background: #ede9fe; color: #6d28d9; border: 1px solid #c4b5fd;">En
+                                    Proceso</span>
+                            </div>
+                        </div>
+
+                        <div class="delivery-highlight">
+                            <div class="delivery-label">Entrega</div>
+                            <div class="flex items-center gap-2 text-slate-500">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <span class="delivery-date" x-text="formatDate(order.delivery_date)"></span>
+                            </div>
+                        </div>
+
+                        <div class="order-client-block">
+                            <span class="text-[11px] font-mono text-slate-500" x-text="order.customer_code"></span>
+                            <div class="text-[15px] font-semibold text-slate-700 leading-snug mt-1 break-words pb-2"
+                                x-text="order.customer_name"></div>
+                        </div>
+
+                        <!-- MAPA DE RELACIONES FUERA DEL DETALLE -->
+                        <div
+                            class="relationship-map-inline mt-1 mb-2 bg-slate-50/50 p-2 rounded-lg border border-slate-100">
+                            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Mapa de
+                                Relaciones</div>
+                            <div class="relationship-map-row clean-scroll pb-1">
+                                <!-- Nodo Actual -->
+                                <div class="sap-node sap-node--mini active !p-2 bg-white">
+                                    <div class="sap-node-kicker"
+                                        x-text="order.status === 'Pendiente' ? 'Documento Base' : (order.status === 'En Proceso' ? 'Etiquetas' : (order.status === 'Preparando' ? 'Preparacion' : 'Envio'))">
+                                    </div>
+                                    <div class="sap-node-title"
+                                        :class="order.status === 'Pendiente' ? 'text-blue-600' : (order.status === 'En Proceso' ? 'text-violet-600' : (order.status === 'Preparando' ? 'text-blue-600' : 'text-emerald-600'))"
+                                        x-text="order.status === 'Pendiente' ? 'Orden de Venta' : (order.status === 'En Proceso' ? 'En Proceso' : (order.status === 'Preparando' ? 'En Preparacion' : 'Entregado a almacen'))">
+                                    </div>
+                                    <div class="sap-node-meta mt-1" x-text="order.order_id || 'N/A'"></div>
+                                </div>
+
+                                <!-- Flecha y Nodo Siguiente -->
+                                <template x-if="order.status !== 'Entregado a almacen'">
+                                    <div class="flex items-center shrink-0">
+                                        <div class="sap-edge sap-edge--mini"></div>
+                                        <div class="sap-node sap-node--mini !p-2 opacity-75">
+                                            <div class="sap-node-kicker"
+                                                x-text="order.status === 'Pendiente' ? 'Etiquetas' : (order.status === 'En Proceso' ? 'Preparacion' : 'Envio')">
+                                            </div>
+                                            <div class="sap-node-title text-slate-500"
+                                                x-text="order.status === 'Pendiente' ? 'En Proceso' : (order.status === 'En Proceso' ? 'En Preparacion' : 'Entregado a almacen')">
+                                            </div>
+                                            <div class="sap-node-meta mt-1 text-slate-400">Pendiente</div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <div class="mt-2 pt-3 border-t border-slate-100 flex justify-between items-center gap-3">
+                            <div class="order-meta-pill" x-text="(order.items ? order.items.length : 0) + ' articulos'">
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <template x-if="order.status === 'Pendiente'">
+                                    <button @click="updateOrderStatus(order.order_id, 'En Proceso')"
+                                        class="px-2.5 py-1 bg-violet-100 text-violet-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-violet-200 hover:bg-violet-200 transition-colors shadow-sm">▶
+                                        Iniciar Proceso</button>
+                                </template>
+                                <template x-if="order.status === 'En Proceso'">
+                                    <button @click="updateOrderStatus(order.order_id, 'Preparando')"
+                                        class="px-2.5 py-1 bg-sky-100 text-sky-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-sky-200 hover:bg-sky-200 transition-colors shadow-sm">▶
+                                        Preparar</button>
+                                </template>
+                                <template x-if="order.status === 'Preparando'">
+                                    <button @click="updateOrderStatus(order.order_id, 'Entregado a almacen')"
+                                        class="px-2.5 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-emerald-200 hover:bg-emerald-200 transition-colors shadow-sm">▶
+                                        Entregar</button>
+                                </template>
+                                <template x-if="order.status === 'Entregado a almacen'">
+                                    <button @click="updateOrderStatus(order.order_id, 'Enviado al cliente')"
+                                        class="px-2.5 py-1 bg-teal-100 text-teal-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-teal-200 hover:bg-teal-200 transition-colors shadow-sm">▶
+                                        Enviar al cliente</button>
+                                </template>
+                                <template x-if="order.status === 'Enviado al cliente'">
+                                    <button @click="updateOrderStatus(order.order_id, 'Recibido por cliente')"
+                                        class="px-2.5 py-1 bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-blue-200 hover:bg-blue-200 transition-colors shadow-sm">▶
+                                        Entregado</button>
+                                </template>
+                                <button @click="toggleExpand(order.order_id)"
+                                    class="order-action-link text-slate-500 hover:text-slate-700">
+                                    Detalle
+                                    <svg class="w-3.5 h-3.5 order-action-arrow"
+                                        :class="expandedOrder === order.order_id ? 'rotate-90' : ''" fill="none"
+                                        stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M9 5l7 7-7 7" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="detail-panel" :class="expandedOrder === order.order_id ? 'open' : ''">
+                            <div class="mt-3 pt-3 border-t border-slate-100">
+
+                                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                                    Articulos del Pedido</div>
+                                <template x-if="order.items && order.items.length > 0">
+                                    <div>
+                                        <template x-for="item in order.items" :key="item.item_code || item.ItemCode">
+                                            <div class="item-row">
+                                                <div class="flex-1 min-w-0">
+                                                    <div class="text-[11px] font-semibold text-slate-700 truncate"
+                                                        x-text="item.item_name || item.ItemName || item.Dscription || '-'">
+                                                    </div>
+                                                    <div class="text-[10px] font-mono text-slate-400"
+                                                        x-text="item.item_code || item.ItemCode || ''"></div>
+                                                </div>
+                                                <div class="text-right ml-3 flex-shrink-0">
+                                                    <div class="text-[11px] font-bold font-mono text-slate-700"
+                                                        x-text="formatItemQuantity(item)"></div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+                                <template x-if="!order.items || order.items.length === 0">
+                                    <div class="text-[11px] text-slate-400 italic py-2">Sin detalle de artículos</div>
+                                </template>
+                                <div class="mt-3 pt-2 border-t border-slate-50 grid grid-cols-2 gap-2">
+                                    <div>
+                                        <div class="text-[9px] text-slate-400 uppercase tracking-wider">Fecha Creación
+                                        </div>
+                                        <div class="text-[11px] font-mono text-slate-600"
+                                            x-text="formatDate(order.created_at || order.order_date)"></div>
+                                    </div>
+                                    <div>
+                                        <div class="text-[9px] text-slate-400 uppercase tracking-wider">Fecha Entrega
+                                        </div>
+                                        <div class="text-[11px] font-mono text-slate-600"
+                                            x-text="formatDate(order.delivery_date)"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <div x-show="!firstLoad && filteredInProgressOrders.length === 0"
+                    class="flex flex-col items-center justify-center pt-24 text-slate-300">
+                    <svg class="w-14 h-14 mb-3" style="width: 56px; height: 56px;" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    <span class="text-sm">Sin pedidos en proceso</span>
+                </div>
+            </div>
+        </div>
+
+
+        <div class="col-divider my-6 flex-shrink-0" x-show="isCol2Expanded || isCol4Expanded"></div>
+        <!-- ▸ COL 4: PREPARANDO -->
+        <div class="flex flex-col min-w-0 pt-4 pb-3 overflow-y-auto clean-scroll transition-all duration-300 ease-in-out"
+            :class="isCol4Expanded ? 'flex-1 px-4' : 'flex-none px-2'" :style="isCol4Expanded ? '' : 'width:84px'"
+            x-show="true">
+            <div x-show="isCol4Expanded" @click="toggleColumn(4)" title="Clic para colapsar"
+                class="status-column-header status-column-trigger flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-sky-50 border border-sky-200">
+                    <div class="w-2.5 h-2.5 rounded-full bg-sky-500"
+                        :class="filteredPreparedOrders.length > 0 ? 'animate-pulse' : ''"></div>
+                    <span class="text-sm font-bold text-sky-700 uppercase tracking-wider">Preparando</span>
+                    <span
+                        class="ml-1 px-2 py-0.5 text-xs font-mono font-bold text-sky-700 bg-sky-100 rounded-full border border-sky-300"
+                        x-text="filteredPreparedOrders.length">0</span>
+                </div>
+                <button class="p-2 rounded-lg hover:bg-slate-100 transition-colors group z-20 pointer-events-none"
+                    :title="isCol4Expanded ? 'Clic para colapsar' : 'Clic para expandir'">
+                    <svg class="w-5 h-5 text-slate-400 group-hover:text-slate-600 transition-transform"
+                        :class="isCol4Expanded ? '' : '-rotate-90'" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </button>
+            </div>
+
+            <div x-show="!isCol4Expanded" class="flex-1 flex items-stretch justify-center">
+                <div @click="toggleColumn(4)" title="Clic para expandir"
+                    class="status-rail status-rail--sky status-column-trigger">
+                    <div class="flex flex-col items-center gap-2">
+                        <span class="status-rail-dot bg-sky-500"
+                            :class="filteredPreparedOrders.length > 0 ? 'animate-pulse' : ''"></span>
+                        <span class="status-rail-count text-sky-700 bg-sky-100 border border-sky-300"
+                            x-text="filteredPreparedOrders.length">0</span>
+                    </div>
+                    <span class="status-rail-label text-sky-700">Preparando</span>
+                    <button class="status-rail-toggle pointer-events-none" title="Clic para expandir">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div x-show="isCol4Expanded" class="flex-1 space-y-3 pr-1">
+                <template x-if="firstLoad">
+                    <div class="space-y-3">
+                        <template x-for="i in 3" :key="'skel-pr-'+i">
+                            <div class="order-card p-4 pl-6">
+                                <div class="skeleton h-5 w-24 mb-3"></div>
+                                <div class="skeleton h-4 w-40 mb-2"></div>
+                                <div class="skeleton h-3 w-28"></div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <template x-for="(order, idx) in filteredPreparedOrders" :key="order.order_id">
+                    <div class="order-card p-4 pl-6 card-animate"
+                        :class="newOrderIds.has(order.order_id) ? 'new-order-enter' : ''"
+                        :style="newOrderIds.has(order.order_id) ? '' : 'animation-delay:' + (idx * 0.04) + 's'">
+                        <div class="accent-bar" :class="'accent-blue'"></div>
+
+                        <div class="flex justify-between items-start gap-3 mb-3">
+                            <div class="min-w-0">
+                                <span
+                                    class="text-[9px] font-bold text-slate-400 uppercase tracking-[0.15em]">Pedido</span>
+                                <div class="text-2xl font-bold font-mono text-slate-800 tracking-tight leading-none mt-0.5"
+                                    x-text="order.order_id"></div>
+                            </div>
+                            <div class="flex flex-col items-end gap-2 flex-shrink-0">
+                                <span class="card-meta-label">Antiguedad</span>
+                                <span class="aging-badge" :class="getAgingClass(order)"
+                                    x-text="getAgingText(order)"></span>
+                                <span
+                                    class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider badge-prepared"
+                                    x-text="'Preparando'"></span>
+                            </div>
+                        </div>
+
+                        <div class="delivery-highlight">
+                            <div class="delivery-label">Entrega</div>
+                            <div class="flex items-center gap-2 text-slate-500">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <span class="delivery-date" x-text="formatDate(order.delivery_date)"></span>
+                            </div>
+                        </div>
+
+                        <div class="order-client-block">
+                            <span class="text-[11px] font-mono text-slate-500" x-text="order.customer_code"></span>
+                            <div class="text-[15px] font-semibold text-slate-700 leading-snug mt-1 break-words pb-2"
+                                x-text="order.customer_name"></div>
+                        </div>
+
+                        <!-- MAPA DE RELACIONES FUERA DEL DETALLE -->
+                        <div
+                            class="relationship-map-inline mt-1 mb-2 bg-slate-50/50 p-2 rounded-lg border border-slate-100">
+                            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Mapa de
+                                Relaciones</div>
+                            <div class="relationship-map-row clean-scroll pb-1">
+                                <!-- Nodo Actual -->
+                                <div class="sap-node sap-node--mini active !p-2 bg-white">
+                                    <div class="sap-node-kicker"
+                                        x-text="order.status === 'Pendiente' ? 'Documento Base' : (order.status === 'En Proceso' ? 'Etiquetas' : (order.status === 'Preparando' ? 'Preparacion' : 'Envio'))">
+                                    </div>
+                                    <div class="sap-node-title"
+                                        :class="order.status === 'Pendiente' ? 'text-blue-600' : (order.status === 'En Proceso' ? 'text-violet-600' : (order.status === 'Preparando' ? 'text-blue-600' : 'text-emerald-600'))"
+                                        x-text="order.status === 'Pendiente' ? 'Orden de Venta' : (order.status === 'En Proceso' ? 'En Proceso' : ('Preparado'))">
+                                    </div>
+                                    <div class="sap-node-meta mt-1" x-text="order.order_id || 'N/A'"></div>
+                                </div>
+
+                                <!-- Flecha y Nodo Siguiente -->
+                                <template x-if="order.status !== 'Entregado a almacen'">
+                                    <div class="flex items-center shrink-0">
+                                        <div class="sap-edge sap-edge--mini"></div>
+                                        <div class="sap-node sap-node--mini !p-2 opacity-75">
+                                            <div class="sap-node-kicker"
+                                                x-text="order.status === 'Pendiente' ? 'Etiquetas' : (order.status === 'En Proceso' ? 'Preparacion' : 'Envio')">
+                                            </div>
+                                            <div class="sap-node-title text-slate-500"
+                                                x-text="order.status === 'Pendiente' ? 'En Proceso' : (order.status === 'En Proceso' ? 'En Preparacion' : 'Entregado a almacen')">
+                                            </div>
+                                            <div class="sap-node-meta mt-1 text-slate-400">Pendiente</div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <div class="mt-2 pt-3 border-t border-slate-100 flex justify-between items-center gap-3">
+                            <div class="order-meta-pill" x-text="(order.items ? order.items.length : 0) + ' articulos'">
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <template x-if="order.status === 'Pendiente'">
+                                    <button @click="updateOrderStatus(order.order_id, 'En Proceso')"
+                                        class="px-2.5 py-1 bg-violet-100 text-violet-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-violet-200 hover:bg-violet-200 transition-colors shadow-sm">▶
+                                        Iniciar Proceso</button>
+                                </template>
+                                <template x-if="order.status === 'En Proceso'">
+                                    <button @click="updateOrderStatus(order.order_id, 'Preparando')"
+                                        class="px-2.5 py-1 bg-sky-100 text-sky-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-sky-200 hover:bg-sky-200 transition-colors shadow-sm">▶
+                                        Preparar</button>
+                                </template>
+                                <template x-if="order.status === 'Preparando'">
+                                    <button @click="updateOrderStatus(order.order_id, 'Entregado a almacen')"
+                                        class="px-2.5 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-emerald-200 hover:bg-emerald-200 transition-colors shadow-sm">▶
+                                        Entregar</button>
+                                </template>
+                                <template x-if="order.status === 'Entregado a almacen'">
+                                    <button @click="updateOrderStatus(order.order_id, 'Enviado al cliente')"
+                                        class="px-2.5 py-1 bg-teal-100 text-teal-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-teal-200 hover:bg-teal-200 transition-colors shadow-sm">▶
+                                        Enviar al cliente</button>
+                                </template>
+                                <template x-if="order.status === 'Enviado al cliente'">
+                                    <button @click="updateOrderStatus(order.order_id, 'Recibido por cliente')"
+                                        class="px-2.5 py-1 bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-blue-200 hover:bg-blue-200 transition-colors shadow-sm">▶
+                                        Entregado</button>
+                                </template>
+                                <button @click="toggleExpand(order.order_id)"
+                                    class="order-action-link text-slate-500 hover:text-slate-700">
+                                    Detalle
+                                    <svg class="w-3.5 h-3.5 order-action-arrow"
+                                        :class="expandedOrder === order.order_id ? 'rotate-90' : ''" fill="none"
+                                        stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M9 5l7 7-7 7" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="detail-panel" :class="expandedOrder === order.order_id ? 'open' : ''">
+                            <div class="mt-3 pt-3 border-t border-slate-100">
+
+                                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                                    Articulos del Pedido</div>
+                                <template x-if="order.items && order.items.length > 0">
+                                    <div>
+                                        <template x-for="item in order.items" :key="item.item_code || item.ItemCode">
+                                            <div class="item-row">
+                                                <div class="flex-1 min-w-0">
+                                                    <div class="text-[11px] font-semibold text-slate-700 truncate"
+                                                        x-text="item.item_name || item.ItemName || item.Dscription || '-'">
+                                                    </div>
+                                                    <div class="text-[10px] font-mono text-slate-400"
+                                                        x-text="item.item_code || item.ItemCode || ''"></div>
+                                                </div>
+                                                <div class="text-right ml-3 flex-shrink-0">
+                                                    <div class="text-[11px] font-bold font-mono text-slate-700"
+                                                        x-text="formatItemQuantity(item)"></div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+                                <template x-if="!order.items || order.items.length === 0">
+                                    <div class="text-[11px] text-slate-400 italic py-2">Sin detalle de artículos</div>
+                                </template>
+                                <div class="mt-3 pt-2 border-t border-slate-50 grid grid-cols-2 gap-2">
+                                    <div>
+                                        <div class="text-[9px] text-slate-400 uppercase tracking-wider">Fecha Creación
+                                        </div>
+                                        <div class="text-[11px] font-mono text-slate-600"
+                                            x-text="formatDate(order.created_at || order.order_date)"></div>
+                                    </div>
+                                    <div>
+                                        <div class="text-[9px] text-slate-400 uppercase tracking-wider">Fecha Entrega
+                                        </div>
+                                        <div class="text-[11px] font-mono text-slate-600"
+                                            x-text="formatDate(order.delivery_date)"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <div x-show="!firstLoad && filteredPreparedOrders.length === 0"
+                    class="flex flex-col items-center justify-center pt-24 text-slate-300">
+                    <svg class="w-14 h-14 mb-3" style="width: 56px; height: 56px;" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    <span class="text-sm">Sin pedidos en preparación</span>
+                </div>
+            </div>
+        </div>
+
+
+        <div class="col-divider my-6 flex-shrink-0" x-show="isCol4Expanded || isCol3Expanded"></div>
+
+        <div class="col-divider my-6 flex-shrink-0" x-show="isCol6Expanded || isCol5Expanded"></div>
+        <!-- ▸ COL 6: FACTURACION -->
+        <div class="flex flex-col min-w-0 pt-4 pb-3 overflow-y-auto clean-scroll transition-all duration-300 ease-in-out"
+            :class="isCol6Expanded ? 'flex-1 px-4' : 'flex-none px-2'" :style="isCol6Expanded ? '' : 'width:84px'"
+            x-show="true">
+            <div x-show="isCol6Expanded" @click="toggleColumn(6)" title="Clic para colapsar"
+                class="status-column-header status-column-trigger flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-pink-50 border border-pink-200">
+                    <div class="w-2.5 h-2.5 rounded-full bg-pink-500"
+                        :class="filteredInvoicingOrders.length > 0 ? 'animate-pulse' : ''"></div>
+                    <span class="text-sm font-bold text-pink-700 uppercase tracking-wider">Facturacion</span>
+                    <span
+                        class="ml-1 px-2 py-0.5 text-xs font-mono font-bold text-pink-700 bg-pink-100 rounded-full border border-pink-300"
+                        x-text="filteredInvoicingOrders.length">0</span>
+                </div>
+                <button class="p-2 rounded-lg hover:bg-slate-100 transition-colors group z-20 pointer-events-none"
+                    :title="isCol6Expanded ? 'Clic para colapsar' : 'Clic para expandir'">
+                    <svg class="w-5 h-5 text-slate-400 group-hover:text-slate-600 transition-transform"
+                        :class="isCol6Expanded ? '' : '-rotate-90'" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </button>
+            </div>
+
+            <div x-show="!isCol6Expanded" class="flex-1 flex items-stretch justify-center">
+                <div @click="toggleColumn(6)" title="Clic para expandir"
+                    class="status-rail status-rail--pink status-column-trigger">
+                    <div class="flex flex-col items-center gap-2">
+                        <span class="status-rail-dot bg-pink-500"
+                            :class="filteredInvoicingOrders.length > 0 ? 'animate-pulse' : ''"></span>
+                        <span class="status-rail-count text-pink-700 bg-pink-100 border border-pink-300"
+                            x-text="filteredInvoicingOrders.length">0</span>
+                    </div>
+                    <span class="status-rail-label text-pink-700">Facturacion</span>
+                    <button class="status-rail-toggle pointer-events-none" title="Clic para expandir">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div x-show="isCol6Expanded" class="flex-1 space-y-3 pr-1">
+                <template x-if="firstLoad">
+                    <div class="space-y-3">
+                        <template x-for="i in 3" :key="'skel-6-'+i">
+                            <div class="order-card p-4 pl-6">
+                                <div class="skeleton h-5 w-24 mb-3"></div>
+                                <div class="skeleton h-4 w-40 mb-2"></div>
+                                <div class="skeleton h-3 w-28"></div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <template x-for="(order, idx) in filteredInvoicingOrders" :key="order.order_id">
+                    <div class="order-card p-4 pl-6 card-animate"
+                        :class="newOrderIds.has(order.order_id) ? 'new-order-enter' : ''"
+                        :style="newOrderIds.has(order.order_id) ? '' : 'animation-delay:' + (idx * 0.04) + 's'">
+                        <div class="accent-bar" style="background: #fce7f3;"></div>
+
+                        <div class="flex justify-between items-start gap-3 mb-3">
+                            <div class="min-w-0">
+                                <span
+                                    class="text-[9px] font-bold text-slate-400 uppercase tracking-[0.15em]">Pedido</span>
+                                <div class="text-2xl font-bold font-mono text-slate-800 tracking-tight leading-none mt-0.5"
+                                    x-text="order.order_id"></div>
+                            </div>
+                            <div class="flex flex-col items-end gap-2 flex-shrink-0">
+                                <span class="card-meta-label">Antiguedad</span>
+                                <span class="aging-badge" :class="getAgingClass(order)"
+                                    x-text="getAgingText(order)"></span>
+                                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider"
+                                    style="background: #fce7f3; color: #be185d; border: 1px solid #fbcfe8;"
+                                    x-text="order.status"></span>
+                            </div>
+                        </div>
+
+                        <!-- Repetir la UI de tarjeta -->
+                        <div class="mt-2 pt-3 border-t border-slate-100 flex justify-between items-center gap-3">
+                            <div class="order-meta-pill" x-text="(order.items ? order.items.length : 0) + ' articulos'">
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <template x-if="order.status === 'Pendiente'"><button
+                                        @click="updateOrderStatus(order.order_id, 'En Proceso')"
+                                        class="px-2.5 py-1 bg-violet-100 text-violet-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-violet-200 hover:bg-violet-200 transition-colors shadow-sm">▶
+                                        Iniciar Proceso</button></template>
+                                <template x-if="order.status === 'En Proceso'"><button
+                                        @click="updateOrderStatus(order.order_id, 'Preparando')"
+                                        class="px-2.5 py-1 bg-sky-100 text-sky-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-sky-200 hover:bg-sky-200 transition-colors shadow-sm">▶
+                                        Preparar</button></template>
+                                <template x-if="order.status === 'Preparando'"><button
+                                        @click="updateOrderStatus(order.order_id, 'Facturacion')"
+                                        class="px-2.5 py-1 bg-pink-100 text-pink-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-pink-200 hover:bg-pink-200 transition-colors shadow-sm">▶
+                                        Facturar</button></template>
+                                <template x-if="order.status === 'Facturacion'"><button
+                                        @click="updateOrderStatus(order.order_id, 'Entregado a almacen')"
+                                        class="px-2.5 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-emerald-200 hover:bg-emerald-200 transition-colors shadow-sm">▶
+                                        Entregar ALM</button></template>
+                                <template x-if="order.status === 'Entregado a almacen'"><button
+                                        @click="updateOrderStatus(order.order_id, 'Enviado al cliente')"
+                                        class="px-2.5 py-1 bg-teal-100 text-teal-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-teal-200 hover:bg-teal-200 transition-colors shadow-sm">▶
+                                        Enviar al cliente</button></template>
+                                <template x-if="order.status === 'Enviado al cliente'"><button
+                                        @click="updateOrderStatus(order.order_id, 'Recibido por cliente')"
+                                        class="px-2.5 py-1 bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-blue-200 hover:bg-blue-200 transition-colors shadow-sm">▶
+                                        Entregado</button></template>
+
+                                <button @click="toggleExpand(order.order_id)"
+                                    class="order-action-link text-slate-500 hover:text-slate-700">Detalle</button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="!firstLoad && filteredInvoicingOrders.length === 0"
+                    class="flex flex-col items-center justify-center pt-24 text-slate-300">
+                    <span class="text-sm">Sin pedidos en facturación</span>
+                </div>
+            </div>
+        </div>
+
+
+
+<div class="col-divider my-6 flex-shrink-0" x-show="isCol3Expanded || isCol5Expanded"></div>
+        <!-- ▸ COL 5: ENVIADO AL CLIENTE AL CLIENTE -->
+        <div class="flex flex-col min-w-0 pt-4 pb-3 overflow-y-auto clean-scroll transition-all duration-300 ease-in-out"
+            :class="isCol5Expanded ? 'flex-1 px-4' : 'flex-none px-2'" :style="isCol5Expanded ? '' : 'width:84px'"
+            x-show="true">
+            <div x-show="isCol5Expanded" @click="toggleColumn(5)" title="Clic para colapsar"
+                class="status-column-header status-column-trigger flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-teal-50 border border-teal-200">
+                    <div class="w-2.5 h-2.5 rounded-full bg-teal-500"
+                        :class="filteredShippedOrders.length > 0 ? 'animate-pulse' : ''"></div>
+                    <span class="text-sm font-bold text-teal-700 uppercase tracking-wider">Enviado al cliente</span>
+                    <span
+                        class="ml-1 px-2 py-0.5 text-xs font-mono font-bold text-teal-700 bg-teal-100 rounded-full border border-teal-300"
+                        x-text="filteredShippedOrders.length">0</span>
+                </div>
+                <button class="p-2 rounded-lg hover:bg-slate-100 transition-colors group z-20 pointer-events-none"
+                    :title="isCol5Expanded ? 'Clic para colapsar' : 'Clic para expandir'">
+                    <svg class="w-5 h-5 text-slate-400 group-hover:text-slate-600 transition-transform"
+                        :class="isCol5Expanded ? '' : '-rotate-90'" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </button>
+            </div>
+
+            <div x-show="!isCol5Expanded" class="flex-1 flex items-stretch justify-center">
+                <div @click="toggleColumn(5)" title="Clic para expandir"
+                    class="status-rail status-rail--teal status-column-trigger">
+                    <div class="flex flex-col items-center gap-2">
+                        <span class="status-rail-dot bg-teal-500"
+                            :class="filteredShippedOrders.length > 0 ? 'animate-pulse' : ''"></span>
+                        <span class="status-rail-count text-teal-700 bg-teal-100 border border-teal-300"
+                            x-text="filteredShippedOrders.length">0</span>
+                    </div>
+                    <span class="status-rail-label text-teal-700">Enviado al cliente</span>
+                    <button class="status-rail-toggle pointer-events-none" title="Clic para expandir">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div x-show="isCol5Expanded" class="flex-1 space-y-3 pr-1">
+                <template x-if="firstLoad">
+                    <div class="space-y-3">
+                        <template x-for="i in 3" :key="'skel-en-'+i">
+                            <div class="order-card p-4 pl-6">
+                                <div class="skeleton h-5 w-24 mb-3"></div>
+                                <div class="skeleton h-4 w-40 mb-2"></div>
+                                <div class="skeleton h-3 w-28"></div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <template x-for="(order, idx) in filteredShippedOrders" :key="order.order_id">
+                    <div class="order-card p-4 pl-6 card-animate"
+                        :class="newOrderIds.has(order.order_id) ? 'new-order-enter' : ''"
+                        :style="newOrderIds.has(order.order_id) ? '' : 'animation-delay:' + (idx * 0.04) + 's'">
+                        <div class="accent-bar" :class="'accent-green'"></div>
+
+                        <div class="flex justify-between items-start gap-3 mb-3">
+                            <div class="min-w-0">
+                                <span
+                                    class="text-[9px] font-bold text-slate-400 uppercase tracking-[0.15em]">Pedido</span>
+                                <div class="text-2xl font-bold font-mono text-slate-800 tracking-tight leading-none mt-0.5"
+                                    x-text="order.order_id"></div>
+                            </div>
+                            <div class="flex flex-col items-end gap-2 flex-shrink-0">
+                                <span class="card-meta-label">Antiguedad</span>
+                                <span class="aging-badge" :class="getAgingClass(order)"
+                                    x-text="getAgingText(order)"></span>
+                                <span
+                                    class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider badge-shipped"
+                                    x-text="'Enviado al cliente'"></span>
+                            </div>
+                        </div>
+
+                        <div class="delivery-highlight">
+                            <div class="delivery-label">Entrega</div>
+                            <div class="flex items-center gap-2 text-slate-500">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <span class="delivery-date" x-text="formatDate(order.delivery_date)"></span>
+                            </div>
+                        </div>
+
+                        <div class="order-client-block">
+                            <span class="text-[11px] font-mono text-slate-500" x-text="order.customer_code"></span>
+                            <div class="text-[15px] font-semibold text-slate-700 leading-snug mt-1 break-words pb-2"
+                                x-text="order.customer_name"></div>
+                        </div>
+
+                        <!-- MAPA DE RELACIONES FUERA DEL DETALLE -->
+                        <div
+                            class="relationship-map-inline mt-1 mb-2 bg-slate-50/50 p-2 rounded-lg border border-slate-100">
+                            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Mapa de
+                                Relaciones</div>
+                            <div class="relationship-map-row clean-scroll pb-1">
+                                <!-- Nodo Actual -->
+                                <div class="sap-node sap-node--mini active !p-2 bg-white">
+                                    <div class="sap-node-kicker"
+                                        x-text="order.status === 'Pendiente' ? 'Documento Base' : (order.status === 'En Proceso' ? 'Etiquetas' : (order.status === 'Preparando' ? 'Preparacion' : 'Envio'))">
+                                    </div>
+                                    <div class="sap-node-title"
+                                        :class="order.status === 'Pendiente' ? 'text-blue-600' : (order.status === 'En Proceso' ? 'text-violet-600' : (order.status === 'Preparando' ? 'text-blue-600' : 'text-emerald-600'))"
+                                        x-text="order.status === 'Pendiente' ? 'Orden de Venta' : (order.status === 'En Proceso' ? 'En Proceso' : ('Enviado al cliente'))">
+                                    </div>
+                                    <div class="sap-node-meta mt-1" x-text="order.order_id || 'N/A'"></div>
+                                </div>
+
+                                <!-- Flecha y Nodo Siguiente -->
+                                <template x-if="order.status !== 'Entregado a almacen'">
+                                    <div class="flex items-center shrink-0">
+                                        <div class="sap-edge sap-edge--mini"></div>
+                                        <div class="sap-node sap-node--mini !p-2 opacity-75">
+                                            <div class="sap-node-kicker"
+                                                x-text="order.status === 'Pendiente' ? 'Etiquetas' : (order.status === 'En Proceso' ? 'Preparacion' : 'Envio')">
+                                            </div>
+                                            <div class="sap-node-title text-slate-500"
+                                                x-text="order.status === 'Pendiente' ? 'En Proceso' : (order.status === 'En Proceso' ? 'En Preparacion' : 'Entregado a almacen')">
+                                            </div>
+                                            <div class="sap-node-meta mt-1 text-slate-400">Pendiente</div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <div class="mt-2 pt-3 border-t border-slate-100 flex justify-between items-center gap-3">
+                            <div class="order-meta-pill" x-text="(order.items ? order.items.length : 0) + ' articulos'">
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <template x-if="order.status === 'Pendiente'">
+                                    <button @click="updateOrderStatus(order.order_id, 'En Proceso')"
+                                        class="px-2.5 py-1 bg-violet-100 text-violet-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-violet-200 hover:bg-violet-200 transition-colors shadow-sm">▶
+                                        Iniciar Proceso</button>
+                                </template>
+                                <template x-if="order.status === 'En Proceso'">
+                                    <button @click="updateOrderStatus(order.order_id, 'Preparando')"
+                                        class="px-2.5 py-1 bg-sky-100 text-sky-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-sky-200 hover:bg-sky-200 transition-colors shadow-sm">▶
+                                        Preparar</button>
+                                </template>
+                                <template x-if="order.status === 'Preparando'">
+                                    <button @click="updateOrderStatus(order.order_id, 'Entregado a almacen')"
+                                        class="px-2.5 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-emerald-200 hover:bg-emerald-200 transition-colors shadow-sm">▶
+                                        Entregar</button>
+                                </template>
+                                <template x-if="order.status === 'Entregado a almacen'">
+                                    <button @click="updateOrderStatus(order.order_id, 'Enviado al cliente')"
+                                        class="px-2.5 py-1 bg-teal-100 text-teal-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-teal-200 hover:bg-teal-200 transition-colors shadow-sm">▶
+                                        Enviar al cliente</button>
+                                </template>
+                                <template x-if="order.status === 'Enviado al cliente'">
+                                    <button @click="updateOrderStatus(order.order_id, 'Recibido por cliente')"
+                                        class="px-2.5 py-1 bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-blue-200 hover:bg-blue-200 transition-colors shadow-sm">▶
+                                        Entregado</button>
+                                </template>
+                                <button @click="toggleExpand(order.order_id)"
+                                    class="order-action-link text-slate-500 hover:text-slate-700">
+                                    Detalle
+                                    <svg class="w-3.5 h-3.5 order-action-arrow"
+                                        :class="expandedOrder === order.order_id ? 'rotate-90' : ''" fill="none"
+                                        stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M9 5l7 7-7 7" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="detail-panel" :class="expandedOrder === order.order_id ? 'open' : ''">
+                            <div class="mt-3 pt-3 border-t border-slate-100">
+
+                                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                                    Articulos del Pedido</div>
+                                <template x-if="order.items && order.items.length > 0">
+                                    <div>
+                                        <template x-for="item in order.items" :key="item.item_code || item.ItemCode">
+                                            <div class="item-row">
+                                                <div class="flex-1 min-w-0">
+                                                    <div class="text-[11px] font-semibold text-slate-700 truncate"
+                                                        x-text="item.item_name || item.ItemName || item.Dscription || '-'">
+                                                    </div>
+                                                    <div class="text-[10px] font-mono text-slate-400"
+                                                        x-text="item.item_code || item.ItemCode || ''"></div>
+                                                </div>
+                                                <div class="text-right ml-3 flex-shrink-0">
+                                                    <div class="text-[11px] font-bold font-mono text-slate-700"
+                                                        x-text="formatItemQuantity(item)"></div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+                                <template x-if="!order.items || order.items.length === 0">
+                                    <div class="text-[11px] text-slate-400 italic py-2">Sin detalle de artículos</div>
+                                </template>
+                                <div class="mt-3 pt-2 border-t border-slate-50 grid grid-cols-2 gap-2">
+                                    <div>
+                                        <div class="text-[9px] text-slate-400 uppercase tracking-wider">Fecha Creación
+                                        </div>
+                                        <div class="text-[11px] font-mono text-slate-600"
+                                            x-text="formatDate(order.created_at || order.order_date)"></div>
+                                    </div>
+                                    <div>
+                                        <div class="text-[9px] text-slate-400 uppercase tracking-wider">Fecha Entrega
+                                        </div>
+                                        <div class="text-[11px] font-mono text-slate-600"
+                                            x-text="formatDate(order.delivery_date)"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <div x-show="!firstLoad && filteredShippedOrders.length === 0"
+                    class="flex flex-col items-center justify-center pt-24 text-slate-300">
+                    <svg class="w-14 h-14 mb-3" style="width: 56px; height: 56px;" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    <span class="text-sm">Sin pedidos enviados al cliente</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-divider my-6 flex-shrink-0" x-show="isCol7Expanded || isCol6Expanded"></div>
+        <!-- ▸ COL 7: RECIBIDO -->
+        <div class="flex flex-col min-w-0 pt-4 pb-3 overflow-y-auto clean-scroll transition-all duration-300 ease-in-out"
+            :class="isCol7Expanded ? 'flex-1 px-4' : 'flex-none px-2'" :style="isCol7Expanded ? '' : 'width:84px'"
+            x-show="true">
+            <div x-show="isCol7Expanded" @click="toggleColumn(7)" title="Clic para colapsar"
+                class="status-column-header status-column-trigger flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-blue-50 border border-blue-200">
+                    <div class="w-2.5 h-2.5 rounded-full bg-blue-500"
+                        :class="filteredReceivedOrders.length > 0 ? 'animate-pulse' : ''"></div>
+                    <span class="text-sm font-bold text-blue-700 uppercase tracking-wider">Recibido</span>
+                    <span
+                        class="ml-1 px-2 py-0.5 text-xs font-mono font-bold text-blue-700 bg-blue-100 rounded-full border border-blue-300"
+                        x-text="filteredReceivedOrders.length">0</span>
+                </div>
+                <button class="p-2 rounded-lg hover:bg-slate-100 transition-colors group z-20 pointer-events-none"
+                    :title="isCol7Expanded ? 'Clic para colapsar' : 'Clic para expandir'">
+                    <svg class="w-5 h-5 text-slate-400 group-hover:text-slate-600 transition-transform"
+                        :class="isCol7Expanded ? '' : '-rotate-90'" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </button>
+            </div>
+
+            <div x-show="!isCol7Expanded" class="flex-1 flex items-stretch justify-center">
+                <div @click="toggleColumn(7)" title="Clic para expandir"
+                    class="status-rail status-rail--blue status-column-trigger">
+                    <div class="flex flex-col items-center gap-2">
+                        <span class="status-rail-dot bg-blue-500"
+                            :class="filteredReceivedOrders.length > 0 ? 'animate-pulse' : ''"></span>
+                        <span class="status-rail-count text-blue-700 bg-blue-100 border border-blue-300"
+                            x-text="filteredReceivedOrders.length">0</span>
+                    </div>
+                    <span class="status-rail-label text-blue-700">Recibido</span>
+                    <button class="status-rail-toggle pointer-events-none" title="Clic para expandir">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div x-show="isCol7Expanded" class="flex-1 space-y-3 pr-1">
+                <template x-if="firstLoad">
+                    <div class="space-y-3">
+                        <template x-for="i in 3" :key="'skel-7-'+i">
+                            <div class="order-card p-4 pl-6">
+                                <div class="skeleton h-5 w-24 mb-3"></div>
+                                <div class="skeleton h-4 w-40 mb-2"></div>
+                                <div class="skeleton h-3 w-28"></div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <template x-for="(order, idx) in filteredReceivedOrders" :key="order.order_id">
+                    <div class="order-card p-4 pl-6 card-animate"
+                        :class="newOrderIds.has(order.order_id) ? 'new-order-enter' : ''"
+                        :style="newOrderIds.has(order.order_id) ? '' : 'animation-delay:' + (idx * 0.04) + 's'">
+                        <div class="accent-bar" style="background: #dbeafe;"></div>
+
+                        <div class="flex justify-between items-start gap-3 mb-3">
+                            <div class="min-w-0">
+                                <span
+                                    class="text-[9px] font-bold text-slate-400 uppercase tracking-[0.15em]">Pedido</span>
+                                <div class="text-2xl font-bold font-mono text-slate-800 tracking-tight leading-none mt-0.5"
+                                    x-text="order.order_id"></div>
+                            </div>
+                            <div class="flex flex-col items-end gap-2 flex-shrink-0">
+                                <span class="card-meta-label">Antiguedad</span>
+                                <span class="aging-badge" :class="getAgingClass(order)"
+                                    x-text="getAgingText(order)"></span>
+                                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider"
+                                    style="background: #dbeafe; color: #1d4ed8; border: 1px solid #bfdbfe;"
+                                    x-text="order.status"></span>
+                            </div>
+                        </div>
+
+                        <!-- Repetir la UI de tarjeta -->
+                        <div class="mt-2 pt-3 border-t border-slate-100 flex justify-between items-center gap-3">
+                            <div class="order-meta-pill" x-text="(order.items ? order.items.length : 0) + ' articulos'">
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <template x-if="order.status === 'Pendiente'"><button
+                                        @click="updateOrderStatus(order.order_id, 'En Proceso')"
+                                        class="px-2.5 py-1 bg-violet-100 text-violet-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-violet-200 hover:bg-violet-200 transition-colors shadow-sm">▶
+                                        Iniciar Proceso</button></template>
+                                <template x-if="order.status === 'En Proceso'"><button
+                                        @click="updateOrderStatus(order.order_id, 'Preparando')"
+                                        class="px-2.5 py-1 bg-sky-100 text-sky-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-sky-200 hover:bg-sky-200 transition-colors shadow-sm">▶
+                                        Preparar</button></template>
+                                <template x-if="order.status === 'Preparando'"><button
+                                        @click="updateOrderStatus(order.order_id, 'Facturacion')"
+                                        class="px-2.5 py-1 bg-pink-100 text-pink-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-pink-200 hover:bg-pink-200 transition-colors shadow-sm">▶
+                                        Facturar</button></template>
+                                <template x-if="order.status === 'Facturacion'"><button
+                                        @click="updateOrderStatus(order.order_id, 'Entregado a almacen')"
+                                        class="px-2.5 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-emerald-200 hover:bg-emerald-200 transition-colors shadow-sm">▶
+                                        Entregar ALM</button></template>
+                                <template x-if="order.status === 'Entregado a almacen'"><button
+                                        @click="updateOrderStatus(order.order_id, 'Enviado al cliente')"
+                                        class="px-2.5 py-1 bg-teal-100 text-teal-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-teal-200 hover:bg-teal-200 transition-colors shadow-sm">▶
+                                        Enviar al cliente</button></template>
+                                <template x-if="order.status === 'Enviado al cliente'"><button
+                                        @click="updateOrderStatus(order.order_id, 'Recibido por cliente')"
+                                        class="px-2.5 py-1 bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-blue-200 hover:bg-blue-200 transition-colors shadow-sm">▶
+                                        Entregado</button></template>
+
+                                <button @click="toggleExpand(order.order_id)"
+                                    class="order-action-link text-slate-500 hover:text-slate-700">Detalle</button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="!firstLoad && filteredReceivedOrders.length === 0"
+                    class="flex flex-col items-center justify-center pt-24 text-slate-300">
+                    <span class="text-sm">Sin pedidos recibidos</span>
+                </div>
+            </div>
+        </div>
+
+
+
+</main>
+
+    <!-- ═══════ TOAST NOTIFICATION ═══════ -->
+    <div x-show="toast.visible" x-cloak
+        class="fixed bottom-5 right-5 z-[60] flex items-start gap-3 px-4 py-3 rounded-xl shadow-md border max-w-xs backdrop-blur-sm"
+        :class="[toast.visible ? 'toast-enter' : 'toast-exit', toast.type === 'error' ? '' : '']"
+        :style="toast.type === 'error' ? 'background:rgba(254,242,242,0.96);border-color:#fecaca' : 'background:rgba(248,250,252,0.96);border-color:#cbd5e1'">
+        <div class="flex items-center justify-center w-7 h-7 rounded-full flex-shrink-0"
+            :class="toast.type === 'error' ? 'bg-red-100' : 'bg-blue-100'">
+            <svg x-show="toast.type !== 'error'" class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor"
+                viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            <svg x-show="toast.type === 'error'" class="w-4 h-4 text-red-600" fill="none" stroke="currentColor"
+                viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+        </div>
+        <div>
+            <div class="text-sm font-semibold" :class="toast.type === 'error' ? 'text-red-800' : 'text-slate-800'"
+                x-text="toast.title"></div>
+            <div class="text-xs mt-0.5" :class="toast.type === 'error' ? 'text-red-600' : 'text-slate-500'"
+                x-text="toast.message"></div>
+        </div>
+    </div>
+
+    <!-- ═══════ APP ═══════ -->
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('orderMonitor', () => ({
+                orders: [],
+                timer: null,
+                loading: false,
+                knownOrderIds: new Set(),
+                newOrderIds: new Set(),
+
+                firstLoad: true,
+                isCol1Expanded: true,
+                isCol2Expanded: true,
+                isCol3Expanded: true,
+                isCol4Expanded: true,
+                isCol5Expanded: true,
+                isCol6Expanded: true,
+                isCol7Expanded: true,
+
+                toggleColumn(colNum) {
+                    if (colNum === 1) this.isCol1Expanded = !this.isCol1Expanded;
+                    if (colNum === 2) this.isCol2Expanded = !this.isCol2Expanded;
+                    if (colNum === 3) this.isCol3Expanded = !this.isCol3Expanded;
+                    if (colNum === 4) this.isCol4Expanded = !this.isCol4Expanded;
+                    if (colNum === 5) this.isCol5Expanded = !this.isCol5Expanded;
+                    if (colNum === 6) this.isCol6Expanded = !this.isCol6Expanded;
+                    if (colNum === 7) this.isCol7Expanded = !this.isCol7Expanded;
+                    localStorage.setItem('monitorColumnStates', JSON.stringify({
+                        col1: this.isCol1Expanded,
+                        col2: this.isCol2Expanded,
+                        col3: this.isCol3Expanded,
+                        col4: this.isCol4Expanded,
+                        col5: this.isCol5Expanded,
+                        col6: this.isCol6Expanded,
+                        col7: this.isCol7Expanded
+                    }));
+                },
+
+                expandedOrder: null,
+
+                toast: { visible: false, title: '', message: '', type: 'info', _timer: null },
+
+                settings: {
+                    limit: 50,
+                    refreshRate: 30000,
+                    ...JSON.parse(localStorage.getItem('monitorSettings') || '{}')
+                },
+
+                get pendingOrders() {
+                    return this.orders.filter(o => o.status === 'Pendiente');
+                },
+                get inProgressOrders() {
+                    return this.orders.filter(o => o.status === 'En Proceso');
+                },
+                get readyOrders() {
+                    return this.orders.filter(o => o.status === 'Entregado a almacen');
+                },
+                get preparedOrders() {
+                    return this.orders.filter(o => o.status === 'Preparando' || o.status === 'Preparado');
+                },
+                get shippedOrders() {
+                    return this.orders.filter(o => o.status === 'Enviado al cliente');
+                },
+                get invoicingOrders() {
+                    return this.orders.filter(o => o.status === 'Facturacion');
+                },
+                get receivedOrders() {
+                    return this.orders.filter(o => o.status === 'Recibido por cliente');
+                },
+
+                get filteredPendingOrders() {
+                    return this.pendingOrders;
+                },
+                get filteredInProgressOrders() {
+                    return this.inProgressOrders;
+                },
+                get filteredReadyOrders() {
+                    return this.readyOrders;
+                },
+                get filteredPreparedOrders() {
+                    return this.preparedOrders;
+                },
+                get filteredShippedOrders() {
+                    return this.shippedOrders;
+                },
+                get filteredInvoicingOrders() {
+                    return this.invoicingOrders;
+                },
+                get filteredReceivedOrders() {
+                    return this.receivedOrders;
+                },
+
+                async updateOrderStatus(orderId, newStatus) {
+                    if (!confirm(`¿Confirmar actualización a '${newStatus}'?`)) return;
+                    this.loading = true;
+                    try {
+                        const res = await fetch(`/orders/${orderId}/status`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ status: newStatus, notes: "Actualizado desde el monitor" })
+                        });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.error || 'Error al actualizar el estado');
+
+                        this.showToast('Éxito', `Pedido actualizado a ${newStatus}`);
+                        this.fetchOrders();
+                    } catch (e) {
+                        this.showToast('Error', e.message, 'error');
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                formatItemQuantity(item) {
+                    const rawQuantity = item.quantity ?? item.Quantity ?? 0;
+                    const quantity = Number.isFinite(Number(rawQuantity)) ? Number(rawQuantity) : rawQuantity;
+                    return `${quantity} ${this.normalizeItemUnit(item)}`;
+                },
+
+                normalizeItemUnit(item) {
+                    const rawUnit = item.unit || item.Unit || item.uom || item.UoM || '';
+                    const normalizedUnit = String(rawUnit).trim().toUpperCase();
+                    if (normalizedUnit === 'KGM' || normalizedUnit === 'KG') return 'KG';
+                    if (normalizedUnit === 'LTR' || normalizedUnit === 'LT' || normalizedUnit === 'L') return 'LT';
+                    if (normalizedUnit === 'PZA' || normalizedUnit === 'PZ' || normalizedUnit === 'PIEZA' || normalizedUnit === 'PIEZAS') return 'PZ';
+
+                    const itemCode = String(item.item_code || item.ItemCode || '').trim().toUpperCase();
+                    if (itemCode === 'VAR-QB00014') return 'KG';
+
+                    return normalizedUnit || 'PZ';
+                },
+
+                toggleExpand(orderId) {
+                    this.expandedOrder = this.expandedOrder === orderId ? null : orderId;
+                },
+
+                getAgingHours(order) {
+                    const ref = order.created_at || order.order_date || order.delivery_date;
+                    if (!ref) return 0;
+                    const created = new Date(ref);
+                    if (isNaN(created)) return 0;
+                    return Math.max(0, Math.floor((Date.now() - created.getTime()) / (1000 * 60 * 60)));
+                },
+
+                getAgingText(order) {
+                    const h = this.getAgingHours(order);
+                    if (h < 1) return '< 1h';
+                    if (h < 24) return h + 'h';
+                    const d = Math.floor(h / 24);
+                    return d + 'd ' + (h % 24) + 'h';
+                },
+
+                getAgingClass(order) {
+                    const h = this.getAgingHours(order);
+                    if (h < 24) return 'aging-ok';
+                    if (h < 72) return 'aging-warn';
+                    return 'aging-danger';
+                },
+
+                init() {
+                    let savedColumns = {};
+                    try {
+                        savedColumns = JSON.parse(localStorage.getItem('monitorColumnStates') || '{}');
+                    } catch (e) {
+                        savedColumns = {};
+                    }
+                    this.isCol1Expanded = savedColumns.col1 ?? true;
+                    this.isCol2Expanded = savedColumns.col2 ?? true;
+                    this.isCol3Expanded = savedColumns.col3 ?? true;
+                    this.isCol4Expanded = savedColumns.col4 ?? true;
+                    this.isCol5Expanded = savedColumns.col5 ?? true;
+                    this.isCol6Expanded = savedColumns.col6 ?? true;
+                    this.isCol7Expanded = savedColumns.col7 ?? true;
+                    this.isCol6Expanded = savedColumns.col6 ?? true;
+                    this.isCol7Expanded = savedColumns.col7 ?? true;
+                    this.fetchOrders();
+                    this.startTimer();
+                },
+
+                startTimer() {
+                    if (this.timer) clearInterval(this.timer);
+                    this.timer = setInterval(() => this.fetchOrders(), this.settings.refreshRate);
+                },
+
+                /* ══════ DATA ══════ */
+                async fetchOrders() {
+                    this.loading = true;
+                    try {
+                        const ts = Date.now();
+                        const res = await fetch('/orders/api/public/active?limit=' + this.settings.limit + '&_=' + ts, { cache: 'no-store' });
+                        if (!res.ok) throw new Error('Network');
+                        const data = await res.json();
+                        const pri = { 'Pendiente': 1, 'En Proceso': 2, 'Preparando': 3, 'Facturacion': 4, 'Entregado a almacen': 5, 'Preparado': 5, 'Enviado al cliente': 6, 'Recibido por cliente': 7 };
+                        const sorted = (data.orders || []).sort((a, b) => (pri[a.status] || 99) - (pri[b.status] || 99));
+
+                        // Detect new orders
+                        const incomingIds = new Set(sorted.map(o => o.order_id));
+                        this.newOrderIds = new Set();
+                        if (!this.firstLoad) {
+                            for (const id of incomingIds) {
+                                if (!this.knownOrderIds.has(id)) {
+                                    this.newOrderIds.add(id);
+                                }
+                            }
+                            if (this.newOrderIds.size > 0) {
+                                const count = this.newOrderIds.size;
+                                const ids = [...this.newOrderIds].slice(0, 3).join(', ');
+                                this.showToast(
+                                    count === 1 ? 'Nuevo Pedido' : count + ' Nuevos Pedidos',
+                                    count === 1 ? 'Pedido ' + ids + ' agregado' : 'Pedidos: ' + ids
+                                );
+                                this.playNotificationSound();
+                                // Auto-clear highlight after 5s
+                                setTimeout(() => { this.newOrderIds = new Set(); }, 5000);
+                            }
+                        }
+                        this.knownOrderIds = incomingIds;
+                        this.firstLoad = false;
+
+                        this.orders = sorted;
+                    } catch (e) {
+                        console.error('Fetch orders:', e);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                showToast(title, message, type = 'info') {
+                    if (this.toast._timer) clearTimeout(this.toast._timer);
+                    this.toast.title = title;
+                    this.toast.message = message;
+                    this.toast.type = type;
+                    this.toast.visible = true;
+                    this.toast._timer = setTimeout(() => { this.toast.visible = false; }, type === 'error' ? 6000 : 4000);
+                },
+
+                _audioCtx: null,
+                playNotificationSound() {
+                    try {
+                        if (!this._audioCtx) this._audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                        const ctx = this._audioCtx;
+                        if (ctx.state === 'suspended') ctx.resume();
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.frequency.setValueAtTime(880, ctx.currentTime);
+                        osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
+                        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+                        osc.start(ctx.currentTime);
+                        osc.stop(ctx.currentTime + 0.3);
+                    } catch (e) { /* audio not available */ }
+                },
+
+                formatDate(str) {
+                    if (!str) return '-';
+                    if (str.includes(' ')) str = str.split(' ')[0];
+                    if (str.includes('T')) str = str.split('T')[0];
+                    if (str.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                        const [y, m, d] = str.split('-');
+                        return `${d}/${m}/${y}`;
+                    }
+                    return str;
+                },
+            }))
+        })
+    </script>
+</body>
+
+</html>

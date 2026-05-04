@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}404 - No encontrado{% endblock %}
+{% block content %}
+<div class="text-center py-20">
+    <h1 class="text-6xl font-bold text-slate-300">404</h1>
+    <p class="text-xl text-slate-600 mt-4">Página no encontrada</p>
+    <a href="{{ url_for('orders.index') }}" class="inline-block mt-6 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Volver a Pedidos</a>
+</div>
+{% endblock %}

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar Sesión — Seguimiento de Pedidos</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>body { font-family: 'Inter', sans-serif; }</style>
+</head>
+<body class="bg-gradient-to-br from-slate-100 to-blue-50 min-h-screen flex items-center justify-center">
+    <div class="w-full max-w-md">
+        <div class="bg-white rounded-2xl shadow-xl border border-slate-200 p-8">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">📦 Seguimiento</h1>
+                <p class="text-slate-500 mt-2">Sistema de Seguimiento de Pedidos</p>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="mb-4 p-3 rounded-lg text-sm
+                        {% if category == 'error' %}bg-red-50 text-red-700 border border-red-200
+                        {% elif category == 'warning' %}bg-amber-50 text-amber-700 border border-amber-200
+                        {% else %}bg-blue-50 text-blue-700 border border-blue-200{% endif %}">
+                {{ message }}
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            <form method="POST" class="space-y-5">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Usuario</label>
+                    <input type="text" name="username" required autofocus
+                           class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow"
+                           placeholder="Ingrese su usuario">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
+                    <input type="password" name="password" required
+                           class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow"
+                           placeholder="Ingrese su contraseña">
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" name="remember" id="remember" class="h-4 w-4 text-blue-600 border-slate-300 rounded">
+                    <label for="remember" class="ml-2 text-sm text-slate-600">Recordarme</label>
+                </div>
+                <button type="submit"
+                        class="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl shadow-md hover:shadow-lg hover:from-blue-700 hover:to-indigo-700 transition-all">
+                    Iniciar Sesión
+                </button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

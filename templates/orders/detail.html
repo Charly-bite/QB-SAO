@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+
+{% block title %}Pedido #{{ order.order_id }}{% endblock %}
+{% block page_title %}Detalle de Pedido{% endblock %}
+
+{% block content %}
+<div class="w-full" x-data="orderDetail()">
+    <!-- Back button -->
+    <a href="{{ url_for('orders.index') }}" class="inline-flex items-center text-slate-600 hover:text-slate-800 mb-6">
+        <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+        Volver a Pedidos
+    </a>
+
+    <!-- Order Header -->
+    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <div class="flex flex-wrap justify-between items-start gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-800 mb-2">
+                    Pedido #{{ order.order_id }}
+                </h1>
+                <div class="text-slate-600">
+                    <p class="font-medium">{{ order.customer_name }}</p>
+                    <p class="text-sm">Código: {{ order.customer_code }}</p>
+                    {% if order.get('factura_number') %}
+                    <p class="text-sm text-blue-600 font-medium mt-1">Factura SAP: #{{ order.factura_number }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Current Status -->
+            <div class="text-right">
+                {% set status = order.status %}
+                <span class="px-4 py-2 rounded-lg text-lg font-bold
+                    {% if status == 'Pendiente' %}bg-gray-100 text-gray-700
+                    {% elif status == 'En Proceso' %}bg-blue-100 text-blue-700
+                    {% elif status == 'Preparando' %}bg-amber-100 text-amber-700
+                    {% elif status == 'Facturacion' %}bg-emerald-700 text-white
+                    {% elif status == 'Recibido por almacen' %}bg-green-100 text-green-700
+                    {% elif status == 'Enviado al cliente' %}bg-purple-100 text-purple-700
+                    {% elif status == 'Recibido por cliente' %}bg-teal-100 text-teal-700
+                    {% elif status == 'Cancelado' %}bg-red-100 text-red-700
+                    {% else %}bg-gray-100 text-gray-700{% endif %}">
+                    {% if status == 'Facturacion' %}
+                    Facturado{% if order.get('factura_number') %} #{{ order.get('factura_number') }}{% endif %}
+                    {% else %}
+                    {{ status }}
+                    {% endif %}
+                </span>
+                <p class="text-sm text-slate-500 mt-2">
+                    Fecha: {{ order.doc_date[:10] if order.doc_date else '-' }}
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Update -->
+    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <h3 class="font-semibold text-slate-800 mb-4">Actualizar Estado</h3>
+        {% set main_statuses = [
+        'Pendiente',
+        'En Proceso',
+        'Preparando',
+        'Facturacion',
+        'Recibido por almacen',
+        'Enviado al cliente',
+        'Recibido por cliente'
+        ] %}
+        {% set extra_statuses = ['Cancelado', 'En Espera'] %}
+        {% set current_idx = main_statuses.index(order.status) if order.status in main_statuses else -1 %}
+
+        <!-- Main Flow -->
+        <div class="flex items-center justify-between w-full gap-2 mb-6 overflow-x-auto pb-2 px-1">
+            {% for s in main_statuses %}
+            {% set step_idx = loop.index0 %}
+
+            {% if step_idx > 0 %}
+            <!-- Arrow -->
+            <div class="text-slate-400 flex-shrink-0">
+                <svg class="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+            </div>
+            {% endif %}
+
+            {% if step_idx < current_idx %} <!-- Finished: Gray with emerald-700 border -->
+                <button @click.prevent="updateStatus('{{ s }}')" :disabled="updatingStatus !== null"
+                    :class="{'opacity-50 cursor-not-allowed': updatingStatus !== null}"
+                    class="flex items-center justify-center flex-1 px-2 py-3 md:py-4 rounded-xl text-sm md:text-base font-semibold transition-colors bg-gray-50 border-2 border-emerald-700 text-gray-700 hover:bg-gray-100 min-w-min whitespace-nowrap shadow-sm">
+                    <svg x-cloak x-show="updatingStatus === '{{ s }}'"
+                        class="animate-spin mr-2 h-4 w-4 md:h-5 md:w-5 text-emerald-700"
+                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4">
+                        </circle>
+                        <path class="opacity-75" fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                        </path>
+                    </svg>
+                    <span>
+                        {% if s == 'Facturacion' %}
+                        Facturado{% if order.get('factura_number') %} #{{ order.get('factura_number') }}{% endif %}
+                        {% else %}
+                        {{ s }}
+                        {% endif %}
+                    </span>
+                </button>
+                {% else %}
+                <!-- Uncompleted / Current: Emerald-700 (Facturado Green) -->
+                <button @click.prevent="updateStatus('{{ s }}')" :disabled="updatingStatus !== null"
+                    :class="{'opacity-50 cursor-not-allowed': updatingStatus !== null}"
+                    class="flex items-center justify-center flex-1 px-2 py-3 md:py-4 rounded-xl text-sm md:text-base font-semibold transition-colors border-2 border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800 min-w-min whitespace-nowrap shadow-md">
+                    <svg x-cloak x-show="updatingStatus === '{{ s }}'"
+                        class="animate-spin mr-2 h-4 w-4 md:h-5 md:w-5 text-white" xmlns="http://www.w3.org/2000/svg"
+                        fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4">
+                        </circle>
+                        <path class="opacity-75" fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                        </path>
+                    </svg>
+                    <span>
+                        {% if s == 'Facturacion' %}
+                        Facturado{% if order.get('factura_number') %} #{{ order.get('factura_number') }}{% endif %}
+                        {% else %}
+                        {{ s }}
+                        {% endif %}
+                    </span>
+                </button>
+                {% endif %}
+                {% endfor %}
+        </div>
+
+        <!-- Extra Statuses (Cancelado, En Espera) -->
+        <div class="flex items-center gap-3 pt-4 border-t border-slate-100">
+            {% for s in extra_statuses %}
+            <button @click.prevent="updateStatus('{{ s }}')" :disabled="updatingStatus !== null"
+                :class="{'opacity-50 cursor-not-allowed': updatingStatus !== null}" class="flex items-center justify-center px-4 py-2 rounded-lg text-sm font-medium transition-colors
+                               {% if order.status == s %}ring-2 ring-blue-500{% endif %}
+                               {% if s == 'Cancelado' %}bg-red-50 hover:bg-red-100 text-red-700 border-2 border-transparent
+                               {% elif s == 'En Espera' %}bg-orange-50 hover:bg-orange-100 text-orange-700 border-2 border-transparent
+                               {% else %}bg-gray-50 hover:bg-gray-100 border-2 border-transparent{% endif %}">
+                <svg x-cloak x-show="updatingStatus === '{{ s }}'"
+                    class="animate-spin mr-2 h-4 w-4 {% if s == 'Cancelado' %}text-red-700{% elif s == 'En Espera' %}text-orange-700{% endif %}"
+                    xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                    </path>
+                </svg>
+                <span>{{ s }}</span>
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Order Items -->
+    {% if order.get('items', []) %}
+    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <h3 class="font-semibold text-slate-800 mb-4">Productos del Pedido</h3>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-slate-50">
+                    <tr class="text-left text-sm text-slate-600">
+                        <th class="px-4 py-2">Código</th>
+                        <th class="px-4 py-2">Descripción</th>
+                        <th class="px-4 py-2 text-right">Cantidad</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in order.get('items', []) %}
+                    <tr class="border-b border-slate-100">
+                        <td class="px-4 py-3 font-mono text-sm">{{ item.get('ItemCode', item.get('item_code', '-')) }}
+                        </td>
+                        <td class="px-4 py-3">{{ item.get('Dscription', item.get('description', '-')) }}</td>
+                        <td class="px-4 py-3 text-right">{{ item.get('Quantity', item.get('quantity', '-')) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Status History -->
+    {% if order.status_history %}
+    <div class="bg-white rounded-xl shadow-sm p-6">
+        <h3 class="font-semibold text-slate-800 mb-4">Historial de Estados</h3>
+        <div class="space-y-4">
+            {% for entry in order.status_history | reverse %}
+            <div class="flex items-start">
+                <div class="w-3 h-3 rounded-full bg-blue-500 mt-1.5 mr-4"></div>
+                <div class="flex-1">
+                    <div class="flex justify-between">
+                        <span class="font-medium text-slate-800">{{ entry.status }}</span>
+                        <span class="text-sm text-slate-500">{{ entry.timestamp[:16] }}</span>
+                    </div>
+                    <p class="text-sm text-slate-600">Por: {{ entry.user or entry.changed_by or '-' }}</p>
+                    {% if entry.notes %}
+                    <p class="text-sm text-slate-500 mt-1">{{ entry.notes }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+    function orderDetail() {
+        return {
+            orderId: '{{ order.order_id }}',
+            updatingStatus: null,
+
+            async updateStatus(newStatus) {
+                if (this.updatingStatus) return;
+                this.updatingStatus = newStatus;
+                try {
+                    const res = await fetch(`/orders/${this.orderId}/status`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: newStatus, notes: '' })
+                    });
+
+                    const data = await res.json();
+                    if (data.success) {
+                        window.location.reload();
+                    } else {
+                        alert(data.error || 'Error actualizando estado');
+                        this.updatingStatus = null;
+                    }
+                } catch (e) {
+                    alert('Error de conexión');
+                    this.updatingStatus = null;
+                }
+            }
+        };
+    }
+</script>
+{% endblock %}
