@@ -1,6 +1,6 @@
 @echo off
 echo ============================================
-echo   Seguimiento Web — Running Tests
+echo   Open-OMS — Running Tests
 echo ============================================
 cd /d "%~dp0\.."
 
@@ -23,3 +23,4 @@ if %ERRORLEVEL% neq 0 (
     echo.
     echo ✅ ALL TESTS PASSED
 )
+

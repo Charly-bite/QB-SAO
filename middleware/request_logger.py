@@ -6,7 +6,7 @@ import logging
 from flask import request, g
 from flask_login import current_user
 
-logger = logging.getLogger('seguimiento.requests')
+logger = logging.getLogger('open_oms.requests')
 
 
 def init_request_logger(app):

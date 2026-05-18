@@ -3,20 +3,36 @@ Order status routes for SGA Web
 """
 
 import datetime
-import os
-import time
 import json as json_mod
 import logging
+import os
+import time
 import urllib.request
 from functools import wraps
-from flask import Blueprint, render_template, request, jsonify, current_app
-from flask_login import login_required, current_user
+
+from flask import Blueprint, current_app, jsonify, render_template, request, Response
+import queue
+from flask_login import current_user, login_required
+
 from core.order_status_manager import OrderStatus
 
 # Weather cache (module-level)
 _weather_cache = {"data": None, "timestamp": 0}
 
 orders_bp = Blueprint("orders", __name__)
+
+# Simple in-memory pub/sub for Server-Sent Events (SSE)
+_SUBSCRIBERS = []
+
+
+def _publish_event(event: dict):
+    # Push event to all subscriber queues (non-blocking)
+    for q in list(_SUBSCRIBERS):
+        try:
+            q.put(event, block=False)
+        except Exception:
+            # ignore full/closed queues
+            pass
 
 
 def _require_monitor_token(f):
@@ -94,6 +110,41 @@ def index():
     )
 
 
+@orders_bp.route('/stream')
+@_require_monitor_token
+def stream():
+    """Server-Sent Events stream that broadcasts order updates to monitors."""
+    q = queue.Queue()
+    _SUBSCRIBERS.append(q)
+
+    def event_stream(local_q):
+        try:
+            while True:
+                data = local_q.get()
+                yield f"data: {json_mod.dumps(data, ensure_ascii=False)}\n\n"
+        finally:
+            # Clean up when client disconnects
+            try:
+                _SUBSCRIBERS.remove(local_q)
+            except ValueError:
+                pass
+
+    return Response(event_stream(q), mimetype='text/event-stream')
+
+
+# Pipeline order for the status stepper — defined once here, passed to template
+_MAIN_STATUSES = [
+    OrderStatus.PENDING.value,
+    OrderStatus.IN_PROGRESS.value,
+    OrderStatus.PICKING.value,
+    OrderStatus.INVOICING.value,
+    OrderStatus.READY.value,
+    OrderStatus.SHIPPED.value,
+    OrderStatus.RECEIVED.value,
+]
+_EXTRA_STATUSES = [OrderStatus.CANCELLED.value, OrderStatus.ON_HOLD.value]
+
+
 @orders_bp.route("/<order_id>")
 @login_required
 def detail(order_id):
@@ -104,7 +155,20 @@ def detail(order_id):
     if not order:
         return render_template("errors/404.html"), 404
 
-    return render_template("orders/detail.html", order=order, OrderStatus=OrderStatus)
+    current_idx = (
+        _MAIN_STATUSES.index(order["status"])
+        if order.get("status") in _MAIN_STATUSES
+        else -1
+    )
+
+    return render_template(
+        "orders/detail.html",
+        order=order,
+        OrderStatus=OrderStatus,
+        main_statuses=_MAIN_STATUSES,
+        extra_statuses=_EXTRA_STATUSES,
+        current_idx=current_idx,
+    )
 
 
 @orders_bp.route("/<order_id>/status", methods=["POST"])
@@ -138,7 +202,9 @@ def update_status(order_id):
 
     # Validate status
     try:
-        logging.info(f"update_status: order={order_id}, raw='{new_status}', normalized='{normalized}'")
+        logging.info(
+            f"update_status: order={order_id}, raw='{new_status}', normalized='{normalized}'"
+        )
         status_enum = OrderStatus(normalized)
     except ValueError:
         # Fallback: try case-insensitive match against enum values
@@ -164,6 +230,18 @@ def update_status(order_id):
     result = order_mgr.update_status(
         order_id, status_enum.value, current_user.username, notes
     )
+
+    # Broadcast update to connected monitors
+    if result:
+        try:
+            updated_order = order_mgr.get_order(order_id)
+            _publish_event({
+                "type": "order_updated",
+                "order_id": str(order_id),
+                "order": updated_order,
+            })
+        except Exception:
+            pass
 
     if result:
         return jsonify({"success": True, "order": result})
@@ -235,6 +313,42 @@ def import_from_sap():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+
+@orders_bp.route("/<order_id>/label-printed", methods=["POST"])
+@login_required
+def label_printed(order_id):
+    """Endpoint to be called when a shipping label is printed for an order.
+
+    This will transition the local order status to `En Proceso` and notify
+    connected monitor clients via SSE.
+    """
+    if not current_user.can_print_labels():
+        return jsonify({"error": "Sin permisos"}), 403
+
+    order_mgr = current_app.order_status_mgr
+
+    # Move to In Progress
+    success = order_mgr.update_status(
+        order_id, OrderStatus.IN_PROGRESS.value, current_user.username, notes="Etiqueta impresa"
+    )
+
+    if not success:
+        return jsonify({"error": "Pedido no encontrado"}), 404
+
+    # Broadcast update
+    try:
+        updated_order = order_mgr.get_order(order_id)
+        _publish_event({
+            "type": "order_updated",
+            "order_id": str(order_id),
+            "order": updated_order,
+        })
+    except Exception:
+        pass
+
+    return jsonify({"success": True})
 
 
 @orders_bp.route("/load-recent-sap", methods=["POST"])
@@ -343,7 +457,7 @@ def load_recent_from_sap():
                                 "status": new_local_status,
                                 "timestamp": now_ts,
                                 "user": sap_user,
-                                "notes": f'Auto-actualizado: {flattened_order["sap_status"]}',
+                                "notes": f"Auto-actualizado: {flattened_order['sap_status']}",
                             }
                         )
                     updated_count += 1
@@ -578,22 +692,22 @@ def visor_sync():
                         OrderStatus.SHIPPED.value,
                         OrderStatus.RECEIVED.value,
                     ]:
-                        order_mgr.orders[order_id][
-                            "status"
-                        ] = OrderStatus.INVOICING.value
-                        order_mgr.orders[order_id][
-                            "last_updated"
-                        ] = datetime.datetime.now().isoformat()
+                        order_mgr.orders[order_id]["status"] = (
+                            OrderStatus.INVOICING.value
+                        )
+                        order_mgr.orders[order_id]["last_updated"] = (
+                            datetime.datetime.now().isoformat()
+                        )
                     elif (
                         new_sap_status == "Cancelado"
                         and current_local != OrderStatus.CANCELLED.value
                     ):
-                        order_mgr.orders[order_id][
-                            "status"
-                        ] = OrderStatus.CANCELLED.value
-                        order_mgr.orders[order_id][
-                            "last_updated"
-                        ] = datetime.datetime.now().isoformat()
+                        order_mgr.orders[order_id]["status"] = (
+                            OrderStatus.CANCELLED.value
+                        )
+                        order_mgr.orders[order_id]["last_updated"] = (
+                            datetime.datetime.now().isoformat()
+                        )
                     needs_update = True
 
                 # Always sync factura_number from SAP
@@ -616,7 +730,9 @@ def visor_sync():
         return jsonify({"success": True, "updated": updated_count, "new": new_count})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        import logging
+        logging.warning(f"Visor sync error: {e}")
+        return jsonify({"success": False, "error": str(e), "updated": 0, "new": 0}), 200
 
 
 @orders_bp.route("/visor")
@@ -690,10 +806,91 @@ def api_active_orders():
 
 
 @orders_bp.route("/monitor")
+@login_required
 def monitor():
-    """Public control tower dashboard for sales team"""
-    # Public page — data is fetched via public API with optional token
+    """Seller tracking panel — login required for role-based filtering.
+    Sellers see only their own orders; managers/admins see all."""
     return render_template("orders/monitor.html", now=datetime.datetime.now())
+
+
+@orders_bp.route("/api/seller/orders")
+@login_required
+def api_seller_orders():
+    """API for the Monitor panel — returns orders filtered by seller identity.
+    - seller role: only orders where created_by matches user's sap_seller_name
+    - sell_manager / admin / operator: all orders (with optional ?seller= filter)
+    """
+    order_mgr = current_app.order_status_mgr
+    active_orders = order_mgr.get_active_orders()
+
+    # Role-based filtering
+    user = current_user
+    can_see_all = user.can_see_all_orders()
+    seller_filter = request.args.get("seller", "").strip()
+
+    if not can_see_all:
+        # Seller role — filter to own SAP seller name
+        sap_name = getattr(user, "sap_seller_name", "") or ""
+        if sap_name:
+            active_orders = [
+                o
+                for o in active_orders
+                if (o.get("created_by", "") or "").upper() == sap_name.upper()
+            ]
+        else:
+            # No SAP name configured — return empty
+            active_orders = []
+    elif seller_filter:
+        # Manager/admin filtering by specific seller
+        active_orders = [
+            o
+            for o in active_orders
+            if (o.get("created_by", "") or "").upper() == seller_filter.upper()
+        ]
+
+    # Build unique seller list (for the filter dropdown)
+    all_orders = order_mgr.get_active_orders()
+    sellers = sorted(
+        set(o.get("created_by", "") for o in all_orders if o.get("created_by"))
+    )
+
+    # Stats
+    stats = {
+        "total_active": len(active_orders),
+        "pending": len(
+            [o for o in active_orders if o.get("status") == OrderStatus.PENDING.value]
+        ),
+        "in_progress": len(
+            [
+                o
+                for o in active_orders
+                if o.get("status") == OrderStatus.IN_PROGRESS.value
+            ]
+        ),
+        "picking": len(
+            [o for o in active_orders if o.get("status") == OrderStatus.PICKING.value]
+        ),
+        "invoicing": len(
+            [o for o in active_orders if o.get("status") == OrderStatus.INVOICING.value]
+        ),
+        "ready": len(
+            [o for o in active_orders if o.get("status") == OrderStatus.READY.value]
+        ),
+        "shipped": len(
+            [o for o in active_orders if o.get("status") == OrderStatus.SHIPPED.value]
+        ),
+    }
+
+    return jsonify(
+        {
+            "orders": active_orders,
+            "stats": stats,
+            "sellers": sellers,
+            "can_see_all": can_see_all,
+            "current_seller": getattr(user, "sap_seller_name", ""),
+            "generated_at": datetime.datetime.now().isoformat(),
+        }
+    )
 
 
 @orders_bp.route("/api/public/active")
@@ -822,22 +1019,22 @@ def public_api_sync():
                         OrderStatus.READY.value,
                         OrderStatus.SHIPPED.value,
                     ]:
-                        order_mgr.orders[order_id][
-                            "status"
-                        ] = OrderStatus.INVOICING.value
-                        order_mgr.orders[order_id][
-                            "last_updated"
-                        ] = datetime.datetime.now().isoformat()
+                        order_mgr.orders[order_id]["status"] = (
+                            OrderStatus.INVOICING.value
+                        )
+                        order_mgr.orders[order_id]["last_updated"] = (
+                            datetime.datetime.now().isoformat()
+                        )
                     elif (
                         new_sap_status == "Cancelado"
                         and current_local != OrderStatus.CANCELLED.value
                     ):
-                        order_mgr.orders[order_id][
-                            "status"
-                        ] = OrderStatus.CANCELLED.value
-                        order_mgr.orders[order_id][
-                            "last_updated"
-                        ] = datetime.datetime.now().isoformat()
+                        order_mgr.orders[order_id]["status"] = (
+                            OrderStatus.CANCELLED.value
+                        )
+                        order_mgr.orders[order_id]["last_updated"] = (
+                            datetime.datetime.now().isoformat()
+                        )
                     needs_update = True
 
                 # Always sync factura_number from SAP

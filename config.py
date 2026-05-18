@@ -1,5 +1,5 @@
 """
-Seguimiento Web Configuration
+Open-OMS Configuration
 Multi-environment: development / staging / production
 """
 import os
@@ -104,3 +104,4 @@ def get_config():
     """Return the config class for the current FLASK_ENV."""
     env = os.environ.get('FLASK_ENV', 'development')
     return config_by_name.get(env, DevelopmentConfig)
+

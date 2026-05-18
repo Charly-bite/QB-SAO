@@ -1,5 +1,5 @@
 """
-Background SAP Order Sync Job — Seguimiento Web
+Background SAP Order Sync Job — Open-OMS
 Run as: python sync_orders_job.py
 Can be scheduled via Windows Task Scheduler.
 """
@@ -104,3 +104,4 @@ def run_order_sync():
 
 if __name__ == "__main__":
     run_order_sync()
+

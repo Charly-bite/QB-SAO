@@ -1,1 +1,2 @@
-# Tests package for Seguimiento Web
+# Tests package for Open-OMS
+

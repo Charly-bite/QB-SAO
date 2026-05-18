@@ -1,86 +1,166 @@
-{% extends "base.html" %}
-
-{% block title %}Visor de Pedidos - Sales Team{% endblock %}
-{% block page_title %}Visor de Estado de Pedidos{% endblock %}
-
-{% block content %}
+{% extends "base.html" %} {% block title %}Visor de Pedidos - Sales Team{%
+endblock %} {% block page_title %}Visor de Estado de Pedidos{% endblock %} {%
+block extra_head %}
+<style>
+    @keyframes stripe-slide {
+        0% {
+            background-position: 0 0;
+        }
+        100% {
+            background-position: 32px 0;
+        }
+    }
+    .progress-striped {
+        background-size: 32px 32px;
+        animation: stripe-slide 0.8s linear infinite;
+    }
+</style>
+{% endblock %} {% block content %}
 <div class="space-y-6" x-data="visorData()">
     <!-- Stats Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <!-- Total Active -->
-        <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-blue-500">
+        <div
+            class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-blue-500"
+        >
             <div class="flex justify-between items-center">
                 <div>
                     <p class="text-sm text-slate-500 font-medium">Activos</p>
-                    <h3 class="text-2xl font-bold text-slate-800">{{ stats.total_active }}</h3>
+                    <h3 class="text-2xl font-bold text-slate-800">
+                        {{ stats.total_active }}
+                    </h3>
                 </div>
                 <div class="p-2 bg-blue-50 rounded-lg text-blue-600">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    <svg
+                        class="w-6 h-6"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M13 10V3L4 14h7v7l9-11h-7z"
+                        />
                     </svg>
                 </div>
             </div>
         </div>
 
         <!-- Pending -->
-        <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-slate-500">
+        <div
+            class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-slate-500"
+        >
             <div class="flex justify-between items-center">
                 <div>
                     <p class="text-sm text-slate-500 font-medium">Pendiente</p>
-                    <h3 class="text-2xl font-bold text-slate-800">{{ stats.pending }}</h3>
+                    <h3 class="text-2xl font-bold text-slate-800">
+                        {{ stats.pending }}
+                    </h3>
                 </div>
                 <div class="p-2 bg-slate-100 rounded-lg text-slate-600">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <svg
+                        class="w-6 h-6"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
                     </svg>
                 </div>
             </div>
         </div>
 
         <!-- Picking -->
-        <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-yellow-500">
+        <div
+            class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-yellow-500"
+        >
             <div class="flex justify-between items-center">
                 <div>
                     <p class="text-sm text-slate-500 font-medium">Preparando</p>
-                    <h3 class="text-2xl font-bold text-slate-800">{{ stats.picking }}</h3>
+                    <h3 class="text-2xl font-bold text-slate-800">
+                        {{ stats.picking }}
+                    </h3>
                 </div>
                 <div class="p-2 bg-yellow-50 rounded-lg text-yellow-600">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    <svg
+                        class="w-6 h-6"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+                        />
                     </svg>
                 </div>
             </div>
         </div>
 
         <!-- Ready -->
-        <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-green-500">
+        <div
+            class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-green-500"
+        >
             <div class="flex justify-between items-center">
                 <div>
                     <p class="text-sm text-slate-500 font-medium">Listo</p>
-                    <h3 class="text-2xl font-bold text-slate-800">{{ stats.ready }}</h3>
+                    <h3 class="text-2xl font-bold text-slate-800">
+                        {{ stats.ready }}
+                    </h3>
                 </div>
                 <div class="p-2 bg-green-50 rounded-lg text-green-600">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    <svg
+                        class="w-6 h-6"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M5 13l4 4L19 7"
+                        />
                     </svg>
                 </div>
             </div>
         </div>
 
         <!-- Shipped -->
-        <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-purple-500">
+        <div
+            class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-purple-500"
+        >
             <div class="flex justify-between items-center">
                 <div>
-                    <p class="text-sm text-slate-500 font-medium">Enviado al cliente</p>
-                    <h3 class="text-2xl font-bold text-slate-800">{{ stats.shipped }}</h3>
+                    <p class="text-sm text-slate-500 font-medium">
+                        Enviado al cliente
+                    </p>
+                    <h3 class="text-2xl font-bold text-slate-800">
+                        {{ stats.shipped }}
+                    </h3>
                 </div>
                 <div class="p-2 bg-purple-50 rounded-lg text-purple-600">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    <svg
+                        class="w-6 h-6"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+                        />
                     </svg>
                 </div>
             </div>
@@ -90,11 +170,21 @@
     <!-- Active Orders Table -->
     <div class="bg-white rounded-xl shadow-sm overflow-hidden">
         <div
-            class="px-6 py-4 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center bg-slate-50 gap-4">
+            class="px-6 py-4 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center bg-slate-50 gap-4"
+        >
             <h3 class="font-bold text-slate-800 flex items-center gap-2">
-                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                <svg
+                    class="w-5 h-5 text-blue-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                    />
                 </svg>
                 Pedidos Activos
             </h3>
@@ -103,40 +193,72 @@
             <div class="flex flex-col md:flex-row gap-3 w-full md:w-auto">
                 <!-- User Filter -->
                 <div class="relative w-full md:w-48">
-                    <select x-model="selectedUser"
-                        class="block w-full pl-3 pr-10 py-2 border border-slate-200 rounded-lg leading-5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-shadow appearance-none text-slate-600">
+                    <select
+                        x-model="selectedUser"
+                        class="block w-full pl-3 pr-10 py-2 border border-slate-200 rounded-lg leading-5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-shadow appearance-none text-slate-600"
+                    >
                         <option value="">Todos los vendedores</option>
                         <template x-for="user in uniqueUsers" :key="user">
                             <option :value="user" x-text="user"></option>
                         </template>
                     </select>
-                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7">
-                            </path>
+                    <div
+                        class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400"
+                    >
+                        <svg
+                            class="h-4 w-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M19 9l-7 7-7-7"
+                            ></path>
                         </svg>
                     </div>
                 </div>
 
                 <!-- Smart Search -->
                 <div class="relative w-full md:w-80">
-                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <svg class="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    <div
+                        class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
+                    >
+                        <svg
+                            class="h-5 w-5 text-slate-400"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                            />
                         </svg>
                     </div>
-                    <input type="text" x-model="searchQuery"
+                    <input
+                        type="text"
+                        x-model="searchQuery"
                         class="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-shadow"
-                        placeholder="Buscar por #pedido, factura, cliente o vendedor...">
+                        placeholder="Buscar por #pedido, factura, cliente o vendedor..."
+                    />
                 </div>
             </div>
 
-            <div class="flex items-center gap-2 text-xs text-slate-500 shrink-0">
+            <div
+                class="flex items-center gap-2 text-xs text-slate-500 shrink-0"
+            >
                 <span class="relative flex h-2 w-2">
                     <span
-                        class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                        class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"
+                    ></span>
+                    <span
+                        class="relative inline-flex rounded-full h-2 w-2 bg-green-500"
+                    ></span>
                 </span>
                 Actualización autom.: <span x-text="timer">60</span>s
             </div>
@@ -146,7 +268,8 @@
             <table class="w-full text-left border-collapse">
                 <thead>
                     <tr
-                        class="text-xs font-semibold tracking-wide text-slate-500 uppercase bg-slate-50 border-b border-slate-100">
+                        class="text-xs font-semibold tracking-wide text-slate-500 uppercase bg-slate-50 border-b border-slate-100"
+                    >
                         <th class="px-6 py-4">Pedido</th>
                         <th class="px-6 py-4">Cliente</th>
                         <th class="px-6 py-4">Status SAP</th>
@@ -156,42 +279,73 @@
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
-                    <template x-for="order in filteredOrders" :key="order.order_id">
+                    <template
+                        x-for="order in filteredOrders"
+                        :key="order.order_id"
+                    >
                         <tr class="hover:bg-blue-50/30 transition-colors">
-                            <td class="px-6 py-4 font-medium text-slate-800" x-text="'#' + order.order_id"></td>
+                            <td
+                                class="px-6 py-4 font-medium text-slate-800"
+                                x-text="'#' + order.order_id"
+                            ></td>
                             <td class="px-6 py-4">
-                                <div class="font-medium text-slate-800" x-text="order.customer_name"></div>
-                                <div class="text-xs text-slate-500" x-text="order.customer_code"></div>
+                                <div
+                                    class="font-medium text-slate-800"
+                                    x-text="order.customer_name"
+                                ></div>
+                                <div
+                                    class="text-xs text-slate-500"
+                                    x-text="order.customer_code"
+                                ></div>
                             </td>
                             <td class="px-6 py-4">
-                                <span class="px-2 py-1 text-xs font-bold rounded-full"
-                                    :class="getSapStatusClass(order.sap_status)" x-text="order.sap_status">
+                                <span
+                                    class="px-2 py-1 text-xs font-bold rounded-full"
+                                    :class="getSapStatusClass(order.sap_status)"
+                                    x-text="order.sap_status"
+                                >
                                 </span>
                             </td>
                             <td class="px-6 py-4">
                                 <div class="w-full max-w-xs">
                                     <div class="flex justify-between mb-1">
-                                        <span class="text-xs font-bold" :class="getTextColor(order.status)"
-                                            x-text="order.status === 'Facturacion' ? (order.factura_number ? 'Facturado #' + order.factura_number : 'Facturado') : order.status"></span>
-                                        <span class="text-xs font-medium text-slate-500"
-                                            x-text="getStatusWidth(order.status)"></span>
+                                        <span
+                                            class="text-xs font-bold"
+                                            :class="getTextColor(order.status)"
+                                            x-text="order.status === 'Facturacion' ? (order.factura_number ? 'Facturado #' + order.factura_number : 'Facturado') : order.status"
+                                        ></span>
+                                        <span
+                                            class="text-xs font-medium text-slate-500"
+                                            x-text="getStatusPercent(order.status)"
+                                        ></span>
                                     </div>
-                                    <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                                        <div class="h-2.5 rounded-full transition-all duration-500"
-                                            :class="getStatusColor(order.status)"
-                                            :style="'width: ' + getStatusWidth(order.status)"></div>
+                                    <div
+                                        class="w-full bg-slate-100 rounded-full h-3 overflow-hidden"
+                                    >
+                                        <div
+                                            class="h-3 rounded-full transition-all duration-700 progress-striped"
+                                            :style="getProgressBarStyle(order.status)"
+                                        ></div>
                                     </div>
                                 </div>
                             </td>
-                            <td class="px-6 py-4 text-sm text-slate-600" x-text="order.delivery_date"></td>
-                            <td class="px-6 py-4 text-right text-xs text-slate-400"
-                                x-text="order.last_updated ? order.last_updated.split('T')[1].substring(0,5) : '-'">
-                            </td>
+                            <td
+                                class="px-6 py-4 text-sm text-slate-600"
+                                x-text="order.delivery_date"
+                            ></td>
+                            <td
+                                class="px-6 py-4 text-right text-xs text-slate-400"
+                                x-text="order.last_updated ? order.last_updated.split('T')[1].substring(0,5) : '-'"
+                            ></td>
                         </tr>
                     </template>
                     <tr x-show="filteredOrders.length === 0">
-                        <td colspan="6" class="px-6 py-12 text-center text-slate-500">
-                            No se encontraron pedidos que coincidan con la búsqueda.
+                        <td
+                            colspan="6"
+                            class="px-6 py-12 text-center text-slate-500"
+                        >
+                            No se encontraron pedidos que coincidan con la
+                            búsqueda.
                         </td>
                     </tr>
                 </tbody>
@@ -258,11 +412,11 @@
         this.loading = true;
 
         try {
-            // 1. Trigger SAP Sync (background)
-            await fetch("{{ url_for('orders.visor_sync') }}", {
+            // 1. Trigger SAP Sync (background) - no await so UI doesn't hang on timeout
+            fetch("{{ url_for('orders.visor_sync') }}", {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
-            });
+            }).catch(e => console.warn("Background sync failed:", e));
 
             // 2. Fetch fresh data
             const res = await fetch("{{ url_for('orders.api_active_orders') }}?_=" + Date.now(), { cache: 'no-store' });
@@ -278,35 +432,47 @@
         }
     },
 
-    // Helper to get color classes based on status
-    getStatusColor(status) {
-        const colors = {
-            'Pendiente': 'bg-slate-500',
-            'En Proceso': 'bg-blue-500',
-            'Preparando': 'bg-yellow-500',
-            'Listo para Envío': 'bg-green-500',
-            'Recibido por almacen': 'bg-green-500',
-            'Enviado al cliente': 'bg-purple-500',
-            'Enviado': 'bg-purple-500',
-            'Recibido por cliente': 'bg-teal-500',
-            'Facturacion': 'bg-emerald-700'
+    // Returns the full inline style string for the striped progress bar
+    getProgressBarStyle(status) {
+        // Two-tone hex pairs for the diagonal stripe effect
+        const colorPairs = {
+            'Pendiente':            ['#94a3b8', '#64748b'],
+            'En Proceso':           ['#60a5fa', '#3b82f6'],
+            'Preparando':           ['#fbbf24', '#f59e0b'],
+            'Facturacion':          ['#34d399', '#059669'],
+            'Recibido por almacen': ['#4ade80', '#16a34a'],
+            'Enviado al cliente':   ['#c084fc', '#9333ea'],
+            'Recibido por cliente': ['#2dd4bf', '#0d9488'],
+            'En Espera':            ['#fb923c', '#ea580c'],
+            'Cancelado':            ['#f87171', '#dc2626'],
         };
-        return colors[status] || 'bg-slate-200';
+        const widths = {
+            'Pendiente':            14,
+            'En Proceso':           28,
+            'Preparando':           43,
+            'Facturacion':          57,
+            'Recibido por almacen': 72,
+            'Enviado al cliente':   86,
+            'Recibido por cliente': 100,
+            'En Espera':            20,
+            'Cancelado':            100,
+        };
+        const [c1, c2] = colorPairs[status] || ['#94a3b8', '#64748b'];
+        const w = widths[status] ?? 0;
+        return [
+            `width: ${w}%`,
+            `background: repeating-linear-gradient(45deg, ${c1}, ${c1} 8px, ${c2} 8px, ${c2} 16px)`,
+        ].join('; ');
     },
 
-    getStatusWidth(status) {
+    getStatusPercent(status) {
         const widths = {
-            'Pendiente': '10%',
-            'En Proceso': '30%',
-            'Preparando': '60%',
-            'Listo para Envío': '90%',
-            'Recibido por almacen': '90%',
-            'Enviado al cliente': '100%',
-            'Enviado': '100%',
-            'Recibido por cliente': '100%',
-            'Facturacion': '100%'
+            'Pendiente': 14, 'En Proceso': 28, 'Preparando': 43,
+            'Facturacion': 57, 'Recibido por almacen': 72,
+            'Enviado al cliente': 86, 'Recibido por cliente': 100,
+            'En Espera': 20, 'Cancelado': 100,
         };
-        return widths[status] || '0%';
+        return (widths[status] ?? 0) + '%';
     },
 
     getTextColor(status) {

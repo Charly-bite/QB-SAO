@@ -1,17 +1,15 @@
 """
-User Manager — Seguimiento Web
+User Manager — Open-OMS
 Independent user management with SQL persistence.
 Uses 'seguimiento_users' table.
 """
 
-import os
-import json
-import hashlib
-import secrets
-import logging
 import datetime
+import hashlib
+import logging
+import secrets
 from enum import Enum
-from typing import Optional, Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -20,17 +18,19 @@ class UserRole(Enum):
     VIEWER = "viewer"
     OPERATOR = "operator"
     ADMIN = "admin"
+    SELLER = "seller"
+    SELL_MANAGER = "sell_manager"
 
 
 class UserManager:
     """
-    Manages users for Seguimiento Web.
+    Manages users for Open-OMS.
     Uses 'seguimiento_users' SQL table (independent from SGA_dev).
     """
 
     TABLE_NAME = "seguimiento_users"
 
-    def __init__(self, fallback_json_path: str = None):
+    def __init__(self, fallback_json_path: Optional[str] = None):
         self.users: Dict[str, Dict] = {}
         self.current_user = None
         self.sql_engine = None
@@ -38,6 +38,7 @@ class UserManager:
         # Try SQL connection
         try:
             from core.database_client import DatabaseClient
+
             db = DatabaseClient()
             if db.connect():
                 self.sql_engine = db.get_sql_engine()
@@ -96,10 +97,13 @@ class UserManager:
                         "email": user_data.get("email", ""),
                         "role": user_data.get("role", "viewer"),
                         "is_active": bool(user_data.get("is_active", True)),
-                        "must_change_password": bool(user_data.get("must_change_password", False)),
+                        "must_change_password": bool(
+                            user_data.get("must_change_password", False)
+                        ),
                         "last_login": user_data.get("last_login"),
                         "created_at": user_data.get("created_at", ""),
                         "warehouse": user_data.get("warehouse", ""),
+                        "sap_seller_name": user_data.get("sap_seller_name", ""),
                     }
             logger.info(f"✅ Loaded {len(self.users)} users from {self.TABLE_NAME}")
         except Exception as e:
@@ -116,7 +120,8 @@ class UserManager:
                 cursor = raw.cursor()
 
                 # Upsert
-                cursor.execute(f"""
+                cursor.execute(
+                    f"""
                     IF EXISTS (SELECT 1 FROM {self.TABLE_NAME} WHERE username = ?)
                         UPDATE {self.TABLE_NAME} SET
                             password_hash = ?, salt = ?, full_name = ?, email = ?,
@@ -128,34 +133,36 @@ class UserManager:
                             (username, password_hash, salt, full_name, email, role,
                              is_active, must_change_password, last_login, created_at, warehouse)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, [
-                    # For EXISTS check
-                    user_data["username"],
-                    # For UPDATE
-                    user_data.get("password_hash", ""),
-                    user_data.get("salt", ""),
-                    user_data.get("full_name", ""),
-                    user_data.get("email", ""),
-                    user_data.get("role", "viewer"),
-                    1 if user_data.get("is_active", True) else 0,
-                    1 if user_data.get("must_change_password", False) else 0,
-                    user_data.get("last_login"),
-                    user_data.get("created_at", ""),
-                    user_data.get("warehouse", ""),
-                    user_data["username"],
-                    # For INSERT
-                    user_data["username"],
-                    user_data.get("password_hash", ""),
-                    user_data.get("salt", ""),
-                    user_data.get("full_name", ""),
-                    user_data.get("email", ""),
-                    user_data.get("role", "viewer"),
-                    1 if user_data.get("is_active", True) else 0,
-                    1 if user_data.get("must_change_password", False) else 0,
-                    user_data.get("last_login"),
-                    user_data.get("created_at", ""),
-                    user_data.get("warehouse", ""),
-                ])
+                """,
+                    [
+                        # For EXISTS check
+                        user_data["username"],
+                        # For UPDATE
+                        user_data.get("password_hash", ""),
+                        user_data.get("salt", ""),
+                        user_data.get("full_name", ""),
+                        user_data.get("email", ""),
+                        user_data.get("role", "viewer"),
+                        1 if user_data.get("is_active", True) else 0,
+                        1 if user_data.get("must_change_password", False) else 0,
+                        user_data.get("last_login"),
+                        user_data.get("created_at", ""),
+                        user_data.get("warehouse", ""),
+                        user_data["username"],
+                        # For INSERT
+                        user_data["username"],
+                        user_data.get("password_hash", ""),
+                        user_data.get("salt", ""),
+                        user_data.get("full_name", ""),
+                        user_data.get("email", ""),
+                        user_data.get("role", "viewer"),
+                        1 if user_data.get("is_active", True) else 0,
+                        1 if user_data.get("must_change_password", False) else 0,
+                        user_data.get("last_login"),
+                        user_data.get("created_at", ""),
+                        user_data.get("warehouse", ""),
+                    ],
+                )
                 raw.commit()
                 cursor.close()
         except Exception as e:
@@ -175,7 +182,7 @@ class UserManager:
             "email": "",
             "role": "admin",
             "is_active": True,
-            "must_change_password": True,
+            "must_change_password": False,
             "last_login": None,
             "created_at": datetime.datetime.now().isoformat(),
             "warehouse": "",
@@ -219,8 +226,16 @@ class UserManager:
         """Get all users."""
         return list(self.users.values())
 
-    def create_user(self, username: str, password: str, full_name: str = "",
-                    email: str = "", role: str = "viewer", requesting_user=None) -> Tuple[bool, str]:
+    def create_user(
+        self,
+        username: str,
+        password: str,
+        full_name: str = "",
+        email: str = "",
+        role: str = "viewer",
+        requesting_user=None,
+        **kwargs,
+    ) -> Tuple[bool, str]:
         """Create a new user."""
         if requesting_user:
             req_role = requesting_user.get("role", "viewer")
@@ -250,13 +265,16 @@ class UserManager:
             "last_login": None,
             "created_at": datetime.datetime.now().isoformat(),
             "warehouse": "",
+            "sap_seller_name": kwargs.get("sap_seller_name", ""),
         }
 
         self.users[username] = user_data
         self._save_user_to_sql(user_data)
         return True, "Usuario creado exitosamente"
 
-    def update_user(self, username: str, requesting_user=None, **kwargs) -> Tuple[bool, str]:
+    def update_user(
+        self, username: str, requesting_user=None, **kwargs
+    ) -> Tuple[bool, str]:
         """Update user properties."""
         user = self.users.get(username)
         if not user:
@@ -269,11 +287,20 @@ class UserManager:
                 return False, "La contraseña debe tener al menos 6 caracteres"
             salt = secrets.token_hex(16)
             user["salt"] = salt
-            user["password_hash"] = hashlib.sha256((new_password + salt).encode()).hexdigest()
+            user["password_hash"] = hashlib.sha256(
+                (new_password + salt).encode()
+            ).hexdigest()
             user["must_change_password"] = False
 
         # Other fields
-        for field in ["full_name", "email", "role", "is_active", "warehouse"]:
+        for field in [
+            "full_name",
+            "email",
+            "role",
+            "is_active",
+            "warehouse",
+            "sap_seller_name",
+        ]:
             if field in kwargs:
                 user[field] = kwargs[field]
 
@@ -295,10 +322,13 @@ class UserManager:
                 with self.sql_engine.connect() as conn:
                     raw = conn.connection
                     cursor = raw.cursor()
-                    cursor.execute(f"DELETE FROM {self.TABLE_NAME} WHERE username = ?", [username])
+                    cursor.execute(
+                        f"DELETE FROM {self.TABLE_NAME} WHERE username = ?", [username]
+                    )
                     raw.commit()
                     cursor.close()
             except Exception as e:
                 logger.error(f"Error deleting user from SQL: {e}")
 
         return True, "Usuario eliminado"
+

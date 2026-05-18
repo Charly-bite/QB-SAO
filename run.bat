@@ -1,6 +1,6 @@
 @echo off
 echo ========================================
-echo   Seguimiento Web - Order Tracking
+echo   Open-OMS - Order Tracking
 echo   Port: 5003
 echo ========================================
 cd /d "%~dp0"
@@ -11,3 +11,4 @@ if exist ".venv\Scripts\python.exe" (
     python app.py
 )
 pause
+
