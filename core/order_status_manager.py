@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Order Status Manager — Seguimiento Web
+Order Status Manager — Open-OMS
 Manages a local database of order statuses.
 
 Database strategy:
@@ -8,12 +8,11 @@ Database strategy:
 - WRITE to 'seguimiento_order_status' table (this app's own tracking)
 """
 
+import datetime
 import json
 import os
-import datetime
-from typing import Optional, Dict, List, Any
 from enum import Enum
-
+from typing import Any, Dict, List, Optional
 
 STATUS_LABEL_MIGRATIONS = {
     "Listo para Envío": "Recibido por almacen",
@@ -25,6 +24,7 @@ STATUS_LABEL_MIGRATIONS = {
 
 class OrderStatus(Enum):
     """Possible order statuses"""
+
     PENDING = "Pendiente"
     IN_PROGRESS = "En Proceso"
     PICKING = "Preparando"
@@ -38,8 +38,8 @@ class OrderStatus(Enum):
 
 class OrderStatusManager:
     """
-    Manages order status tracking for Seguimiento Web.
-    
+    Manages order status tracking for Open-OMS.
+
     Database strategy:
     - Reads from SGA's 'order_status' table as base data
     - Writes its own tracking to 'seguimiento_order_status' table
@@ -51,7 +51,7 @@ class OrderStatusManager:
     # The table SGA_dev writes to (read-only for us)
     READ_TABLE = "order_status"
 
-    def __init__(self, db_path: str = None):
+    def __init__(self, db_path: Optional[str] = None):
         if db_path is None:
             base_dir = os.path.dirname(os.path.abspath(__file__))
             db_path = os.path.join(base_dir, "order_status_db.json")
@@ -61,6 +61,7 @@ class OrderStatusManager:
 
         # Connect to DB
         from core.database_client import DatabaseClient
+
         self.db_client = DatabaseClient()
         self.sql_engine = None
         try:
@@ -104,31 +105,39 @@ class OrderStatusManager:
                 import pandas as pd
 
                 # 1. Load from our own write table first
-                df = pd.read_sql(f"SELECT * FROM {self.WRITE_TABLE}", con=self.sql_engine)
+                df = pd.read_sql(
+                    f"SELECT * FROM {self.WRITE_TABLE}", con=self.sql_engine
+                )
                 if len(df) > 0:
                     self.orders = {}
                     for _, row in df.iterrows():
                         o_id = str(row["order_id"])
                         try:
-                            self.orders[o_id] = json.loads(row["data"])
-                        except:
+                            self.orders[o_id] = json.loads(str(row["data"]))
+                        except Exception:
                             pass
                     loaded_from_sql = True
-                    print(f"✅ Loaded {len(self.orders)} orders from {self.WRITE_TABLE}")
+                    print(
+                        f"✅ Loaded {len(self.orders)} orders from {self.WRITE_TABLE}"
+                    )
                 else:
                     # 2. Seed from SGA's read table
                     try:
-                        df_sga = pd.read_sql(f"SELECT * FROM {self.READ_TABLE}", con=self.sql_engine)
+                        df_sga = pd.read_sql(
+                            f"SELECT * FROM {self.READ_TABLE}", con=self.sql_engine
+                        )
                         if len(df_sga) > 0:
                             self.orders = {}
                             for _, row in df_sga.iterrows():
                                 o_id = str(row["order_id"])
                                 try:
-                                    self.orders[o_id] = json.loads(row["data"])
-                                except:
+                                    self.orders[o_id] = json.loads(str(row["data"]))
+                                except Exception:
                                     pass
                             loaded_from_sql = True
-                            print(f"✅ Seeded {len(self.orders)} orders from {self.READ_TABLE} → {self.WRITE_TABLE}")
+                            print(
+                                f"✅ Seeded {len(self.orders)} orders from {self.READ_TABLE} → {self.WRITE_TABLE}"
+                            )
                             # Save to our own table immediately
                             self._save_database()
                     except Exception as e:
@@ -183,12 +192,14 @@ class OrderStatusManager:
             try:
                 records = []
                 for o_id, o_data in self.orders.items():
-                    records.append((
-                        str(o_id),
-                        o_data.get("status", ""),
-                        o_data.get("last_updated", last_updated),
-                        json.dumps(o_data, ensure_ascii=False),
-                    ))
+                    records.append(
+                        (
+                            str(o_id),
+                            o_data.get("status", ""),
+                            o_data.get("last_updated", last_updated),
+                            json.dumps(o_data, ensure_ascii=False),
+                        )
+                    )
                 if records:
                     with self.sql_engine.connect() as conn:
                         raw_conn = conn.connection
@@ -202,6 +213,7 @@ class OrderStatusManager:
                         cursor.close()
             except Exception as e:
                 import traceback
+
                 print(f"⚠️ Error saving to SQL: {e}")
                 traceback.print_exc()
 
@@ -215,7 +227,9 @@ class OrderStatusManager:
             print(f"⚠️ Error saving to JSON: {e}")
             return False
 
-    def import_from_sap(self, sap_order: Dict[str, Any], imported_by: str = "system") -> Dict[str, Any]:
+    def import_from_sap(
+        self, sap_order: Dict[str, Any], imported_by: str = "system"
+    ) -> Dict[str, Any]:
         """Import an order from SAP data without modifying SAP."""
         order_id = str(sap_order.get("DocNum", sap_order.get("order_id", "")))
 
@@ -230,8 +244,12 @@ class OrderStatusManager:
         if order_id in self.orders:
             existing_status = self.orders[order_id].get("status")
             existing_history = self.orders[order_id].get("status_history", [])
-            existing_imported_at = self.orders[order_id].get("imported_at", existing_imported_at)
-            existing_last_updated = self.orders[order_id].get("last_updated", existing_last_updated)
+            existing_imported_at = self.orders[order_id].get(
+                "imported_at", existing_imported_at
+            )
+            existing_last_updated = self.orders[order_id].get(
+                "last_updated", existing_last_updated
+            )
 
         order_record = {
             "order_id": order_id,
@@ -249,22 +267,26 @@ class OrderStatusManager:
             "imported_at": existing_imported_at,
             "last_updated": existing_last_updated,
             "updated_by": (
-                imported_by if not existing_status
+                imported_by
+                if not existing_status
                 else self.orders.get(order_id, {}).get("updated_by", "system")
             ),
             "created_by": (
-                imported_by if not existing_status
+                imported_by
+                if not existing_status
                 else self.orders.get(order_id, {}).get("created_by", "system")
             ),
         }
 
         if not existing_status:
-            order_record["status_history"].append({
-                "status": OrderStatus.PENDING.value,
-                "timestamp": datetime.datetime.now().isoformat(),
-                "user": imported_by,
-                "notes": "Importado desde SAP",
-            })
+            order_record["status_history"].append(
+                {
+                    "status": OrderStatus.PENDING.value,
+                    "timestamp": datetime.datetime.now().isoformat(),
+                    "user": imported_by,
+                    "notes": "Importado desde SAP",
+                }
+            )
 
         self.orders[order_id] = order_record
         self._save_database()
@@ -311,14 +333,20 @@ class OrderStatusManager:
 
             except Exception as e:
                 stats["errors"] += 1
-                stats["error_details"].append({
-                    "order": str(sap_order.get("header", {}).get("order_number", "unknown")),
-                    "error": str(e),
-                })
+                stats["error_details"].append(
+                    {
+                        "order": str(
+                            sap_order.get("header", {}).get("order_number", "unknown")
+                        ),
+                        "error": str(e),
+                    }
+                )
 
         return stats
 
-    def update_status(self, order_id: str, new_status: str, user: str, notes: str = "") -> bool:
+    def update_status(
+        self, order_id: str, new_status: str, user: str, notes: str = ""
+    ) -> bool:
         """Update the status of an order."""
         order_id = str(order_id)
 
@@ -332,13 +360,15 @@ class OrderStatusManager:
         self.orders[order_id]["last_updated"] = datetime.datetime.now().isoformat()
         self.orders[order_id]["updated_by"] = user
 
-        self.orders[order_id]["status_history"].append({
-            "status": new_status,
-            "previous_status": old_status,
-            "timestamp": datetime.datetime.now().isoformat(),
-            "user": user,
-            "notes": notes,
-        })
+        self.orders[order_id]["status_history"].append(
+            {
+                "status": new_status,
+                "previous_status": old_status,
+                "timestamp": datetime.datetime.now().isoformat(),
+                "user": user,
+                "notes": notes,
+            }
+        )
 
         return self._save_database()
 
@@ -363,7 +393,9 @@ class OrderStatusManager:
             OrderStatus.RECEIVED.value,
             OrderStatus.CANCELLED.value,
         ]
-        active = [o for o in self.orders.values() if o.get("status") not in inactive_statuses]
+        active = [
+            o for o in self.orders.values() if o.get("status") not in inactive_statuses
+        ]
         active.sort(key=lambda x: x.get("order_date", ""), reverse=True)
         return active
 
@@ -391,20 +423,25 @@ class OrderStatusManager:
                 OrderStatus.RECEIVED.value,
             ]:
                 new_status = OrderStatus.READY.value
-            elif sap_status == "Cancelado" and local_status != OrderStatus.CANCELLED.value:
+            elif (
+                sap_status == "Cancelado"
+                and local_status != OrderStatus.CANCELLED.value
+            ):
                 new_status = OrderStatus.CANCELLED.value
 
             if new_status:
                 old_status = order["status"]
                 order["status"] = new_status
                 order["last_updated"] = now_iso
-                order["status_history"].append({
-                    "status": new_status,
-                    "previous_status": old_status,
-                    "timestamp": now_iso,
-                    "user": "system",
-                    "notes": f"Reconciliación automática: SAP={sap_status}",
-                })
+                order["status_history"].append(
+                    {
+                        "status": new_status,
+                        "previous_status": old_status,
+                        "timestamp": now_iso,
+                        "user": "system",
+                        "notes": f"Reconciliación automática: SAP={sap_status}",
+                    }
+                )
                 fixed += 1
 
         if fixed > 0:
@@ -429,18 +466,21 @@ class OrderStatusManager:
         orders = self.get_all_orders()
         web_orders = []
         for order in orders:
-            web_orders.append({
-                "order_id": order.get("order_id"),
-                "customer_name": order.get("customer_name"),
-                "order_date": order.get("order_date"),
-                "delivery_date": order.get("delivery_date"),
-                "status": order.get("status"),
-                "last_updated": order.get("last_updated"),
-                "item_count": len(order.get("items", [])),
-            })
+            web_orders.append(
+                {
+                    "order_id": order.get("order_id"),
+                    "customer_name": order.get("customer_name"),
+                    "order_date": order.get("order_date"),
+                    "delivery_date": order.get("delivery_date"),
+                    "status": order.get("status"),
+                    "last_updated": order.get("last_updated"),
+                    "item_count": len(order.get("items", [])),
+                }
+            )
 
         return {
             "orders": web_orders,
             "status_counts": self.get_order_count_by_status(),
             "generated_at": datetime.datetime.now().isoformat(),
         }
+

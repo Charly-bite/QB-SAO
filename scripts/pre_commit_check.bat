@@ -1,6 +1,6 @@
 @echo off
 echo ============================================
-echo   Seguimiento Web — Pre-Commit Check
+echo   Open-OMS — Pre-Commit Check
 echo ============================================
 cd /d "%~dp0\.."
 
@@ -36,3 +36,4 @@ if %ERRORLEVEL% neq 0 (
 
 echo.
 echo ✅ PRE-COMMIT CHECK PASSED — Safe to commit.
+

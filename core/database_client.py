@@ -1,5 +1,5 @@
 """
-Database Client — Seguimiento Web
+Database Client — Open-OMS
 Provides SQL Server connectivity via ODBC + SQLAlchemy.
 """
 
@@ -23,7 +23,20 @@ class DatabaseClient:
         self._connection_string = None
 
     def _build_connection_string(self):
-        driver = "{ODBC Driver 17 for SQL Server}"
+        driver = os.getenv("SQL_DRIVER", "")
+        if not driver:
+            try:
+                available = [d for d in pyodbc.drivers() if 'SQL Server' in d]
+                for preferred in ['ODBC Driver 18 for SQL Server', 'ODBC Driver 17 for SQL Server', 'SQL Server']:
+                    if preferred in available:
+                        driver = '{' + preferred + '}'
+                        break
+                if not driver and available:
+                    driver = '{' + available[0] + '}'
+                if not driver:
+                    driver = '{ODBC Driver 17 for SQL Server}'
+            except Exception:
+                driver = '{ODBC Driver 17 for SQL Server}'
         server = os.getenv("SQL_SERVER", "192.168.2.237")
         database = os.getenv("SQL_DATABASE", "SGA_Database")
         user = os.getenv("SQL_USER", "sga_app_user")
@@ -77,3 +90,4 @@ class DatabaseClient:
             else:
                 result = conn.exec_driver_sql(query)
             return result.fetchall()
+

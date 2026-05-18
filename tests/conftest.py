@@ -1,15 +1,17 @@
 """
-Test fixtures for Seguimiento Web.
+Test fixtures for Open-OMS.
 
 All external dependencies (SAP HANA, SQL Server) are mocked so tests
 run anywhere without infrastructure.
 """
+
+import json
 import os
 import sys
-import json
 import tempfile
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 # Ensure project root is on the path
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -23,13 +25,14 @@ if PROJECT_ROOT not in sys.path:
 # hdbcli is only available on machines with the SAP HANA client installed.
 # We stub the entire package so `from core.sap_connector import ...` works.
 _hdbcli_mock = MagicMock()
-sys.modules.setdefault('hdbcli', _hdbcli_mock)
-sys.modules.setdefault('hdbcli.dbapi', _hdbcli_mock.dbapi)
+sys.modules.setdefault("hdbcli", _hdbcli_mock)
+sys.modules.setdefault("hdbcli.dbapi", _hdbcli_mock.dbapi)
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_mock_database_client():
     """Return a mock DatabaseClient class whose instances never connect."""
@@ -45,13 +48,16 @@ def _make_mock_database_client():
 # Fixtures
 # ---------------------------------------------------------------------------
 
-@pytest.fixture(scope='session')
+
+@pytest.fixture(scope="session")
 def _mock_database_client():
     """Session-scoped patch: prevent DatabaseClient from connecting to SQL Server.
     We patch at the SOURCE module so both local imports in user_manager and
     order_status_manager pick up the mock."""
-    with patch('core.database_client.pyodbc') as mock_pyodbc, \
-         patch('core.database_client.create_engine') as mock_engine:
+    with (
+        patch("core.database_client.pyodbc") as mock_pyodbc,
+        patch("core.database_client.create_engine") as _mock_engine,
+    ):
         mock_pyodbc.connect.side_effect = Exception("No SQL Server in tests")
         yield
 
@@ -60,7 +66,7 @@ def _mock_database_client():
 def app(_mock_database_client):
     """Create a Flask application configured for testing."""
     # Use a temporary JSON file so tests don't touch the real DB
-    tmp = tempfile.NamedTemporaryFile(suffix='.json', delete=False, mode='w')
+    tmp = tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w")
     seed_data = {
         "orders": {
             "10001": {
@@ -82,13 +88,13 @@ def app(_mock_database_client):
                         "status": "Pendiente",
                         "timestamp": "2026-01-15T10:00:00",
                         "user": "system",
-                        "notes": "Importado desde SAP"
+                        "notes": "Importado desde SAP",
                     }
                 ],
                 "imported_at": "2026-01-15T10:00:00",
                 "last_updated": "2026-01-15T10:00:00",
                 "updated_by": "system",
-                "created_by": "system"
+                "created_by": "system",
             },
             "10002": {
                 "order_id": "10002",
@@ -106,10 +112,10 @@ def app(_mock_database_client):
                 "imported_at": "2026-01-16T08:00:00",
                 "last_updated": "2026-01-16T09:00:00",
                 "updated_by": "admin",
-                "created_by": "admin"
-            }
+                "created_by": "admin",
+            },
         },
-        "last_updated": "2026-01-16T09:00:00"
+        "last_updated": "2026-01-16T09:00:00",
     }
     json.dump(seed_data, tmp, ensure_ascii=False)
     tmp.close()
@@ -119,12 +125,14 @@ def app(_mock_database_client):
     # inside __init__, so patching the source module is the correct approach.
     mock_db_cls = _make_mock_database_client()
 
-    with patch('core.database_client.DatabaseClient', mock_db_cls):
+    with patch("core.database_client.DatabaseClient", mock_db_cls):
         from app import create_app
-        test_app = create_app('testing')
+
+        test_app = create_app("testing")
 
         # Replace the order manager with one using our temp file
         from core.order_status_manager import OrderStatusManager
+
         test_app.order_status_mgr = OrderStatusManager(db_path=tmp.name)
 
     yield test_app
@@ -155,18 +163,22 @@ def auth_client(app):
     with app.app_context():
         # Ensure admin user exists
         um = app.user_manager
-        if 'testadmin' not in um.users:
+        if "testadmin" not in um.users:
             um.create_user(
-                username='testadmin',
-                password='testpass123',
-                full_name='Test Admin',
-                role='admin',
+                username="testadmin",
+                password="testpass123",
+                full_name="Test Admin",
+                role="admin",
             )
         # Log in
-        client.post('/login', data={
-            'username': 'testadmin',
-            'password': 'testpass123',
-        }, follow_redirects=True)
+        client.post(
+            "/login",
+            data={
+                "username": "testadmin",
+                "password": "testpass123",
+            },
+            follow_redirects=True,
+        )
 
     return client
 
@@ -177,17 +189,21 @@ def operator_client(app):
     client = app.test_client()
     with app.app_context():
         um = app.user_manager
-        if 'testoperator' not in um.users:
+        if "testoperator" not in um.users:
             um.create_user(
-                username='testoperator',
-                password='operpass123',
-                full_name='Test Operator',
-                role='operator',
+                username="testoperator",
+                password="operpass123",
+                full_name="Test Operator",
+                role="operator",
             )
-        client.post('/login', data={
-            'username': 'testoperator',
-            'password': 'operpass123',
-        }, follow_redirects=True)
+        client.post(
+            "/login",
+            data={
+                "username": "testoperator",
+                "password": "operpass123",
+            },
+            follow_redirects=True,
+        )
 
     return client
 
@@ -198,16 +214,73 @@ def viewer_client(app):
     client = app.test_client()
     with app.app_context():
         um = app.user_manager
-        if 'testviewer' not in um.users:
+        if "testviewer" not in um.users:
             um.create_user(
-                username='testviewer',
-                password='viewpass123',
-                full_name='Test Viewer',
-                role='viewer',
+                username="testviewer",
+                password="viewpass123",
+                full_name="Test Viewer",
+                role="viewer",
             )
-        client.post('/login', data={
-            'username': 'testviewer',
-            'password': 'viewpass123',
-        }, follow_redirects=True)
+        client.post(
+            "/login",
+            data={
+                "username": "testviewer",
+                "password": "viewpass123",
+            },
+            follow_redirects=True,
+        )
 
     return client
+
+
+@pytest.fixture()
+def seller_client(app):
+    """Authenticated test client with seller role + SAP seller name."""
+    client = app.test_client()
+    with app.app_context():
+        um = app.user_manager
+        if "testseller" not in um.users:
+            um.create_user(
+                username="testseller",
+                password="sellpass123",
+                full_name="Test Seller",
+                role="seller",
+                sap_seller_name="system",  # Matches seed data created_by
+            )
+        client.post(
+            "/login",
+            data={
+                "username": "testseller",
+                "password": "sellpass123",
+            },
+            follow_redirects=True,
+        )
+
+    return client
+
+
+@pytest.fixture()
+def sell_manager_client(app):
+    """Authenticated test client with sell_manager role."""
+    client = app.test_client()
+    with app.app_context():
+        um = app.user_manager
+        if "testmanager" not in um.users:
+            um.create_user(
+                username="testmanager",
+                password="mgrpass123",
+                full_name="Test Manager",
+                role="sell_manager",
+                sap_seller_name="MANAGER SAP",
+            )
+        client.post(
+            "/login",
+            data={
+                "username": "testmanager",
+                "password": "mgrpass123",
+            },
+            follow_redirects=True,
+        )
+
+    return client
+

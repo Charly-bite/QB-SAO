@@ -20,7 +20,7 @@ class TestHealthEndpoint:
 
     def test_health_contains_app_name(self, client):
         data = client.get('/health').get_json()
-        assert data['app'] == 'Seguimiento Web'
+        assert data['app'] == 'Open-OMS'
 
     def test_health_reports_sap_availability(self, client):
         data = client.get('/health').get_json()
@@ -55,3 +55,4 @@ class TestAppBoot:
         assert len(orders) >= 2
         assert '10001' in orders
         assert '10002' in orders
+

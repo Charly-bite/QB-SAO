@@ -1,6 +1,6 @@
 @echo off
 echo ============================================
-echo   Seguimiento Web — Dev Deployment
+echo   Open-OMS — Dev Deployment
 echo ============================================
 cd /d "%~dp0\.."
 
@@ -36,3 +36,4 @@ echo.
 echo [4/4] Starting dev server...
 echo Press Ctrl+C to stop.
 %PYTHON% app.py
+

@@ -166,3 +166,70 @@ class TestDeleteOrder:
     def test_delete_missing_order(self, auth_client):
         response = auth_client.delete('/orders/99999/delete')
         assert response.status_code == 404
+
+
+class TestMonitorRoute:
+    """GET /orders/monitor — seller tracking panel."""
+
+    def test_monitor_requires_login(self, client):
+        response = client.get('/orders/monitor')
+        assert response.status_code in (302, 401)
+
+    def test_monitor_renders_for_admin(self, auth_client):
+        response = auth_client.get('/orders/monitor')
+        assert response.status_code == 200
+        html = response.data.decode('utf-8')
+        assert 'Open-OMS' in html
+
+    def test_monitor_renders_for_seller(self, seller_client):
+        response = seller_client.get('/orders/monitor')
+        assert response.status_code == 200
+
+
+class TestSellerAPI:
+    """GET /orders/api/seller/orders — role-based order filtering."""
+
+    def test_api_requires_login(self, client):
+        response = client.get('/orders/api/seller/orders')
+        assert response.status_code in (302, 401)
+
+    def test_admin_sees_all_orders(self, auth_client):
+        response = auth_client.get('/orders/api/seller/orders')
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data['can_see_all'] is True
+        assert len(data['orders']) >= 2  # seed has 2 orders
+
+    def test_seller_sees_only_own_orders(self, seller_client):
+        """Seller with sap_seller_name='system' should see only orders
+        where created_by='system' (order 10001 in seed data)."""
+        response = seller_client.get('/orders/api/seller/orders')
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data['can_see_all'] is False
+        # Only order 10001 has created_by='system'
+        for order in data['orders']:
+            assert order['created_by'].lower() == 'system'
+
+    def test_manager_can_filter_by_seller(self, sell_manager_client):
+        response = sell_manager_client.get('/orders/api/seller/orders?seller=system')
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data['can_see_all'] is True
+        for order in data['orders']:
+            assert order['created_by'].lower() == 'system'
+
+    def test_api_returns_stats(self, auth_client):
+        response = auth_client.get('/orders/api/seller/orders')
+        data = response.get_json()
+        assert 'stats' in data
+        assert 'pending' in data['stats']
+        assert 'in_progress' in data['stats']
+        assert 'invoicing' in data['stats']
+
+    def test_api_returns_sellers_list(self, auth_client):
+        response = auth_client.get('/orders/api/seller/orders')
+        data = response.get_json()
+        assert 'sellers' in data
+        assert isinstance(data['sellers'], list)
+
