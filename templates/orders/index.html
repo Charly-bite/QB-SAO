@@ -287,7 +287,7 @@ block page_title %}Estado de Pedidos{% endblock %} {% block content %}
                     <td class="px-6 py-4">
                         {% set status = order.status %}
                         <span
-                            class="px-3 py-1 rounded-full text-xs font-medium {% if status == 'Pendiente' %}bg-gray-100 text-gray-700 {% elif status == 'En Proceso' %}bg-blue-100 text-blue-700 {% elif status == 'Preparando' %}bg-amber-100 text-amber-700 {% elif status == 'Facturacion' %}bg-emerald-700 text-white {% elif status == 'Recibido por almacen' %}bg-green-100 text-green-700 {% elif status == 'Enviado al cliente' %}bg-purple-100 text-purple-700 {% elif status == 'Recibido por cliente' %}bg-teal-100 text-teal-700 {% elif status == 'Cancelado' %}bg-red-100 text-red-700 {% elif status == 'En Espera' %}bg-yellow-100 text-yellow-700 {% else %}bg-gray-100 text-gray-700{% endif %}"
+                            class="px-3 py-1 rounded-full text-xs font-medium {% if status == 'Pendiente' %}bg-gray-100 text-gray-700 {% elif status == 'En Proceso' %}bg-blue-100 text-blue-700 {% elif status == 'Terminado' or status == 'Preparando' %}bg-amber-100 text-amber-700 {% elif status == 'Facturacion' %}bg-emerald-700 text-white {% elif status == 'Relacion de envio' or status == 'Recibido por almacen' %}bg-green-100 text-green-700 {% elif status == 'Enviado al cliente' %}bg-purple-100 text-purple-700 {% elif status == 'Cancelado' %}bg-red-100 text-red-700 {% elif status == 'En Espera' %}bg-yellow-100 text-yellow-700 {% else %}bg-gray-100 text-gray-700{% endif %}"
                         >
                             {% if status == 'Facturacion' %} Facturado{% if
                             order.get('factura_number') %} #{{
@@ -521,11 +521,12 @@ block page_title %}Estado de Pedidos{% endblock %} {% block content %}
         const colors = {
             Pendiente: "bg-gray-100 text-gray-700",
             "En Proceso": "bg-blue-100 text-blue-700",
+            Terminado: "bg-amber-100 text-amber-700",
             Preparando: "bg-amber-100 text-amber-700",
             Facturacion: "bg-emerald-700 text-white",
+            "Relacion de envio": "bg-green-100 text-green-700",
             "Recibido por almacen": "bg-green-100 text-green-700",
             "Enviado al cliente": "bg-purple-100 text-purple-700",
-            "Recibido por cliente": "bg-teal-100 text-teal-700",
             Cancelado: "bg-red-100 text-red-700",
             "En Espera": "bg-yellow-100 text-yellow-700",
         };
