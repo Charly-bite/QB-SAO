@@ -180,8 +180,8 @@ The heart of the tracking system.
 **`OrderStatus` enum values (workflow pipeline):**
 
 ```
-Pendiente → En Proceso → Preparando → Facturacion →
-Recibido por almacen → Enviado al cliente → Recibido por cliente
+Pendiente → En Proceso → Terminado → Facturacion →
+Relacion de envio → Enviado al cliente
                                           ↘ Cancelado / En Espera
 ```
 
@@ -193,7 +193,7 @@ Recibido por almacen → Enviado al cliente → Recibido por cliente
 | `bulk_import_from_sap(orders)` | Batch upsert from SAP list |
 | `update_status(order_id, new_status, user, notes)` | Transition status + append to history |
 | `get_all_orders()` | All orders, sorted by `last_updated` desc |
-| `get_active_orders()` | Orders excluding Shipped/Received/Cancelled |
+| `get_active_orders()` | Orders excluding Shipped/Cancelled |
 | `get_order_count_by_status()` | Dict of `{status: count}` |
 | `reconcile_statuses()` | Fix mismatches between `sap_status` and local `status` |
 | `export_for_web()` | Serializable list for JSON API responses |

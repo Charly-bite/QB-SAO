@@ -64,28 +64,43 @@
     <!-- ═══════ KPI CARDS ═══════ -->
     <section class="kpi-bar">
         <div class="kpi-inner">
-            <div class="kpi-card">
+            <button type="button" class="kpi-card"
+                :class="activeTopFilter === 'all' ? 'is-active' : ''"
+                @click="toggleTopFilter('all')"
+                title="Mostrar todos">
                 <div class="kpi-value" x-text="stats.total_active || 0">0</div>
                 <div class="kpi-label">Total Activos</div>
-            </div>
-            <div class="kpi-card kpi-pending">
+            </button>
+            <button type="button" class="kpi-card kpi-pending"
+                :class="activeTopFilter === 'pending' ? 'is-active' : ''"
+                @click="toggleTopFilter('pending')"
+                title="Filtrar pendientes">
                 <div class="kpi-value" x-text="stats.pending || 0">0</div>
                 <div class="kpi-label">Pendientes</div>
-            </div>
-            <div class="kpi-card kpi-process">
+            </button>
+            <button type="button" class="kpi-card kpi-process"
+                :class="activeTopFilter === 'process' ? 'is-active' : ''"
+                @click="toggleTopFilter('process')"
+                title="Filtrar en proceso y terminado">
                 <div class="kpi-value"
                     x-text="(stats.in_progress || 0) + (stats.picking || 0)">0</div>
                 <div class="kpi-label">En Proceso</div>
-            </div>
-            <div class="kpi-card kpi-invoice">
+            </button>
+            <button type="button" class="kpi-card kpi-invoice"
+                :class="activeTopFilter === 'invoice' ? 'is-active' : ''"
+                @click="toggleTopFilter('invoice')"
+                title="Filtrar facturados y relación de envío">
                 <div class="kpi-value"
                     x-text="(stats.invoicing || 0) + (stats.ready || 0)">0</div>
-                <div class="kpi-label">Facturado / Almacén</div>
-            </div>
-            <div class="kpi-card kpi-shipped">
+                <div class="kpi-label">Facturado / Relación</div>
+            </button>
+            <button type="button" class="kpi-card kpi-shipped"
+                :class="activeTopFilter === 'shipped' ? 'is-active' : ''"
+                @click="toggleTopFilter('shipped')"
+                title="Filtrar enviados">
                 <div class="kpi-value" x-text="stats.shipped || 0">0</div>
                 <div class="kpi-label">Enviados</div>
-            </div>
+            </button>
         </div>
     </section>
 
@@ -102,6 +117,12 @@
             </div>
             <div class="order-count">
                 <span x-text="filteredOrders.length"></span> pedidos
+                <template x-if="activeTopFilter !== 'all'">
+                    <span class="filter-chip" @click="toggleTopFilter(activeTopFilter)">
+                        <span x-text="getTopFilterLabel()"></span>
+                        <span class="filter-chip-x">x</span>
+                    </span>
+                </template>
             </div>
         </div>
     </section>
@@ -287,6 +308,7 @@
                 currentSeller: '',
                 selectedSeller: '',
                 searchQuery: '',
+                activeTopFilter: 'all',
                 loading: false,
                 firstLoad: true,
                 timer: 30,
@@ -299,11 +321,10 @@
                 statusSteps: [
                     { key: 'Pendiente', short: 'Pend' },
                     { key: 'En Proceso', short: 'Proc' },
-                    { key: 'Preparando', short: 'Prep' },
+                    { key: 'Terminado', short: 'Term' },
                     { key: 'Facturacion', short: 'Fact' },
-                    { key: 'Recibido por almacen', short: 'Alm' },
+                    { key: 'Relacion de envio', short: 'Rel' },
                     { key: 'Enviado al cliente', short: 'Env' },
-                    { key: 'Recibido por cliente', short: 'Rec' },
                 ],
 
                 get statusIndex() {
@@ -313,14 +334,40 @@
                 },
 
                 get filteredOrders() {
-                    if (!this.searchQuery) return this.orders;
-                    const q = this.searchQuery.toLowerCase();
+                    const q = (this.searchQuery || '').toLowerCase().trim();
                     return this.orders.filter(o => {
+                        if (!this.orderMatchesTopFilter(o)) return false;
+                        if (!q) return true;
                         return String(o.order_id).includes(q) ||
                             (o.customer_name || '').toLowerCase().includes(q) ||
                             (o.customer_code || '').toLowerCase().includes(q) ||
                             (o.factura_number && String(o.factura_number).includes(q));
                     });
+                },
+
+                orderMatchesTopFilter(order) {
+                    const status = order?.status;
+                    if (this.activeTopFilter === 'all') return true;
+                    if (this.activeTopFilter === 'pending') return status === 'Pendiente';
+                    if (this.activeTopFilter === 'process') return status === 'En Proceso' || status === 'Terminado' || status === 'Preparando';
+                    if (this.activeTopFilter === 'invoice') return status === 'Facturacion' || status === 'Relacion de envio' || status === 'Recibido por almacen';
+                    if (this.activeTopFilter === 'shipped') return status === 'Enviado al cliente';
+                    return true;
+                },
+
+                toggleTopFilter(filterKey) {
+                    this.activeTopFilter = this.activeTopFilter === filterKey ? 'all' : filterKey;
+                    this.expandedOrder = null;
+                },
+
+                getTopFilterLabel() {
+                    const labels = {
+                        pending: 'Pendientes',
+                        process: 'En Proceso',
+                        invoice: 'Facturado / Relación',
+                        shipped: 'Enviados',
+                    };
+                    return labels[this.activeTopFilter] || 'Todos';
                 },
 
                 // ── Progress timeline helpers ──
@@ -347,11 +394,12 @@
                     const map = {
                         'Pendiente': 'accent-amber',
                         'En Proceso': 'accent-violet',
+                        'Terminado': 'accent-sky',
                         'Preparando': 'accent-sky',
                         'Facturacion': 'accent-pink',
+                        'Relacion de envio': 'accent-emerald',
                         'Recibido por almacen': 'accent-emerald',
                         'Enviado al cliente': 'accent-teal',
-                        'Recibido por cliente': 'accent-blue',
                     };
                     return map[status] || 'accent-slate';
                 },
@@ -514,9 +562,9 @@
                         const s = o.status;
                         if (s === 'Pendiente') counts.pending += 1;
                         if (s === 'En Proceso') counts.in_progress += 1;
-                        if (s === 'Preparando') counts.picking += 1;
+                        if (s === 'Terminado' || s === 'Preparando') counts.picking += 1;
                         if (s === 'Facturacion') counts.invoicing += 1;
-                        if (s === 'Recibido por almacen') counts.ready += 1;
+                        if (s === 'Relacion de envio' || s === 'Recibido por almacen') counts.ready += 1;
                         if (s === 'Enviado al cliente') counts.shipped += 1;
                     }
                     this.stats = counts;

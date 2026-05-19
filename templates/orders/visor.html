@@ -83,7 +83,7 @@ block extra_head %}
         >
             <div class="flex justify-between items-center">
                 <div>
-                    <p class="text-sm text-slate-500 font-medium">Preparando</p>
+                    <p class="text-sm text-slate-500 font-medium">Terminado</p>
                     <h3 class="text-2xl font-bold text-slate-800">
                         {{ stats.picking }}
                     </h3>
@@ -112,7 +112,7 @@ block extra_head %}
         >
             <div class="flex justify-between items-center">
                 <div>
-                    <p class="text-sm text-slate-500 font-medium">Listo</p>
+                    <p class="text-sm text-slate-500 font-medium">Relacion de envio</p>
                     <h3 class="text-2xl font-bold text-slate-800">
                         {{ stats.ready }}
                     </h3>
@@ -438,22 +438,24 @@ block extra_head %}
         const colorPairs = {
             'Pendiente':            ['#94a3b8', '#64748b'],
             'En Proceso':           ['#60a5fa', '#3b82f6'],
+            'Terminado':            ['#fbbf24', '#f59e0b'],
             'Preparando':           ['#fbbf24', '#f59e0b'],
             'Facturacion':          ['#34d399', '#059669'],
+            'Relacion de envio':    ['#4ade80', '#16a34a'],
             'Recibido por almacen': ['#4ade80', '#16a34a'],
             'Enviado al cliente':   ['#c084fc', '#9333ea'],
-            'Recibido por cliente': ['#2dd4bf', '#0d9488'],
             'En Espera':            ['#fb923c', '#ea580c'],
             'Cancelado':            ['#f87171', '#dc2626'],
         };
         const widths = {
             'Pendiente':            14,
             'En Proceso':           28,
+            'Terminado':            43,
             'Preparando':           43,
             'Facturacion':          57,
+            'Relacion de envio':    72,
             'Recibido por almacen': 72,
-            'Enviado al cliente':   86,
-            'Recibido por cliente': 100,
+            'Enviado al cliente':   100,
             'En Espera':            20,
             'Cancelado':            100,
         };
@@ -467,9 +469,9 @@ block extra_head %}
 
     getStatusPercent(status) {
         const widths = {
-            'Pendiente': 14, 'En Proceso': 28, 'Preparando': 43,
-            'Facturacion': 57, 'Recibido por almacen': 72,
-            'Enviado al cliente': 86, 'Recibido por cliente': 100,
+            'Pendiente': 14, 'En Proceso': 28, 'Terminado': 43, 'Preparando': 43,
+            'Facturacion': 57, 'Relacion de envio': 72, 'Recibido por almacen': 72,
+            'Enviado al cliente': 100,
             'En Espera': 20, 'Cancelado': 100,
         };
         return (widths[status] ?? 0) + '%';
@@ -479,12 +481,13 @@ block extra_head %}
         const colors = {
             'Pendiente': 'text-slate-700',
             'En Proceso': 'text-blue-700',
+            'Terminado': 'text-yellow-700',
             'Preparando': 'text-yellow-700',
             'Listo para Envío': 'text-green-700',
+            'Relacion de envio': 'text-green-700',
             'Recibido por almacen': 'text-green-700',
             'Enviado al cliente': 'text-purple-700',
             'Enviado': 'text-purple-700',
-            'Recibido por cliente': 'text-teal-700',
             'Facturacion': 'text-emerald-700'
         };
         return colors[status] || 'text-slate-600';

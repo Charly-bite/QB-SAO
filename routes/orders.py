@@ -140,7 +140,6 @@ _MAIN_STATUSES = [
     OrderStatus.INVOICING.value,
     OrderStatus.READY.value,
     OrderStatus.SHIPPED.value,
-    OrderStatus.RECEIVED.value,
 ]
 _EXTRA_STATUSES = [OrderStatus.CANCELLED.value, OrderStatus.ON_HOLD.value]
 
@@ -189,14 +188,21 @@ def update_status(order_id):
     STATUS_ALIASES = {
         "Facturado": "Facturacion",
         "Facturación": "Facturacion",
-        "Listo para Envío": "Recibido por almacen",
-        "Listo para Envio": "Recibido por almacen",
-        "Entregado a almacen": "Recibido por almacen",
+        "Preparando": "Terminado",
+        "Preparado": "Terminado",
+        "Terminado": "Terminado",
+        "Listo para Envío": "Relacion de envio",
+        "Listo para Envio": "Relacion de envio",
+        "Entregado a almacen": "Relacion de envio",
+        "Recibido por almacen": "Relacion de envio",
+        "Relación de envío": "Relacion de envio",
+        "Relacion de envio": "Relacion de envio",
         "Enviado": "Enviado al cliente",
+        "Recibido por cliente": "Enviado al cliente",
         # Reverse mappings (old enum values → new enum values)
-        "Recibido por almacen": "Recibido por almacen",
+        "Terminado": "Terminado",
+        "Relacion de envio": "Relacion de envio",
         "Enviado al cliente": "Enviado al cliente",
-        "Recibido por cliente": "Recibido por cliente",
     }
     normalized = STATUS_ALIASES.get(new_status, new_status)
 
@@ -435,7 +441,6 @@ def load_recent_from_sap():
                         OrderStatus.INVOICING.value,
                         OrderStatus.READY.value,
                         OrderStatus.SHIPPED.value,
-                        OrderStatus.RECEIVED.value,
                     ]:
                         new_local_status = OrderStatus.INVOICING.value
                         order_mgr.orders[order_id]["status"] = new_local_status
@@ -548,7 +553,6 @@ def sync_sap_status():
                     OrderStatus.INVOICING.value,
                     OrderStatus.READY.value,
                     OrderStatus.SHIPPED.value,
-                    OrderStatus.RECEIVED.value,
                 ]:
                     order_mgr.update_status(
                         order_id,
@@ -690,7 +694,6 @@ def visor_sync():
                         OrderStatus.INVOICING.value,
                         OrderStatus.READY.value,
                         OrderStatus.SHIPPED.value,
-                        OrderStatus.RECEIVED.value,
                     ]:
                         order_mgr.orders[order_id]["status"] = (
                             OrderStatus.INVOICING.value

@@ -15,10 +15,15 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 STATUS_LABEL_MIGRATIONS = {
-    "Listo para Envío": "Recibido por almacen",
-    "Listo para Envio": "Recibido por almacen",
-    "Entregado a almacen": "Recibido por almacen",
+    "Preparando": "Terminado",
+    "Preparado": "Terminado",
+    "Listo para Envío": "Relacion de envio",
+    "Listo para Envio": "Relacion de envio",
+    "Entregado a almacen": "Relacion de envio",
+    "Recibido por almacen": "Relacion de envio",
+    "Relación de envío": "Relacion de envio",
     "Enviado": "Enviado al cliente",
+    "Recibido por cliente": "Enviado al cliente",
 }
 
 
@@ -27,11 +32,10 @@ class OrderStatus(Enum):
 
     PENDING = "Pendiente"
     IN_PROGRESS = "En Proceso"
-    PICKING = "Preparando"
+    PICKING = "Terminado"
     INVOICING = "Facturacion"
-    READY = "Recibido por almacen"
+    READY = "Relacion de envio"
     SHIPPED = "Enviado al cliente"
-    RECEIVED = "Recibido por cliente"
     CANCELLED = "Cancelado"
     ON_HOLD = "En Espera"
 
@@ -158,7 +162,9 @@ class OrderStatusManager:
             else:
                 self.orders = {}
 
-        self._normalize_status_labels()
+        changed = self._normalize_status_labels()
+        if changed:
+            self._save_database()
 
     def _normalize_status_labels(self) -> bool:
         """Normalize legacy status labels to the current naming in memory."""
@@ -387,10 +393,9 @@ class OrderStatusManager:
         return [o for o in self.orders.values() if o.get("status") == status]
 
     def get_active_orders(self) -> List[Dict[str, Any]]:
-        """Get orders that are not delivered, shipped, or cancelled."""
+        """Get orders that are not shipped or cancelled."""
         inactive_statuses = [
             OrderStatus.SHIPPED.value,
-            OrderStatus.RECEIVED.value,
             OrderStatus.CANCELLED.value,
         ]
         active = [
@@ -420,7 +425,6 @@ class OrderStatusManager:
                 OrderStatus.INVOICING.value,
                 OrderStatus.READY.value,
                 OrderStatus.SHIPPED.value,
-                OrderStatus.RECEIVED.value,
             ]:
                 new_status = OrderStatus.READY.value
             elif (
