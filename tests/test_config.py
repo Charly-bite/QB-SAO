@@ -103,6 +103,38 @@ class TestBaseConfig:
         assert Config.SESSION_COOKIE_SAMESITE == 'Lax'
 
 
+class TestStagingConfig:
+    """StagingConfig specifics."""
+
+    def test_debug_disabled(self):
+        from config import StagingConfig
+        assert StagingConfig.DEBUG is False
+
+    def test_session_cookie_not_secure(self):
+        from config import StagingConfig
+        assert StagingConfig.SESSION_COOKIE_SECURE is False
+
+
+class TestProductionInitApp:
+    def test_init_app_adds_handler(self, app):
+        from unittest.mock import MagicMock
+        from config import ProductionConfig
+        with patch("logging.handlers.RotatingFileHandler") as mock_handler_cls:
+            mock_handler = MagicMock()
+            mock_handler.level = 10
+            mock_handler_cls.return_value = mock_handler
+
+            ProductionConfig.init_app(app)
+
+            # verify app.logger has our mock_handler
+            assert mock_handler in app.logger.handlers
+            mock_handler.setLevel.assert_called_once()
+            mock_handler.setFormatter.assert_called_once()
+            
+            # cleanup
+            app.logger.removeHandler(mock_handler)
+
+
 class TestSecretKeyGeneration:
     """_generate_secret_key behaviour."""
 
@@ -118,3 +150,46 @@ class TestSecretKeyGeneration:
             key = _generate_secret_key()
             assert isinstance(key, str)
             assert len(key) > 0
+
+    def test_reads_from_key_file(self):
+        import tempfile
+        from config import _generate_secret_key
+
+        tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.key', delete=False)
+        tmp.write('file-secret-key')
+        tmp.close()
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop('SECRET_KEY', None)
+            with patch("config.os.path.join", return_value=tmp.name):
+                key = _generate_secret_key()
+        assert key == 'file-secret-key'
+        os.unlink(tmp.name)
+
+    def test_generates_and_writes_key(self):
+        import tempfile
+        from config import _generate_secret_key
+
+        tmp_dir = tempfile.mkdtemp()
+        key_path = os.path.join(tmp_dir, '.flask_secret_key')
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop('SECRET_KEY', None)
+            with patch("config.os.path.join", return_value=key_path):
+                key = _generate_secret_key()
+
+        assert len(key) == 64  # hex of 32 bytes
+        assert os.path.exists(key_path)
+        os.unlink(key_path)
+        os.rmdir(tmp_dir)
+
+    def test_write_failure_still_returns_key(self):
+        from config import _generate_secret_key
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop('SECRET_KEY', None)
+            with patch("config.os.path.join", return_value="/nonexistent/dir/.flask_secret_key"):
+                with patch("config.os.path.exists", return_value=False):
+                    key = _generate_secret_key()
+        assert isinstance(key, str)
+        assert len(key) > 0

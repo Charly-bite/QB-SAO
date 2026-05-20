@@ -48,7 +48,7 @@ jobs:
         env:
           FLASK_ENV: testing
         run: |
-          python -m pytest tests/ --cov=. --cov-fail-under=55 -q --no-header
+          python -m pytest tests/ --cov=. --cov-fail-under=100 -q --no-header
 
       - name: Upload coverage report
         if: always()

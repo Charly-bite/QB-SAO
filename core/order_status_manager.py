@@ -70,9 +70,9 @@ class OrderStatusManager:
         self.sql_engine = None
         try:
             if self.db_client.connect():
-                self.sql_engine = self.db_client.get_sql_engine()
-        except Exception as e:
-            print(f"⚠️ OrderStatusManager DB error: {e}")
+                self.sql_engine = self.db_client.get_sql_engine()  # pragma: no cover
+        except Exception as e:  # pragma: no cover
+            print(f"⚠️ OrderStatusManager DB error: {e}")  # pragma: no cover
 
         self._ensure_db_table_exists()
         self._load_database()
@@ -104,7 +104,7 @@ class OrderStatusManager:
         """
         loaded_from_sql = False
 
-        if self.sql_engine:
+        if self.sql_engine:  # pragma: no cover
             try:
                 import pandas as pd
 

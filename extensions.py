@@ -16,7 +16,7 @@ limiter = Limiter(
 # Typed re-export of current_app so route files can import it from here and get
 # the correct OpenOMSApp type without triggering circular-import errors.
 # At runtime this is identical to flask.current_app (the same proxy object).
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     import flask as _flask_mod
 
     from app import OpenOMSApp as _OpenOMSApp

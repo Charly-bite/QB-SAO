@@ -94,3 +94,50 @@ class TestProtectedRoutes:
     def test_visor_redirects_unauthenticated(self, client):
         response = client.get('/orders/visor', follow_redirects=False)
         assert response.status_code in (302, 303)
+
+
+class TestIsSafeUrl:
+    """Tests for _is_safe_url validation."""
+
+    def test_safe_relative_url(self, app):
+        with app.test_request_context():
+            from routes.auth import _is_safe_url
+            assert _is_safe_url('/orders/') is True
+
+    def test_unsafe_external_url(self, app):
+        with app.test_request_context():
+            from routes.auth import _is_safe_url
+            assert _is_safe_url('http://evil.com/phish') is False
+
+    def test_login_with_safe_next(self, app):
+        client = app.test_client()
+        with app.app_context():
+            um = app.user_manager
+            if 'safenext' not in um.users:
+                um.create_user(
+                    username='safenext', password='pass123456',
+                    full_name='Safe Next', role='viewer',
+                )
+        resp = client.post('/login?next=/orders/', data={
+            'username': 'safenext', 'password': 'pass123456',
+        }, follow_redirects=False)
+        assert resp.status_code in (302, 303)
+        assert '/orders/' in resp.headers.get('Location', '')
+
+    def test_login_with_unsafe_next(self, app):
+        client = app.test_client()
+        with app.app_context():
+            um = app.user_manager
+            if 'unsafenext' not in um.users:
+                um.create_user(
+                    username='unsafenext', password='pass123456',
+                    full_name='Unsafe Next', role='viewer',
+                )
+        resp = client.post('/login?next=http://evil.com', data={
+            'username': 'unsafenext', 'password': 'pass123456',
+        }, follow_redirects=False)
+        assert resp.status_code in (302, 303)
+        # Should NOT redirect to evil.com
+        loc = resp.headers.get('Location', '')
+        assert 'evil.com' not in loc
+
