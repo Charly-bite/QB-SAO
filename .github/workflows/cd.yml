@@ -18,6 +18,11 @@ concurrency:
   group: cd-${{ github.ref }}
   cancel-in-progress: false
 
+permissions:
+  checks: read
+  actions: read
+  contents: read
+
 jobs:
   ci-gate:
     name: Verify CI passed
