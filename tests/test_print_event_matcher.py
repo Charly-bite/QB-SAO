@@ -56,3 +56,51 @@ def test_find_matching_order_ids_ambiguous():
 
     matches = find_matching_order_ids({"IFF-QB00063"}, orders)
     assert matches == ["1001", "1002"]
+
+
+# ---- Edge-case tests for full coverage ----
+
+
+def test_normalize_item_code_none():
+    from core.print_event_matcher import normalize_item_code
+    assert normalize_item_code(None) == ""
+
+
+def test_extract_print_items_dict_input():
+    """When input is already a dict (not a string)."""
+    result = extract_print_items({"items": ["ITEM-A"]})
+    assert result == {"ITEM-A"}
+
+
+def test_extract_print_items_invalid_json_string():
+    result = extract_print_items("not valid json {{{")
+    assert result == set()
+
+
+def test_extract_print_items_non_list_items():
+    result = extract_print_items({"items": "not a list"})
+    assert result == set()
+
+
+def test_extract_print_items_none_input():
+    result = extract_print_items(None)
+    assert result == set()
+
+
+def test_find_matching_order_ids_empty_print_items():
+    orders = [{"order_id": "1001", "status": "Pendiente", "items": [{"item_code": "A"}]}]
+    matches = find_matching_order_ids(set(), orders)
+    assert matches == []
+
+
+def test_find_matching_order_ids_order_no_id():
+    orders = [{"order_id": "", "status": "Pendiente", "items": [{"item_code": "A"}]}]
+    matches = find_matching_order_ids({"A"}, orders)
+    assert matches == []
+
+
+def test_find_matching_order_ids_order_no_items():
+    orders = [{"order_id": "1001", "status": "Pendiente", "items": []}]
+    matches = find_matching_order_ids({"A"}, orders)
+    assert matches == []
+

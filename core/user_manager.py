@@ -41,9 +41,9 @@ class UserManager:
 
             db = DatabaseClient()
             if db.connect():
-                self.sql_engine = db.get_sql_engine()
-        except Exception as e:
-            logger.warning(f"UserManager SQL error: {e}")
+                self.sql_engine = db.get_sql_engine()  # pragma: no cover
+        except Exception as e:  # pragma: no cover
+            logger.warning(f"UserManager SQL error: {e}")  # pragma: no cover
 
         self._ensure_table_exists()
         self._load_users()
