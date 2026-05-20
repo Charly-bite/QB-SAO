@@ -23,16 +23,40 @@ jobs:
     name: Verify CI passed
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Wait for CI to succeed
-        uses: lewagon/wait-on-check-action@v1.3.4
+      - name: Wait for CI workflow to pass
+        uses: actions/github-script@v7
         with:
-          ref: ${{ github.sha }}
-          check-name: 'Tests (Python 3.12)'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 15
+          script: |
+            const sha = context.sha;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const checkName = 'Tests (Python 3.12)';
+            const maxWait = 300; // 5 minutes
+            const interval = 15; // seconds
+            let elapsed = 0;
+
+            while (elapsed < maxWait) {
+              const { data: checks } = await github.rest.checks.listForRef({
+                owner, repo, ref: sha, check_name: checkName,
+              });
+              const run = checks.check_runs[0];
+              if (run) {
+                if (run.status === 'completed') {
+                  if (run.conclusion === 'success') {
+                    core.info(`✅ CI check "${checkName}" passed.`);
+                    return;
+                  }
+                  core.setFailed(`❌ CI check "${checkName}" concluded: ${run.conclusion}`);
+                  return;
+                }
+                core.info(`⏳ CI check "${checkName}" status: ${run.status}. Waiting ${interval}s...`);
+              } else {
+                core.info(`⏳ CI check "${checkName}" not found yet. Waiting ${interval}s...`);
+              }
+              await new Promise(r => setTimeout(r, interval * 1000));
+              elapsed += interval;
+            }
+            core.setFailed(`⏰ Timed out waiting for CI check "${checkName}" after ${maxWait}s.`);
 
   package:
     name: Build deploy artifact
