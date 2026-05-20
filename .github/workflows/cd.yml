@@ -1,7 +1,10 @@
 name: CD
 
 on:
-  push:
+  # Only trigger after CI workflow completes successfully
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: [develop, main]
   workflow_dispatch:
     inputs:
@@ -18,70 +21,32 @@ concurrency:
   group: cd-${{ github.ref }}
   cancel-in-progress: false
 
-permissions:
-  checks: read
-  actions: read
-  contents: read
-
 jobs:
-  ci-gate:
-    name: Verify CI passed
-    runs-on: ubuntu-latest
-    steps:
-      - name: Wait for CI workflow to pass
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const sha = context.sha;
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const checkName = 'Tests (Python 3.12)';
-            const maxWait = 300; // 5 minutes
-            const interval = 15; // seconds
-            let elapsed = 0;
-
-            while (elapsed < maxWait) {
-              const { data: checks } = await github.rest.checks.listForRef({
-                owner, repo, ref: sha, check_name: checkName,
-              });
-              const run = checks.check_runs[0];
-              if (run) {
-                if (run.status === 'completed') {
-                  if (run.conclusion === 'success') {
-                    core.info(`✅ CI check "${checkName}" passed.`);
-                    return;
-                  }
-                  core.setFailed(`❌ CI check "${checkName}" concluded: ${run.conclusion}`);
-                  return;
-                }
-                core.info(`⏳ CI check "${checkName}" status: ${run.status}. Waiting ${interval}s...`);
-              } else {
-                core.info(`⏳ CI check "${checkName}" not found yet. Waiting ${interval}s...`);
-              }
-              await new Promise(r => setTimeout(r, interval * 1000));
-              elapsed += interval;
-            }
-            core.setFailed(`⏰ Timed out waiting for CI check "${checkName}" after ${maxWait}s.`);
-
   package:
     name: Build deploy artifact
-    needs: ci-gate
     runs-on: ubuntu-latest
+    # Only run if CI succeeded (or if manually triggered)
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Create release bundle
         run: |
           mkdir -p dist
-          git archive --format=zip --output=dist/open-oms-${{ github.sha }}.zip HEAD
+          SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          git archive --format=zip --output=dist/open-oms-${SHA}.zip HEAD
 
       - name: Upload deploy artifact
         uses: actions/upload-artifact@v4
         with:
-          name: open-oms-${{ github.sha }}
-          path: dist/open-oms-${{ github.sha }}.zip
+          name: open-oms-${{ github.event.workflow_run.head_sha || github.sha }}
+          path: dist/open-oms-${{ github.event.workflow_run.head_sha || github.sha }}.zip
 
   deploy-development:
     name: Deploy Development
@@ -89,26 +54,27 @@ jobs:
     needs: package
     environment: development
     if: |
-      (github.ref == 'refs/heads/develop' || (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'development')) &&
-      secrets.DEPLOY_HOST != '' && secrets.DEPLOY_USER != '' && secrets.DEPLOY_SSH_KEY != ''
+      (github.event.workflow_run.head_branch == 'develop' || (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'development'))
 
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: open-oms-${{ github.sha }}
+          name: open-oms-${{ github.event.workflow_run.head_sha || github.sha }}
           path: dist
 
       - name: Upload artifact to server
+        if: ${{ secrets.DEPLOY_HOST != '' && secrets.DEPLOY_USER != '' && secrets.DEPLOY_SSH_KEY != '' }}
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          source: dist/open-oms-${{ github.sha }}.zip
+          source: dist/open-oms-${{ github.event.workflow_run.head_sha || github.sha }}.zip
           target: ${{ secrets.DEPLOY_PATH }}
 
       - name: Run remote deploy command
+        if: ${{ secrets.DEPLOY_HOST != '' && secrets.DEPLOY_USER != '' && secrets.DEPLOY_SSH_KEY != '' }}
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -118,7 +84,8 @@ jobs:
             set -e
             DEPLOY_DIR="${{ secrets.DEPLOY_PATH }}"
             APP_DIR="${DEPLOY_DIR}/open-oms"
-            BUNDLE="${DEPLOY_DIR}/open-oms-${{ github.sha }}.zip"
+            SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+            BUNDLE="${DEPLOY_DIR}/open-oms-${SHA}.zip"
             mkdir -p "${APP_DIR}"
             unzip -o "${BUNDLE}" -d "${APP_DIR}"
             cd "${APP_DIR}"
@@ -132,26 +99,27 @@ jobs:
     needs: package
     environment: production
     if: |
-      (github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'production')) &&
-      secrets.DEPLOY_HOST != '' && secrets.DEPLOY_USER != '' && secrets.DEPLOY_SSH_KEY != ''
+      (github.event.workflow_run.head_branch == 'main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'production'))
 
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: open-oms-${{ github.sha }}
+          name: open-oms-${{ github.event.workflow_run.head_sha || github.sha }}
           path: dist
 
       - name: Upload artifact to server
+        if: ${{ secrets.DEPLOY_HOST != '' && secrets.DEPLOY_USER != '' && secrets.DEPLOY_SSH_KEY != '' }}
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          source: dist/open-oms-${{ github.sha }}.zip
+          source: dist/open-oms-${{ github.event.workflow_run.head_sha || github.sha }}.zip
           target: ${{ secrets.DEPLOY_PATH }}
 
       - name: Run remote deploy command
+        if: ${{ secrets.DEPLOY_HOST != '' && secrets.DEPLOY_USER != '' && secrets.DEPLOY_SSH_KEY != '' }}
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -161,7 +129,8 @@ jobs:
             set -e
             DEPLOY_DIR="${{ secrets.DEPLOY_PATH }}"
             APP_DIR="${DEPLOY_DIR}/open-oms"
-            BUNDLE="${DEPLOY_DIR}/open-oms-${{ github.sha }}.zip"
+            SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+            BUNDLE="${DEPLOY_DIR}/open-oms-${SHA}.zip"
             mkdir -p "${APP_DIR}"
             unzip -o "${BUNDLE}" -d "${APP_DIR}"
             cd "${APP_DIR}"
