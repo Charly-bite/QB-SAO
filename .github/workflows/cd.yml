@@ -19,8 +19,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  ci-gate:
+    name: Verify CI passed
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Wait for CI to succeed
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.sha }}
+          check-name: 'Tests (Python 3.12)'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 15
+
   package:
     name: Build deploy artifact
+    needs: ci-gate
     runs-on: ubuntu-latest
 
     steps:
