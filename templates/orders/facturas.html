@@ -1,0 +1,386 @@
+{% extends "base.html" %}
+{% block title %}Facturas del Día - Open-OMS{% endblock %}
+{% block extra_head %}
+<style>
+    @keyframes fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fade-in 0.3s ease-out; }
+    @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.3); } 50% { box-shadow: 0 0 12px 4px rgba(251, 191, 36, 0.15); } }
+    .stat-glow { animation: pulse-glow 3s ease-in-out infinite; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="facturasApp()" x-init="init()">
+
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                <svg class="w-7 h-7 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                Facturas del Día
+            </h1>
+            <p class="text-sm text-slate-500 mt-1">
+                <span x-text="dateLabel"></span>
+            </p>
+        </div>
+        <div class="flex items-center gap-3">
+            <!-- Date picker -->
+            <input type="date" x-model="selectedDate" @change="fetchInvoices()"
+                class="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white" />
+            <!-- Refresh button -->
+            <button @click="fetchInvoices()" :disabled="loading"
+                class="inline-flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50">
+                <svg class="w-4 h-4" :class="loading && 'animate-spin'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Actualizar
+            </button>
+            <!-- Auto-refresh indicator -->
+            <div class="flex items-center gap-2 text-xs text-slate-500 shrink-0">
+                <span class="relative flex h-2 w-2">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                </span>
+                Auto: <span x-text="timer"></span>s
+            </div>
+        </div>
+    </div>
+
+    <!-- SAP Unavailable Banner -->
+    <template x-if="!sapAvailable">
+        <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
+            <svg class="w-6 h-6 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+            </svg>
+            <div>
+                <p class="font-medium text-amber-800">SAP no disponible</p>
+                <p class="text-sm text-amber-600">No se puede conectar a SAP HANA para obtener las facturas. Verifique la conexión.</p>
+            </div>
+        </div>
+    </template>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <!-- Total Invoices -->
+        <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-amber-500 stat-glow">
+            <div class="flex justify-between items-center">
+                <div>
+                    <p class="text-sm text-slate-500 font-medium">Facturas</p>
+                    <h3 class="text-2xl font-bold text-slate-800" x-text="stats.total_count || 0"></h3>
+                </div>
+                <div class="p-2 bg-amber-50 rounded-lg text-amber-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active -->
+        <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-green-500">
+            <div class="flex justify-between items-center">
+                <div>
+                    <p class="text-sm text-slate-500 font-medium">Activas</p>
+                    <h3 class="text-2xl font-bold text-slate-800" x-text="stats.active_count || 0"></h3>
+                </div>
+                <div class="p-2 bg-green-50 rounded-lg text-green-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cancelled -->
+        <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-red-500">
+            <div class="flex justify-between items-center">
+                <div>
+                    <p class="text-sm text-slate-500 font-medium">Canceladas</p>
+                    <h3 class="text-2xl font-bold text-slate-800" x-text="stats.cancelled_count || 0"></h3>
+                </div>
+                <div class="p-2 bg-red-50 rounded-lg text-red-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Total MXN -->
+        <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-blue-500">
+            <div class="flex justify-between items-center">
+                <div>
+                    <p class="text-sm text-slate-500 font-medium">Total MXN</p>
+                    <h3 class="text-xl font-bold text-slate-800" x-text="formatCurrency(stats.total_mxn || 0, 'MXN')"></h3>
+                </div>
+                <div class="p-2 bg-blue-50 rounded-lg text-blue-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Total USD -->
+        <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-indigo-500">
+            <div class="flex justify-between items-center">
+                <div>
+                    <p class="text-sm text-slate-500 font-medium">Total USD</p>
+                    <h3 class="text-xl font-bold text-slate-800" x-text="formatCurrency(stats.total_usd || 0, 'USD')"></h3>
+                </div>
+                <div class="p-2 bg-indigo-50 rounded-lg text-indigo-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Invoice Table -->
+    <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center bg-slate-50 gap-4">
+            <h3 class="font-bold text-slate-800 flex items-center gap-2">
+                <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                Listado de Facturas
+                <span class="text-sm font-normal text-slate-500" x-text="'(' + filteredInvoices.length + ' de ' + invoices.length + ')'"></span>
+            </h3>
+
+            <!-- Search -->
+            <div class="flex gap-3 w-full md:w-auto">
+                <!-- Status filter -->
+                <div class="relative w-full md:w-40">
+                    <select x-model="statusFilter"
+                        class="block w-full pl-3 pr-10 py-2 border border-slate-200 rounded-lg leading-5 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 sm:text-sm transition-shadow appearance-none text-slate-600">
+                        <option value="">Todos</option>
+                        <option value="Abierta">Abierta</option>
+                        <option value="Cerrada">Cerrada</option>
+                        <option value="Cancelada">Cancelada</option>
+                    </select>
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </div>
+                </div>
+                <!-- Text search -->
+                <div class="relative w-full md:w-72">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg class="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </div>
+                    <input type="text" x-model="searchQuery"
+                        class="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 sm:text-sm transition-shadow"
+                        placeholder="Buscar factura, cliente o vendedor..." />
+                </div>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse" id="facturas-table">
+                <thead>
+                    <tr class="text-xs font-semibold tracking-wide text-slate-500 uppercase bg-slate-50 border-b border-slate-100">
+                        <th class="px-6 py-4 cursor-pointer hover:text-slate-700" @click="sortBy('invoice_number')">
+                            Factura
+                            <span x-show="sortColumn === 'invoice_number'" x-text="sortDir === 'asc' ? '↑' : '↓'"></span>
+                        </th>
+                        <th class="px-6 py-4">Cliente</th>
+                        <th class="px-6 py-4">Vendedor</th>
+                        <th class="px-6 py-4 cursor-pointer hover:text-slate-700 text-right" @click="sortBy('total')">
+                            Total
+                            <span x-show="sortColumn === 'total'" x-text="sortDir === 'asc' ? '↑' : '↓'"></span>
+                        </th>
+                        <th class="px-6 py-4">Moneda</th>
+                        <th class="px-6 py-4">Estado</th>
+                        <th class="px-6 py-4">Comentarios</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <template x-for="inv in filteredInvoices" :key="inv.invoice_number">
+                        <tr class="hover:bg-amber-50/30 transition-colors fade-in">
+                            <td class="px-6 py-4 font-medium text-slate-800" x-text="'#' + inv.invoice_number"></td>
+                            <td class="px-6 py-4">
+                                <div class="font-medium text-slate-800" x-text="inv.customer_name"></div>
+                                <div class="text-xs text-slate-500" x-text="inv.customer_code"></div>
+                            </td>
+                            <td class="px-6 py-4 text-sm text-slate-600" x-text="inv.seller_name"></td>
+                            <td class="px-6 py-4 text-right font-semibold text-slate-800" x-text="formatCurrency(inv.total, inv.currency)"></td>
+                            <td class="px-6 py-4">
+                                <span class="px-2 py-0.5 text-xs font-bold rounded-full"
+                                    :class="inv.currency === 'USD' ? 'bg-indigo-100 text-indigo-700' : 'bg-blue-100 text-blue-700'"
+                                    x-text="inv.currency">
+                                </span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="px-2 py-1 text-xs font-bold rounded-full"
+                                    :class="getStatusClass(inv.status)"
+                                    x-text="inv.status">
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-xs text-slate-500 max-w-[200px] truncate" x-text="inv.comments || '-'"></td>
+                        </tr>
+                    </template>
+
+                    <!-- Empty state -->
+                    <tr x-show="filteredInvoices.length === 0 && !loading">
+                        <td colspan="7" class="px-6 py-16 text-center">
+                            <div class="flex flex-col items-center gap-3">
+                                <svg class="w-12 h-12 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                                <p class="text-slate-500 font-medium">No se encontraron facturas</p>
+                                <p class="text-sm text-slate-400" x-text="searchQuery ? 'Intenta con otra búsqueda' : 'No hay facturas para la fecha seleccionada'"></p>
+                            </div>
+                        </td>
+                    </tr>
+
+                    <!-- Loading state -->
+                    <tr x-show="loading && invoices.length === 0">
+                        <td colspan="7" class="px-6 py-16 text-center">
+                            <div class="flex flex-col items-center gap-3">
+                                <svg class="w-8 h-8 text-amber-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <p class="text-slate-500 font-medium">Cargando facturas de SAP...</p>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+function facturasApp() {
+    return {
+        invoices: [],
+        stats: {},
+        loading: false,
+        timer: 30,
+        searchQuery: '',
+        statusFilter: '',
+        sortColumn: 'invoice_number',
+        sortDir: 'desc',
+        selectedDate: new Date().toISOString().split('T')[0],
+        sapAvailable: {{ sap_available | tojson }},
+        errorMsg: '',
+
+        get dateLabel() {
+            const today = new Date().toISOString().split('T')[0];
+            if (this.selectedDate === today) {
+                return 'Hoy — ' + new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            }
+            const d = new Date(this.selectedDate + 'T12:00:00');
+            return d.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        },
+
+        get filteredInvoices() {
+            let result = this.invoices;
+
+            if (this.statusFilter) {
+                result = result.filter(i => i.status === this.statusFilter);
+            }
+
+            if (this.searchQuery) {
+                const q = this.searchQuery.toLowerCase();
+                result = result.filter(i =>
+                    String(i.invoice_number).includes(q) ||
+                    (i.customer_name && i.customer_name.toLowerCase().includes(q)) ||
+                    (i.customer_code && i.customer_code.toLowerCase().includes(q)) ||
+                    (i.seller_name && i.seller_name.toLowerCase().includes(q))
+                );
+            }
+
+            // Sort
+            const col = this.sortColumn;
+            const dir = this.sortDir === 'asc' ? 1 : -1;
+            result = [...result].sort((a, b) => {
+                const av = a[col] ?? 0;
+                const bv = b[col] ?? 0;
+                if (typeof av === 'number') return (av - bv) * dir;
+                return String(av).localeCompare(String(bv)) * dir;
+            });
+
+            return result;
+        },
+
+        init() {
+            this.fetchInvoices();
+            this.startTimer();
+        },
+
+        startTimer() {
+            setInterval(() => {
+                this.timer--;
+                if (this.timer <= 0) {
+                    this.timer = 30;
+                    this.fetchInvoices();
+                }
+            }, 1000);
+        },
+
+        async fetchInvoices() {
+            if (this.loading) return;
+            this.loading = true;
+            this.errorMsg = '';
+
+            try {
+                const params = this.selectedDate ? '?date=' + this.selectedDate : '';
+                const res = await fetch("{{ url_for('orders.api_facturas') }}" + params + (params ? '&' : '?') + '_=' + Date.now(), { cache: 'no-store' });
+                const data = await res.json();
+
+                if (res.ok) {
+                    this.invoices = data.invoices || [];
+                    this.stats = data.stats || {};
+                } else {
+                    this.errorMsg = data.error || 'Error desconocido';
+                    console.error('API error:', data.error);
+                }
+            } catch (e) {
+                this.errorMsg = 'Error de conexión';
+                console.error('Fetch error:', e);
+            } finally {
+                this.loading = false;
+                this.timer = 30;
+            }
+        },
+
+        sortBy(column) {
+            if (this.sortColumn === column) {
+                this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.sortColumn = column;
+                this.sortDir = 'desc';
+            }
+        },
+
+        formatCurrency(value, currency) {
+            if (value === null || value === undefined) return '$0.00';
+            const symbol = currency === 'USD' ? 'US$' : '$';
+            return symbol + Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        },
+
+        getStatusClass(status) {
+            if (status === 'Cancelada') return 'bg-red-100 text-red-700';
+            if (status === 'Cerrada') return 'bg-green-100 text-green-700';
+            return 'bg-blue-100 text-blue-700';
+        }
+    }
+}
+</script>
+{% endblock %}
