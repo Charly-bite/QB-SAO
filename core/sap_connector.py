@@ -398,3 +398,143 @@ class SAPHanaConnector:
                     pass  # pragma: no cover
 
         return results
+
+    # =========================================================================
+    # INVOICE QUERIES
+    # =========================================================================
+
+    def get_todays_invoices(self, date_str=None):
+        """Fetch invoices for a given date (defaults to today).
+
+        Args:
+            date_str: Optional date string in 'YYYY-MM-DD' format.
+                      If None, uses the current date on the SAP server.
+
+        Returns:
+            List of invoice dicts with header information.
+        """
+        self._ensure_connected()
+
+        slp_codes = (
+            "('12', '23', '6', '13', '14', '11', '15', '5', "
+            "'8', '17', '3', '19', '7', '4', '10', '-1')"
+        )
+
+        if date_str:
+            date_filter = f"T0.\"DocDate\" = '{date_str}'"
+        else:
+            date_filter = 'T0."DocDate" = CURRENT_DATE'
+
+        query = f"""
+            SELECT
+                T0."DocNum"    AS invoice_number,
+                T0."DocEntry"  AS doc_entry,
+                T0."CardCode"  AS customer_code,
+                T0."CardName"  AS customer_name,
+                T0."DocDate"   AS invoice_date,
+                T0."DocTotal"  AS total,
+                T0."DocCur"    AS currency,
+                T0."DocStatus" AS doc_status,
+                T0."CANCELED"  AS canceled,
+                T0."Comments"  AS comments,
+                T3."SlpName"   AS seller_name
+            FROM {self._get_table_name("invoices")} T0
+            LEFT JOIN {self.schema}."OSLP" T3 ON T0."SlpCode" = T3."SlpCode"
+            WHERE {date_filter}
+              AND T0."SlpCode" IN {slp_codes}
+            ORDER BY T0."DocNum" DESC
+        """
+
+        conn = getattr(self._local, "connection", None)
+        if conn is None:
+            raise ConnectionError("No active connection")
+
+        cursor = conn.cursor()
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        cursor.close()
+
+        invoices = []
+        for row in rows:
+            canceled = row[8] or "N"
+            doc_status = row[7] or "O"
+
+            if canceled == "Y":
+                status = "Cancelada"
+            elif doc_status == "C":
+                status = "Cerrada"
+            else:
+                status = "Abierta"
+
+            invoices.append({
+                "invoice_number": int(row[0]),
+                "doc_entry": int(row[1]),
+                "customer_code": row[2] or "",
+                "customer_name": row[3] or "",
+                "invoice_date": str(row[4]),
+                "total": float(row[5]) if row[5] else 0.0,
+                "currency": row[6] or "MXN",
+                "status": status,
+                "doc_status": doc_status,
+                "canceled": canceled,
+                "comments": row[9] or "",
+                "seller_name": row[10] or "SAP System",
+            })
+
+        return invoices
+
+    def get_invoice_lines(self, doc_entry):
+        """Fetch line items for a specific invoice.
+
+        Args:
+            doc_entry: The DocEntry of the invoice.
+
+        Returns:
+            List of line item dicts.
+        """
+        self._ensure_connected()
+
+        query = f"""
+            SELECT
+                T1."LineNum"    AS line_number,
+                T1."ItemCode"   AS item_code,
+                T1."Dscription" AS description,
+                T1."Quantity"   AS quantity,
+                T1."unitMsr"    AS unit,
+                T1."Price"      AS unit_price,
+                T1."LineTotal"  AS line_total,
+                T1."WhsCode"    AS warehouse
+            FROM {self._get_table_name("invoice_lines")} T1
+            WHERE T1."DocEntry" = ?
+            ORDER BY T1."LineNum"
+        """
+
+        conn = getattr(self._local, "connection", None)
+        if conn is None:
+            raise ConnectionError("No active connection")
+
+        cursor = conn.cursor()
+        cursor.execute(query, [doc_entry])
+        rows = cursor.fetchall()
+        cursor.close()
+
+        items = []
+        for row in rows:
+            def _safe_float(v):
+                try:
+                    return float(v) if v is not None else 0.0
+                except (ValueError, TypeError):  # pragma: no cover
+                    return 0.0  # pragma: no cover
+
+            items.append({
+                "line_number": int(row[0]),
+                "item_code": row[1] or "",
+                "description": row[2] or "",
+                "quantity": _safe_float(row[3]),
+                "unit": row[4] or "",
+                "unit_price": _safe_float(row[5]),
+                "line_total": _safe_float(row[6]),
+                "warehouse": row[7] or "",
+            })
+
+        return items
