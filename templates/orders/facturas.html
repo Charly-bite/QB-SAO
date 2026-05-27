@@ -1,11 +1,27 @@
 {% extends "base.html" %}
-{% block title %}Facturas del Día - Open-OMS{% endblock %}
+{% block title %}Facturas del Día - QB-OMS{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="qb-breadcrumbs" aria-label="Breadcrumb">
+    <a href="{{ url_for('orders.index') }}">QB-OMS</a>
+    <span class="bc-sep">›</span>
+    <span class="bc-current">Facturas</span>
+</nav>
+{% endblock %}
+
 {% block extra_head %}
 <style>
     @keyframes fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     .fade-in { animation: fade-in 0.3s ease-out; }
     @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.3); } 50% { box-shadow: 0 0 12px 4px rgba(251, 191, 36, 0.15); } }
     .stat-glow { animation: pulse-glow 3s ease-in-out infinite; }
+    
+    @media print {
+        body * { visibility: hidden; }
+        #facturas-table, #facturas-table * { visibility: visible; }
+        #facturas-table { position: absolute; left: 0; top: 0; width: 100%; }
+        .drag-handle { display: none !important; }
+    }
 </style>
 {% endblock %}
 
@@ -65,80 +81,19 @@
     </template>
 
     <!-- Stats Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <!-- Total Invoices -->
-        <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-amber-500 stat-glow">
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <!-- Cerradas -->
+        <div @click="statusFilter = 'Cerrada'"
+             class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-green-500 cursor-pointer transition-all duration-200"
+             :class="statusFilter === 'Cerrada' ? 'ring-2 ring-green-500 transform scale-105' : 'hover:-translate-y-1'">
             <div class="flex justify-between items-center">
                 <div>
-                    <p class="text-sm text-slate-500 font-medium">Facturas</p>
-                    <h3 class="text-2xl font-bold text-slate-800" x-text="stats.total_count || 0"></h3>
-                </div>
-                <div class="p-2 bg-amber-50 rounded-lg text-amber-600">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                    </svg>
-                </div>
-            </div>
-        </div>
-
-        <!-- Active -->
-        <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-green-500">
-            <div class="flex justify-between items-center">
-                <div>
-                    <p class="text-sm text-slate-500 font-medium">Activas</p>
-                    <h3 class="text-2xl font-bold text-slate-800" x-text="stats.active_count || 0"></h3>
+                    <p class="text-sm text-slate-500 font-medium">Cerradas</p>
+                    <h3 class="text-2xl font-bold text-slate-800" x-text="stats.closed_count || 0"></h3>
                 </div>
                 <div class="p-2 bg-green-50 rounded-lg text-green-600">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                    </svg>
-                </div>
-            </div>
-        </div>
-
-        <!-- Cancelled -->
-        <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-red-500">
-            <div class="flex justify-between items-center">
-                <div>
-                    <p class="text-sm text-slate-500 font-medium">Canceladas</p>
-                    <h3 class="text-2xl font-bold text-slate-800" x-text="stats.cancelled_count || 0"></h3>
-                </div>
-                <div class="p-2 bg-red-50 rounded-lg text-red-600">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </div>
-            </div>
-        </div>
-
-        <!-- Total MXN -->
-        <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-blue-500">
-            <div class="flex justify-between items-center">
-                <div>
-                    <p class="text-sm text-slate-500 font-medium">Total MXN</p>
-                    <h3 class="text-xl font-bold text-slate-800" x-text="formatCurrency(stats.total_mxn || 0, 'MXN')"></h3>
-                </div>
-                <div class="p-2 bg-blue-50 rounded-lg text-blue-600">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                </div>
-            </div>
-        </div>
-
-        <!-- Total USD -->
-        <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-indigo-500">
-            <div class="flex justify-between items-center">
-                <div>
-                    <p class="text-sm text-slate-500 font-medium">Total USD</p>
-                    <h3 class="text-xl font-bold text-slate-800" x-text="formatCurrency(stats.total_usd || 0, 'USD')"></h3>
-                </div>
-                <div class="p-2 bg-indigo-50 rounded-lg text-indigo-600">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
                 </div>
             </div>
@@ -159,21 +114,10 @@
 
             <!-- Search -->
             <div class="flex gap-3 w-full md:w-auto">
-                <!-- Status filter -->
-                <div class="relative w-full md:w-40">
-                    <select x-model="statusFilter"
-                        class="block w-full pl-3 pr-10 py-2 border border-slate-200 rounded-lg leading-5 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 sm:text-sm transition-shadow appearance-none text-slate-600">
-                        <option value="">Todos</option>
-                        <option value="Abierta">Abierta</option>
-                        <option value="Cerrada">Cerrada</option>
-                        <option value="Cancelada">Cancelada</option>
-                    </select>
-                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                        </svg>
-                    </div>
-                </div>
+                <button onclick="window.print()" class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium rounded-lg transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                    Imprimir Relación
+                </button>
                 <!-- Text search -->
                 <div class="relative w-full md:w-72">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -192,6 +136,7 @@
             <table class="w-full text-left border-collapse" id="facturas-table">
                 <thead>
                     <tr class="text-xs font-semibold tracking-wide text-slate-500 uppercase bg-slate-50 border-b border-slate-100">
+                        <th class="px-3 py-4 w-10 drag-handle"></th>
                         <th class="px-6 py-4 cursor-pointer hover:text-slate-700" @click="sortBy('invoice_number')">
                             Factura
                             <span x-show="sortColumn === 'invoice_number'" x-text="sortDir === 'asc' ? '↑' : '↓'"></span>
@@ -207,9 +152,12 @@
                         <th class="px-6 py-4">Comentarios</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-slate-100" id="invoices-tbody">
                     <template x-for="inv in filteredInvoices" :key="inv.invoice_number">
-                        <tr class="hover:bg-amber-50/30 transition-colors fade-in">
+                        <tr class="hover:bg-amber-50/30 transition-colors fade-in" :data-id="inv.invoice_number">
+                            <td class="px-3 py-4 text-slate-400 hover:text-slate-600 cursor-grab drag-handle">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/></svg>
+                            </td>
                             <td class="px-6 py-4 font-medium text-slate-800" x-text="'#' + inv.invoice_number"></td>
                             <td class="px-6 py-4">
                                 <div class="font-medium text-slate-800" x-text="inv.customer_name"></div>
@@ -273,9 +221,10 @@ function facturasApp() {
         loading: false,
         timer: 30,
         searchQuery: '',
-        statusFilter: '',
+        statusFilter: 'Cerrada',
         sortColumn: 'invoice_number',
         sortDir: 'desc',
+        manualOrder: [],
         selectedDate: new Date().toISOString().split('T')[0],
         sapAvailable: {{ sap_available | tojson }},
         errorMsg: '',
@@ -308,6 +257,19 @@ function facturasApp() {
 
             // Sort
             const col = this.sortColumn;
+            
+            if (col === 'manual' && this.manualOrder.length > 0) {
+                result = [...result].sort((a, b) => {
+                    const idxA = this.manualOrder.indexOf(String(a.invoice_number));
+                    const idxB = this.manualOrder.indexOf(String(b.invoice_number));
+                    if (idxA === -1 && idxB === -1) return 0;
+                    if (idxA === -1) return 1;
+                    if (idxB === -1) return -1;
+                    return idxA - idxB;
+                });
+                return result;
+            }
+
             const dir = this.sortDir === 'asc' ? 1 : -1;
             result = [...result].sort((a, b) => {
                 const av = a[col] ?? 0;
@@ -322,6 +284,24 @@ function facturasApp() {
         init() {
             this.fetchInvoices();
             this.startTimer();
+            this.$nextTick(() => {
+                if (typeof Sortable !== 'undefined') {
+                    Sortable.create(document.getElementById('invoices-tbody'), {
+                        animation: 150,
+                        handle: '.drag-handle',
+                        ghostClass: 'bg-amber-50',
+                        onEnd: (evt) => {
+                            const newOrder = Array.from(evt.to.children)
+                                .map(tr => tr.getAttribute('data-id'))
+                                .filter(Boolean);
+                            if (newOrder.length > 0) {
+                                this.manualOrder = newOrder;
+                                this.sortColumn = 'manual';
+                            }
+                        }
+                    });
+                }
+            });
         },
 
         startTimer() {

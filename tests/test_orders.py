@@ -179,7 +179,7 @@ class TestMonitorRoute:
         response = auth_client.get('/orders/monitor')
         assert response.status_code == 200
         html = response.data.decode('utf-8')
-        assert 'Open-OMS' in html
+        assert 'QB-OMS' in html
 
     def test_monitor_renders_for_seller(self, seller_client):
         response = seller_client.get('/orders/monitor')

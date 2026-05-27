@@ -1374,11 +1374,13 @@ def api_facturas():
         total_usd = sum(i["total"] for i in invoices if i["currency"] == "USD")
         active = [i for i in invoices if i["status"] != "Cancelada"]
         cancelled = [i for i in invoices if i["status"] == "Cancelada"]
+        closed = [i for i in invoices if i["status"] == "Cerrada"]
 
         stats = {
             "total_count": len(invoices),
             "active_count": len(active),
             "cancelled_count": len(cancelled),
+            "closed_count": len(closed),
             "total_mxn": round(total_mxn, 2),
             "total_usd": round(total_usd, 2),
         }

@@ -1,166 +1,461 @@
 {% extends "base.html" %} {% block title %}Visor de Pedidos - Sales Team{%
-endblock %} {% block page_title %}Visor de Estado de Pedidos{% endblock %} {%
-block extra_head %}
+endblock %} {% block page_title %}Visor de Estado de Pedidos{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="qb-breadcrumbs" aria-label="Breadcrumb">
+    <a href="{{ url_for('orders.index') }}">QB-OMS</a>
+    <span class="bc-sep">›</span>
+    <span class="bc-current">Visor</span>
+</nav>
+{% endblock %}
+
+{% block extra_head %}
 <style>
     @keyframes stripe-slide {
-        0% {
-            background-position: 0 0;
-        }
-        100% {
-            background-position: 32px 0;
-        }
+        0% { background-position: 0 0; }
+        100% { background-position: 32px 0; }
     }
     .progress-striped {
         background-size: 32px 32px;
         animation: stripe-slide 0.8s linear infinite;
     }
+
+    /* ── QB Moodboard — Visor Stats Cards ── */
+    .qb-stat-card {
+        background: #ffffff;
+        border-radius: 16px;
+        border: 1px solid #e2e8f0;
+        padding: 20px;
+        position: relative;
+        overflow: hidden;
+        transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .qb-stat-card:hover { transform: translateY(-2px); }
+    .qb-stat-card::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+        border-radius: 4px 0 0 4px;
+    }
+    .qb-stat-card.blue::before { background: linear-gradient(180deg, #4a7dff, #2563eb); }
+    .qb-stat-card.slate::before { background: linear-gradient(180deg, #94a3b8, #64748b); }
+    .qb-stat-card.amber::before { background: linear-gradient(180deg, #fbbf24, #f59e0b); }
+    .qb-stat-card.green::before { background: linear-gradient(180deg, #34d399, #10b981); }
+    .qb-stat-card.violet::before { background: linear-gradient(180deg, #a78bfa, #6366f1); }
+
+    .qb-stat-label {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #94a3b8;
+    }
+    .qb-stat-value {
+        font-size: 2rem;
+        font-weight: 800;
+        color: #0f1b2d;
+        letter-spacing: -0.03em;
+        line-height: 1.1;
+        margin-top: 4px;
+        font-family: 'JetBrains Mono', 'Inter', monospace;
+    }
+    .qb-stat-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .qb-stat-icon.blue { background: rgba(74, 125, 255, 0.1); color: #4a7dff; }
+    .qb-stat-icon.slate { background: #f1f5f9; color: #64748b; }
+    .qb-stat-icon.amber { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+    .qb-stat-icon.green { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+    .qb-stat-icon.violet { background: rgba(99, 102, 241, 0.1); color: #6366f1; }
+
+    /* ── Table Section ── */
+    .qb-visor-panel {
+        background: #ffffff;
+        border-radius: 16px;
+        border: 1px solid #e2e8f0;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .qb-visor-header {
+        padding: 16px 24px;
+        border-bottom: 1px solid #f1f5f9;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+    }
+    .qb-visor-title {
+        font-size: 14px;
+        font-weight: 800;
+        color: #0f1b2d;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .qb-visor-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        flex: 1;
+        min-width: 0;
+        justify-content: flex-end;
+    }
+
+    .qb-visor-select {
+        padding: 8px 32px 8px 12px;
+        border-radius: 10px;
+        border: 1px solid #e2e8f0;
+        background: #f8fafc;
+        font-size: 13px;
+        font-family: 'Inter', sans-serif;
+        color: #475569;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%2394a3b8' viewBox='0 0 24 24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 10px center;
+        background-size: 14px;
+        transition: all 0.2s;
+        outline: none;
+        min-width: 180px;
+    }
+    .qb-visor-select:focus {
+        border-color: #4a7dff;
+        box-shadow: 0 0 0 3px rgba(74, 125, 255, 0.12);
+        background-color: #fff;
+    }
+
+    .qb-visor-search {
+        position: relative;
+        min-width: 280px;
+        flex: 1;
+        max-width: 400px;
+    }
+    .qb-visor-search-icon {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 16px;
+        height: 16px;
+        color: #94a3b8;
+        pointer-events: none;
+    }
+    .qb-visor-search input {
+        width: 100%;
+        padding: 8px 14px 8px 36px;
+        border-radius: 10px;
+        border: 1px solid #e2e8f0;
+        background: #f8fafc;
+        font-size: 13px;
+        font-family: 'Inter', sans-serif;
+        color: #1e293b;
+        outline: none;
+        transition: all 0.2s;
+    }
+    .qb-visor-search input:focus {
+        border-color: #4a7dff;
+        box-shadow: 0 0 0 3px rgba(74, 125, 255, 0.12);
+        background-color: #fff;
+    }
+    .qb-visor-search input::placeholder { color: #94a3b8; }
+
+    .qb-live-dot {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        font-weight: 500;
+        color: #64748b;
+        font-family: 'JetBrains Mono', monospace;
+        white-space: nowrap;
+    }
+    .qb-live-dot-inner {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #22c55e;
+        position: relative;
+    }
+    .qb-live-dot-inner::after {
+        content: '';
+        position: absolute;
+        inset: -3px;
+        border-radius: 50%;
+        background: rgba(34, 197, 94, 0.3);
+        animation: dotPing 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+    }
+    @keyframes dotPing { 0% { opacity: 1; transform: scale(1); } 75%, 100% { opacity: 0; transform: scale(2); } }
+
+    /* Table */
+    .qb-visor-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .qb-visor-table thead {
+        background: linear-gradient(135deg, #0f1b2d, #1a2744);
+    }
+    .qb-visor-table thead th {
+        padding: 14px 24px;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: rgba(148, 163, 184, 0.9);
+        text-align: left;
+        white-space: nowrap;
+    }
+    .qb-visor-table tbody tr {
+        border-bottom: 1px solid #f1f5f9;
+        transition: background 0.15s ease;
+    }
+    .qb-visor-table tbody tr:hover {
+        background: #f8fafc;
+    }
+    .qb-visor-table td {
+        padding: 14px 24px;
+        font-size: 13px;
+        color: #475569;
+    }
+
+    /* Order ID */
+    .qb-visor-oid {
+        font-weight: 800;
+        font-family: 'JetBrains Mono', monospace;
+        color: #4a7dff;
+        font-size: 13px;
+    }
+    .qb-visor-oid-hash { color: #94a3b8; font-weight: 400; }
+
+    /* Customer */
+    .qb-visor-cust { font-weight: 600; color: #1e293b; font-size: 13px; }
+    .qb-visor-code {
+        font-size: 11px;
+        font-family: 'JetBrains Mono', monospace;
+        color: #94a3b8;
+        margin-top: 2px;
+    }
+
+    /* SAP badge */
+    .qb-sap-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    /* Progress */
+    .qb-progress-wrap { width: 100%; max-width: 220px; }
+    .qb-progress-label {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 4px;
+    }
+    .qb-progress-status {
+        font-size: 11px;
+        font-weight: 700;
+    }
+    .qb-progress-pct {
+        font-size: 11px;
+        font-weight: 600;
+        color: #94a3b8;
+        font-family: 'JetBrains Mono', monospace;
+    }
+    .qb-progress-track {
+        width: 100%;
+        height: 6px;
+        border-radius: 6px;
+        background: #f1f5f9;
+        overflow: hidden;
+    }
+    .qb-progress-bar {
+        height: 6px;
+        border-radius: 6px;
+        transition: width 0.7s cubic-bezier(0.32, 0.72, 0, 1);
+    }
+
+    /* Date */
+    .qb-visor-date {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 12px;
+        color: #64748b;
+    }
+    .qb-visor-time {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 12px;
+        color: #94a3b8;
+    }
+
+    /* Empty */
+    .qb-visor-empty {
+        text-align: center;
+        padding: 48px 20px;
+        color: #94a3b8;
+        font-size: 14px;
+        font-weight: 500;
+    }
+
+    /* ── Pagination ── */
+    .qb-pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 24px;
+        border-top: 1px solid #f1f5f9;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+    .qb-pagination-info {
+        font-size: 13px;
+        font-weight: 500;
+        color: #94a3b8;
+        font-family: 'JetBrains Mono', monospace;
+    }
+    .qb-pagination-info b {
+        font-weight: 700;
+        color: #475569;
+    }
+    .qb-pagination-controls {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .qb-page-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 36px;
+        height: 36px;
+        padding: 0 8px;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        background: #ffffff;
+        color: #64748b;
+        font-size: 13px;
+        font-weight: 600;
+        font-family: 'JetBrains Mono', monospace;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        appearance: none;
+    }
+    .qb-page-btn:hover:not(:disabled):not(.qb-page-active) {
+        background: #f0f2f5;
+        border-color: #94a3b8;
+        color: #1e293b;
+    }
+    .qb-page-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+    }
+    .qb-page-active {
+        background: linear-gradient(135deg, #0f1b2d, #243556);
+        border-color: #0f1b2d;
+        color: #ffffff;
+        box-shadow: 0 2px 8px rgba(15, 27, 45, 0.25);
+        cursor: default;
+    }
+    .qb-page-dots {
+        border: none;
+        background: transparent;
+        cursor: default;
+        color: #94a3b8;
+        min-width: 28px;
+        padding: 0;
+    }
+
+    @media (max-width: 768px) {
+        .qb-visor-filters { flex-direction: column; }
+        .qb-visor-search { min-width: 100%; max-width: 100%; }
+        .qb-visor-select { min-width: 100%; }
+    }
 </style>
 {% endblock %} {% block content %}
 <div class="space-y-6" x-data="visorData()">
     <!-- Stats Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <!-- Total Active -->
-        <div
-            class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-blue-500"
-        >
-            <div class="flex justify-between items-center">
+        <div class="qb-stat-card blue">
+            <div class="flex justify-between items-start">
                 <div>
-                    <p class="text-sm text-slate-500 font-medium">Activos</p>
-                    <h3 class="text-2xl font-bold text-slate-800">
-                        {{ stats.total_active }}
-                    </h3>
+                    <p class="qb-stat-label">Activos</p>
+                    <h3 class="qb-stat-value">{{ stats.total_active }}</h3>
                 </div>
-                <div class="p-2 bg-blue-50 rounded-lg text-blue-600">
-                    <svg
-                        class="w-6 h-6"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M13 10V3L4 14h7v7l9-11h-7z"
-                        />
+                <div class="qb-stat-icon blue">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                 </div>
             </div>
         </div>
 
         <!-- Pending -->
-        <div
-            class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-slate-500"
-        >
-            <div class="flex justify-between items-center">
+        <div class="qb-stat-card slate">
+            <div class="flex justify-between items-start">
                 <div>
-                    <p class="text-sm text-slate-500 font-medium">Pendiente</p>
-                    <h3 class="text-2xl font-bold text-slate-800">
-                        {{ stats.pending }}
-                    </h3>
+                    <p class="qb-stat-label">Pendiente</p>
+                    <h3 class="qb-stat-value">{{ stats.pending }}</h3>
                 </div>
-                <div class="p-2 bg-slate-100 rounded-lg text-slate-600">
-                    <svg
-                        class="w-6 h-6"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
+                <div class="qb-stat-icon slate">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                 </div>
             </div>
         </div>
 
         <!-- Picking -->
-        <div
-            class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-yellow-500"
-        >
-            <div class="flex justify-between items-center">
+        <div class="qb-stat-card amber">
+            <div class="flex justify-between items-start">
                 <div>
-                    <p class="text-sm text-slate-500 font-medium">Terminado</p>
-                    <h3 class="text-2xl font-bold text-slate-800">
-                        {{ stats.picking }}
-                    </h3>
+                    <p class="qb-stat-label">Terminado</p>
+                    <h3 class="qb-stat-value">{{ stats.picking }}</h3>
                 </div>
-                <div class="p-2 bg-yellow-50 rounded-lg text-yellow-600">
-                    <svg
-                        class="w-6 h-6"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-                        />
+                <div class="qb-stat-icon amber">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                     </svg>
                 </div>
             </div>
         </div>
 
         <!-- Ready -->
-        <div
-            class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-green-500"
-        >
-            <div class="flex justify-between items-center">
+        <div class="qb-stat-card green">
+            <div class="flex justify-between items-start">
                 <div>
-                    <p class="text-sm text-slate-500 font-medium">Relacion de envio</p>
-                    <h3 class="text-2xl font-bold text-slate-800">
-                        {{ stats.ready }}
-                    </h3>
+                    <p class="qb-stat-label">Relacion de envio</p>
+                    <h3 class="qb-stat-value">{{ stats.ready }}</h3>
                 </div>
-                <div class="p-2 bg-green-50 rounded-lg text-green-600">
-                    <svg
-                        class="w-6 h-6"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M5 13l4 4L19 7"
-                        />
+                <div class="qb-stat-icon green">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                     </svg>
                 </div>
             </div>
         </div>
 
         <!-- Shipped -->
-        <div
-            class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-purple-500"
-        >
-            <div class="flex justify-between items-center">
+        <div class="qb-stat-card violet">
+            <div class="flex justify-between items-start">
                 <div>
-                    <p class="text-sm text-slate-500 font-medium">
-                        Enviado al cliente
-                    </p>
-                    <h3 class="text-2xl font-bold text-slate-800">
-                        {{ stats.shipped }}
-                    </h3>
+                    <p class="qb-stat-label">Enviado al cliente</p>
+                    <h3 class="qb-stat-value">{{ stats.shipped }}</h3>
                 </div>
-                <div class="p-2 bg-purple-50 rounded-lg text-purple-600">
-                    <svg
-                        class="w-6 h-6"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                        />
+                <div class="qb-stat-icon violet">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                     </svg>
                 </div>
             </div>
@@ -168,188 +463,144 @@ block extra_head %}
     </div>
 
     <!-- Active Orders Table -->
-    <div class="bg-white rounded-xl shadow-sm overflow-hidden">
-        <div
-            class="px-6 py-4 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center bg-slate-50 gap-4"
-        >
-            <h3 class="font-bold text-slate-800 flex items-center gap-2">
-                <svg
-                    class="w-5 h-5 text-blue-600"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                >
-                    <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                    />
+    <div class="qb-visor-panel">
+        <div class="qb-visor-header">
+            <h3 class="qb-visor-title">
+                <svg class="w-5 h-5" style="color:#4a7dff" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                 </svg>
                 Pedidos Activos
             </h3>
 
             <!-- Filters Container -->
-            <div class="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+            <div class="qb-visor-filters">
                 <!-- User Filter -->
-                <div class="relative w-full md:w-48">
-                    <select
-                        x-model="selectedUser"
-                        class="block w-full pl-3 pr-10 py-2 border border-slate-200 rounded-lg leading-5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-shadow appearance-none text-slate-600"
-                    >
-                        <option value="">Todos los vendedores</option>
-                        <template x-for="user in uniqueUsers" :key="user">
-                            <option :value="user" x-text="user"></option>
-                        </template>
-                    </select>
-                    <div
-                        class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400"
-                    >
-                        <svg
-                            class="h-4 w-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M19 9l-7 7-7-7"
-                            ></path>
-                        </svg>
-                    </div>
-                </div>
+                <select
+                    x-model="selectedUser"
+                    @change="currentPage = 1"
+                    class="qb-visor-select"
+                >
+                    <option value="">Todos los vendedores</option>
+                    <template x-for="user in uniqueUsers" :key="user">
+                        <option :value="user" x-text="user"></option>
+                    </template>
+                </select>
 
                 <!-- Smart Search -->
-                <div class="relative w-full md:w-80">
-                    <div
-                        class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
-                    >
-                        <svg
-                            class="h-5 w-5 text-slate-400"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                            />
-                        </svg>
-                    </div>
+                <div class="qb-visor-search">
+                    <svg class="qb-visor-search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
                     <input
                         type="text"
                         x-model="searchQuery"
-                        class="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-shadow"
+                        @input="currentPage = 1"
                         placeholder="Buscar por #pedido, factura, cliente o vendedor..."
                     />
                 </div>
-            </div>
 
-            <div
-                class="flex items-center gap-2 text-xs text-slate-500 shrink-0"
-            >
-                <span class="relative flex h-2 w-2">
-                    <span
-                        class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"
-                    ></span>
-                    <span
-                        class="relative inline-flex rounded-full h-2 w-2 bg-green-500"
-                    ></span>
-                </span>
-                Actualización autom.: <span x-text="timer">60</span>s
+                <div class="qb-live-dot">
+                    <div class="qb-live-dot-inner"></div>
+                    <span>Auto: <span x-text="timer"></span>s</span>
+                </div>
             </div>
         </div>
 
-        <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
+        <div style="overflow-x: auto;">
+            <table class="qb-visor-table">
                 <thead>
-                    <tr
-                        class="text-xs font-semibold tracking-wide text-slate-500 uppercase bg-slate-50 border-b border-slate-100"
-                    >
-                        <th class="px-6 py-4">Pedido</th>
-                        <th class="px-6 py-4">Cliente</th>
-                        <th class="px-6 py-4">Status SAP</th>
-                        <th class="px-6 py-4">Progreso</th>
-                        <th class="px-6 py-4">Entrega</th>
-                        <th class="px-6 py-4 text-right">Actualizado</th>
+                    <tr>
+                        <th>Pedido</th>
+                        <th>Cliente</th>
+                        <th>Status SAP</th>
+                        <th>Progreso</th>
+                        <th>Entrega</th>
+                        <th style="text-align: right;">Actualizado</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody>
                     <template
-                        x-for="order in filteredOrders"
+                        x-for="order in paginatedOrders"
                         :key="order.order_id"
                     >
-                        <tr class="hover:bg-blue-50/30 transition-colors">
-                            <td
-                                class="px-6 py-4 font-medium text-slate-800"
-                                x-text="'#' + order.order_id"
-                            ></td>
-                            <td class="px-6 py-4">
-                                <div
-                                    class="font-medium text-slate-800"
-                                    x-text="order.customer_name"
-                                ></div>
-                                <div
-                                    class="text-xs text-slate-500"
-                                    x-text="order.customer_code"
-                                ></div>
-                            </td>
-                            <td class="px-6 py-4">
-                                <span
-                                    class="px-2 py-1 text-xs font-bold rounded-full"
-                                    :class="getSapStatusClass(order.sap_status)"
-                                    x-text="order.sap_status"
-                                >
+                        <tr>
+                            <td>
+                                <span class="qb-visor-oid">
+                                    <span class="qb-visor-oid-hash">#</span><span x-text="order.order_id"></span>
                                 </span>
                             </td>
-                            <td class="px-6 py-4">
-                                <div class="w-full max-w-xs">
-                                    <div class="flex justify-between mb-1">
+                            <td>
+                                <div class="qb-visor-cust" x-text="order.customer_name"></div>
+                                <div class="qb-visor-code" x-text="order.customer_code"></div>
+                            </td>
+                            <td>
+                                <span
+                                    class="qb-sap-badge"
+                                    :class="getSapStatusClass(order.sap_status)"
+                                    x-text="order.sap_status"
+                                ></span>
+                            </td>
+                            <td>
+                                <div class="qb-progress-wrap">
+                                    <div class="qb-progress-label">
                                         <span
-                                            class="text-xs font-bold"
+                                            class="qb-progress-status"
                                             :class="getTextColor(order.status)"
                                             x-text="order.status === 'Facturacion' ? (order.factura_number ? 'Facturado #' + order.factura_number : 'Facturado') : order.status"
                                         ></span>
-                                        <span
-                                            class="text-xs font-medium text-slate-500"
-                                            x-text="getStatusPercent(order.status)"
-                                        ></span>
+                                        <span class="qb-progress-pct" x-text="getStatusPercent(order.status)"></span>
                                     </div>
-                                    <div
-                                        class="w-full bg-slate-100 rounded-full h-3 overflow-hidden"
-                                    >
+                                    <div class="qb-progress-track">
                                         <div
-                                            class="h-3 rounded-full transition-all duration-700 progress-striped"
+                                            class="qb-progress-bar progress-striped"
                                             :style="getProgressBarStyle(order.status)"
                                         ></div>
                                     </div>
                                 </div>
                             </td>
-                            <td
-                                class="px-6 py-4 text-sm text-slate-600"
-                                x-text="order.delivery_date"
-                            ></td>
-                            <td
-                                class="px-6 py-4 text-right text-xs text-slate-400"
-                                x-text="order.last_updated ? order.last_updated.split('T')[1].substring(0,5) : '-'"
-                            ></td>
+                            <td>
+                                <span class="qb-visor-date" x-text="order.delivery_date || '-'"></span>
+                            </td>
+                            <td style="text-align: right;">
+                                <span
+                                    class="qb-visor-time"
+                                    x-text="order.last_updated ? order.last_updated.split('T')[1].substring(0,5) : '-'"
+                                ></span>
+                            </td>
                         </tr>
                     </template>
                     <tr x-show="filteredOrders.length === 0">
-                        <td
-                            colspan="6"
-                            class="px-6 py-12 text-center text-slate-500"
-                        >
-                            No se encontraron pedidos que coincidan con la
-                            búsqueda.
+                        <td colspan="6">
+                            <div class="qb-visor-empty">No se encontraron pedidos que coincidan con la búsqueda.</div>
                         </td>
                     </tr>
                 </tbody>
             </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="qb-pagination" x-show="totalPages > 1" x-cloak>
+            <div class="qb-pagination-info">
+                Mostrando <b x-text="pageStartIdx + 1"></b>–<b x-text="Math.min(pageEndIdx, filteredOrders.length)"></b> de <b x-text="filteredOrders.length"></b> pedidos
+            </div>
+            <div class="qb-pagination-controls">
+                <button class="qb-page-btn" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+                <template x-for="p in pageNumbers" :key="'p'+p">
+                    <button
+                        class="qb-page-btn"
+                        :class="{ 'qb-page-active': p === currentPage, 'qb-page-dots': p === '...' }"
+                        :disabled="p === '...'"
+                        @click="p !== '...' && goToPage(p)"
+                        x-text="p === '...' ? '…' : p"
+                    ></button>
+                </template>
+                <button class="qb-page-btn" :disabled="currentPage >= totalPages" @click="goToPage(currentPage + 1)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -359,145 +610,182 @@ block extra_head %}
         return {
             orders: {{ orders | tojson }},
             stats: {{ stats | tojson }},
-    timer: 10,
-        loading: false,
+            timer: 10,
+            loading: false,
             searchQuery: '',
-                selectedUser: '',
+            selectedUser: '',
+            currentPage: 1,
+            pageSize: 50,
 
-                    get uniqueUsers() {
-        const users = new Set(this.orders.map(o => o.created_by).filter(Boolean));
-        return Array.from(users).sort();
-    },
+            get uniqueUsers() {
+                const users = new Set(this.orders.map(o => o.created_by).filter(Boolean));
+                return Array.from(users).sort();
+            },
 
             get filteredOrders() {
-        let result = this.orders;
+                let result = this.orders;
 
-        if (this.selectedUser !== '') {
-            result = result.filter(o => o.created_by === this.selectedUser);
-        }
+                if (this.selectedUser !== '') {
+                    result = result.filter(o => o.created_by === this.selectedUser);
+                }
 
-        if (this.searchQuery !== '') {
-            const query = this.searchQuery.toLowerCase();
-            result = result.filter(o => {
-                const orderIdMatch = String(o.order_id).includes(query);
-                const customerNameMatch = o.customer_name && o.customer_name.toLowerCase().includes(query);
-                const customerCodeMatch = o.customer_code && o.customer_code.toLowerCase().includes(query);
-                const facturaMatch = o.factura_number && String(o.factura_number).includes(query);
-                const creatorMatch = o.created_by && o.created_by.toLowerCase().includes(query);
+                if (this.searchQuery !== '') {
+                    const query = this.searchQuery.toLowerCase();
+                    result = result.filter(o => {
+                        const orderIdMatch = String(o.order_id).includes(query);
+                        const customerNameMatch = o.customer_name && o.customer_name.toLowerCase().includes(query);
+                        const customerCodeMatch = o.customer_code && o.customer_code.toLowerCase().includes(query);
+                        const facturaMatch = o.factura_number && String(o.factura_number).includes(query);
+                        const creatorMatch = o.created_by && o.created_by.toLowerCase().includes(query);
+                        return orderIdMatch || customerNameMatch || customerCodeMatch || facturaMatch || creatorMatch;
+                    });
+                }
 
-                return orderIdMatch || customerNameMatch || customerCodeMatch || facturaMatch || creatorMatch;
-            });
-        }
+                return result;
+            },
 
-        return result;
-    },
+            get totalPages() {
+                return Math.max(1, Math.ceil(this.filteredOrders.length / this.pageSize));
+            },
 
-    init() {
-        // Initial data load handled by Jinja template
-        this.startTimer();
-    },
+            get pageStartIdx() {
+                return (this.currentPage - 1) * this.pageSize;
+            },
 
-    startTimer() {
-        setInterval(() => {
-            this.timer--;
-            if (this.timer <= 0) {
-                this.timer = 10;
-                this.refreshData();
-            }
-        }, 1000);
-    },
+            get pageEndIdx() {
+                return this.pageStartIdx + this.pageSize;
+            },
+
+            get paginatedOrders() {
+                // Clamp page
+                if (this.currentPage > this.totalPages) this.currentPage = this.totalPages;
+                if (this.currentPage < 1) this.currentPage = 1;
+                return this.filteredOrders.slice(this.pageStartIdx, this.pageEndIdx);
+            },
+
+            get pageNumbers() {
+                const total = this.totalPages;
+                const current = this.currentPage;
+                if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+                const pages = [1];
+                if (current > 3) pages.push('...');
+                for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) {
+                    pages.push(i);
+                }
+                if (current < total - 2) pages.push('...');
+                pages.push(total);
+                return pages;
+            },
+
+            goToPage(page) {
+                if (page < 1 || page > this.totalPages) return;
+                this.currentPage = page;
+                document.querySelector('.qb-visor-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            },
+
+            init() {
+                this.startTimer();
+            },
+
+            startTimer() {
+                setInterval(() => {
+                    this.timer--;
+                    if (this.timer <= 0) {
+                        this.timer = 10;
+                        this.refreshData();
+                    }
+                }, 1000);
+            },
 
             async refreshData() {
-        if (this.loading) return;
-        this.loading = true;
+                if (this.loading) return;
+                this.loading = true;
 
-        try {
-            // 1. Trigger SAP Sync (background) - no await so UI doesn't hang on timeout
-            fetch("{{ url_for('orders.visor_sync') }}", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            }).catch(e => console.warn("Background sync failed:", e));
+                try {
+                    // 1. Trigger SAP Sync (background)
+                    fetch("{{ url_for('orders.visor_sync') }}", {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    }).catch(e => console.warn("Background sync failed:", e));
 
-            // 2. Fetch fresh data
-            const res = await fetch("{{ url_for('orders.api_active_orders') }}?_=" + Date.now(), { cache: 'no-store' });
-            if (res.ok) {
-                const data = await res.json();
-                this.orders = data.orders;
-                this.stats = data.stats;
+                    // 2. Fetch fresh data
+                    const res = await fetch("{{ url_for('orders.api_active_orders') }}?_=" + Date.now(), { cache: 'no-store' });
+                    if (res.ok) {
+                        const data = await res.json();
+                        this.orders = data.orders;
+                        this.stats = data.stats;
+                    }
+                } catch (e) {
+                    console.error("Refresh failed:", e);
+                } finally {
+                    this.loading = false;
+                }
+            },
+
+            getProgressBarStyle(status) {
+                const colorPairs = {
+                    'Pendiente':            ['#94a3b8', '#64748b'],
+                    'En Proceso':           ['#60a5fa', '#3b82f6'],
+                    'Terminado':            ['#fbbf24', '#f59e0b'],
+                    'Preparando':           ['#fbbf24', '#f59e0b'],
+                    'Facturacion':          ['#34d399', '#059669'],
+                    'Relacion de envio':    ['#4ade80', '#16a34a'],
+                    'Recibido por almacen': ['#4ade80', '#16a34a'],
+                    'Enviado al cliente':   ['#c084fc', '#9333ea'],
+                    'En Espera':            ['#fb923c', '#ea580c'],
+                    'Cancelado':            ['#f87171', '#dc2626'],
+                };
+                const widths = {
+                    'Pendiente':            14,
+                    'En Proceso':           28,
+                    'Terminado':            43,
+                    'Preparando':           43,
+                    'Facturacion':          57,
+                    'Relacion de envio':    72,
+                    'Recibido por almacen': 72,
+                    'Enviado al cliente':   100,
+                    'En Espera':            20,
+                    'Cancelado':            100,
+                };
+                const [c1, c2] = colorPairs[status] || ['#94a3b8', '#64748b'];
+                const w = widths[status] ?? 0;
+                return [
+                    `width: ${w}%`,
+                    `background: repeating-linear-gradient(45deg, ${c1}, ${c1} 8px, ${c2} 8px, ${c2} 16px)`,
+                ].join('; ');
+            },
+
+            getStatusPercent(status) {
+                const widths = {
+                    'Pendiente': 14, 'En Proceso': 28, 'Terminado': 43, 'Preparando': 43,
+                    'Facturacion': 57, 'Relacion de envio': 72, 'Recibido por almacen': 72,
+                    'Enviado al cliente': 100,
+                    'En Espera': 20, 'Cancelado': 100,
+                };
+                return (widths[status] ?? 0) + '%';
+            },
+
+            getTextColor(status) {
+                const colors = {
+                    'Pendiente': 'text-slate-700',
+                    'En Proceso': 'text-blue-700',
+                    'Terminado': 'text-yellow-700',
+                    'Preparando': 'text-yellow-700',
+                    'Listo para Envío': 'text-green-700',
+                    'Relacion de envio': 'text-green-700',
+                    'Recibido por almacen': 'text-green-700',
+                    'Enviado al cliente': 'text-purple-700',
+                    'Enviado': 'text-purple-700',
+                    'Facturacion': 'text-emerald-700'
+                };
+                return colors[status] || 'text-slate-600';
+            },
+
+            getSapStatusClass(status) {
+                if (status === 'Cerrado') return 'bg-green-100 text-green-700';
+                if (status === 'Cancelado') return 'bg-red-100 text-red-700';
+                return 'bg-blue-100 text-blue-700';
             }
-        } catch (e) {
-            console.error("Refresh failed:", e);
-        } finally {
-            this.loading = false;
-        }
-    },
-
-    // Returns the full inline style string for the striped progress bar
-    getProgressBarStyle(status) {
-        // Two-tone hex pairs for the diagonal stripe effect
-        const colorPairs = {
-            'Pendiente':            ['#94a3b8', '#64748b'],
-            'En Proceso':           ['#60a5fa', '#3b82f6'],
-            'Terminado':            ['#fbbf24', '#f59e0b'],
-            'Preparando':           ['#fbbf24', '#f59e0b'],
-            'Facturacion':          ['#34d399', '#059669'],
-            'Relacion de envio':    ['#4ade80', '#16a34a'],
-            'Recibido por almacen': ['#4ade80', '#16a34a'],
-            'Enviado al cliente':   ['#c084fc', '#9333ea'],
-            'En Espera':            ['#fb923c', '#ea580c'],
-            'Cancelado':            ['#f87171', '#dc2626'],
-        };
-        const widths = {
-            'Pendiente':            14,
-            'En Proceso':           28,
-            'Terminado':            43,
-            'Preparando':           43,
-            'Facturacion':          57,
-            'Relacion de envio':    72,
-            'Recibido por almacen': 72,
-            'Enviado al cliente':   100,
-            'En Espera':            20,
-            'Cancelado':            100,
-        };
-        const [c1, c2] = colorPairs[status] || ['#94a3b8', '#64748b'];
-        const w = widths[status] ?? 0;
-        return [
-            `width: ${w}%`,
-            `background: repeating-linear-gradient(45deg, ${c1}, ${c1} 8px, ${c2} 8px, ${c2} 16px)`,
-        ].join('; ');
-    },
-
-    getStatusPercent(status) {
-        const widths = {
-            'Pendiente': 14, 'En Proceso': 28, 'Terminado': 43, 'Preparando': 43,
-            'Facturacion': 57, 'Relacion de envio': 72, 'Recibido por almacen': 72,
-            'Enviado al cliente': 100,
-            'En Espera': 20, 'Cancelado': 100,
-        };
-        return (widths[status] ?? 0) + '%';
-    },
-
-    getTextColor(status) {
-        const colors = {
-            'Pendiente': 'text-slate-700',
-            'En Proceso': 'text-blue-700',
-            'Terminado': 'text-yellow-700',
-            'Preparando': 'text-yellow-700',
-            'Listo para Envío': 'text-green-700',
-            'Relacion de envio': 'text-green-700',
-            'Recibido por almacen': 'text-green-700',
-            'Enviado al cliente': 'text-purple-700',
-            'Enviado': 'text-purple-700',
-            'Facturacion': 'text-emerald-700'
-        };
-        return colors[status] || 'text-slate-600';
-    },
-
-    getSapStatusClass(status) {
-        if (status === 'Cerrado') return 'bg-green-100 text-green-700';
-        if (status === 'Cancelado') return 'bg-red-100 text-red-700';
-        return 'bg-blue-100 text-blue-700';
-    }
         }
     }
 </script>

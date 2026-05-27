@@ -109,7 +109,8 @@ class TestConnect:
 
     @patch("core.database_client.pyodbc")
     @patch("core.database_client.load_dotenv")
-    def test_connect_failure(self, _ld, mock_pyodbc):
+    @patch("core.database_client.time.sleep")
+    def test_connect_failure(self, mock_sleep, _ld, mock_pyodbc):
         mock_pyodbc.drivers.return_value = []
         mock_pyodbc.connect.side_effect = Exception("Connection failed")
 
@@ -121,6 +122,32 @@ class TestConnect:
         assert result is False
         assert db.connected is False
         assert db.engine is None
+        assert mock_pyodbc.connect.call_count == 3
+        assert mock_sleep.call_count == 2
+
+    @patch("core.database_client.create_engine")
+    @patch("core.database_client.pyodbc")
+    @patch("core.database_client.load_dotenv")
+    @patch("core.database_client.time.sleep")
+    def test_connect_retry_success(self, mock_sleep, _ld, mock_pyodbc, mock_create_engine):
+        mock_pyodbc.drivers.return_value = []
+        mock_conn = MagicMock()
+        # Fail first, then succeed
+        mock_pyodbc.connect.side_effect = [Exception("Timeout"), mock_conn]
+        mock_engine = MagicMock()
+        mock_create_engine.return_value = mock_engine
+
+        from core.database_client import DatabaseClient
+        db = DatabaseClient()
+        with patch.dict(os.environ, {"SQL_PASSWORD": "test_pass"}, clear=False):
+            result = db.connect()
+
+        assert result is True
+        assert db.connected is True
+        assert db.engine is mock_engine
+        assert mock_pyodbc.connect.call_count == 2
+        assert mock_sleep.call_count == 1
+        mock_conn.close.assert_called_once()
 
 
 class TestGetSqlEngine:
