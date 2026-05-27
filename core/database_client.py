@@ -5,6 +5,7 @@ Provides SQL Server connectivity via ODBC + SQLAlchemy.
 
 import os
 import logging
+import time
 import pyodbc
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
@@ -52,28 +53,40 @@ class DatabaseClient:
             f"UID={user};PWD={password};TrustServerCertificate={trust}"
         )
 
-    def connect(self):
-        """Establish connection to SQL Server."""
+    def connect(self, max_retries=3, retry_delay=2):
+        """Establish connection to SQL Server with retries."""
         try:
             self._connection_string = self._build_connection_string()
-
-            # Test with pyodbc first
-            conn = pyodbc.connect(self._connection_string, timeout=10)
-            conn.close()
-
-            # Create SQLAlchemy engine
-            sa_url = f"mssql+pyodbc:///?odbc_connect={self._connection_string}"
-            self.engine = create_engine(sa_url, echo=False, pool_pre_ping=True)
-
-            self.connected = True
-            logger.info("✅ SQL Server connected")
-            return True
-
-        except Exception as e:
-            logger.error(f"❌ SQL Server connection failed: {e}")
+        except ValueError as e:
+            logger.error(f"❌ Cannot build connection string: {e}")
             self.connected = False
             self.engine = None
             return False
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                # Test with pyodbc first
+                conn = pyodbc.connect(self._connection_string, timeout=10)
+                conn.close()
+
+                # Create SQLAlchemy engine
+                sa_url = f"mssql+pyodbc:///?odbc_connect={self._connection_string}"
+                self.engine = create_engine(sa_url, echo=False, pool_pre_ping=True)
+
+                self.connected = True
+                logger.info("✅ SQL Server connected")
+                return True
+
+            except Exception as e:
+                if attempt < max_retries:
+                    logger.warning(f"⚠️ SQL Server connection attempt {attempt} failed: {e}. Retrying in {retry_delay}s...")
+                    time.sleep(retry_delay)
+                else:
+                    logger.error(f"❌ SQL Server connection failed after {max_retries} attempts: {e}")
+
+        self.connected = False
+        self.engine = None
+        return False
 
     def get_sql_engine(self):
         """Get the SQLAlchemy engine."""
