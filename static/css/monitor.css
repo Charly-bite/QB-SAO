@@ -49,6 +49,32 @@ body {
 .brand-subtitle { font-size: 11px; color: #94a3b8; font-weight: 400; margin-top: 1px; }
 .header-controls { display: flex; align-items: center; gap: 12px; }
 
+/* Monitor breadcrumbs */
+.monitor-breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+}
+.monitor-breadcrumbs a {
+    color: #94a3b8;
+    text-decoration: none;
+    transition: color 0.15s;
+}
+.monitor-breadcrumbs a:hover {
+    color: #4a7dff;
+}
+.monitor-breadcrumbs .bc-sep {
+    color: rgba(148, 163, 184, 0.4);
+    font-size: 10px;
+    user-select: none;
+}
+.monitor-breadcrumbs .bc-current {
+    color: #e2e8f0;
+    font-weight: 700;
+}
+
 /* Filter select */
 .filter-wrapper { position: relative; display: flex; align-items: center; }
 .filter-icon { position: absolute; left: 10px; width: 14px; height: 14px; color: #94a3b8; pointer-events: none; }
@@ -104,7 +130,13 @@ body {
 .kpi-card.is-active {
     border-color: #6366f1;
     background: #eef2ff;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2), 0 4px 12px rgba(99, 102, 241, 0.1);
+    transform: translateY(-2px);
 }
+.kpi-pending.is-active { border-color: #d97706; background: #fffbeb; box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.2), 0 4px 12px rgba(217, 119, 6, 0.1); }
+.kpi-process.is-active { border-color: #7c3aed; background: #f5f3ff; box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.2), 0 4px 12px rgba(124, 58, 237, 0.1); }
+.kpi-invoice.is-active { border-color: #059669; background: #ecfdf5; box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.2), 0 4px 12px rgba(5, 150, 105, 0.1); }
+.kpi-shipped.is-active { border-color: #0891b2; background: #ecfeff; box-shadow: 0 0 0 2px rgba(8, 145, 178, 0.2), 0 4px 12px rgba(8, 145, 178, 0.1); }
 .kpi-value { font-size: 28px; font-weight: 800; font-family: var(--mono); letter-spacing: -0.03em; line-height: 1; }
 .kpi-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
 
@@ -126,6 +158,58 @@ body {
 }
 .search-input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
 .search-input::placeholder { color: var(--text-faint); }
+
+/* Search clear button */
+.search-clear {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--border);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    font-family: var(--mono);
+    line-height: 1;
+    transition: var(--transition);
+    padding: 0;
+}
+.search-clear:hover {
+    background: #cbd5e1;
+    color: var(--text);
+}
+
+/* Card close button */
+.card-close-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-faint);
+    transition: var(--transition);
+    z-index: 2;
+}
+.card-close-btn:hover {
+    background: #fee2e2;
+    border-color: #fca5a5;
+    color: #dc2626;
+}
 .order-count { font-size: 13px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
 .filter-chip {
     display: inline-flex;
@@ -153,6 +237,7 @@ body {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
     gap: 14px;
+    align-items: start;
 }
 
 /* ── ORDER CARD ── */
@@ -264,12 +349,46 @@ body {
 .sap-closed { background: #f1f5f9; color: #64748b; }
 .sap-cancelled { background: #fef2f2; color: #dc2626; }
 
-/* ── Card detail panel ── */
-.card-detail { margin-top: 14px; }
-.detail-enter { transition: all 0.25s ease; }
-.detail-enter-start { opacity: 0; max-height: 0; }
-.detail-enter-end { opacity: 1; max-height: 600px; }
-.detail-divider { height: 1px; background: var(--border-light); margin-bottom: 14px; }
+/* ── Card detail panel (CSS Grid accordion — 60fps) ── */
+/*
+ * How it works:
+ * .card-detail is a CSS Grid container whose `grid-template-rows`
+ * transitions between 0fr (collapsed) and 1fr (expanded).
+ * The inner .card-detail-inner has `min-height: 0` so the grid
+ * row can shrink it below its natural height.
+ * This avoids animating `height` (layout thrash) entirely.
+ */
+.card-detail {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition:
+        grid-template-rows 0.35s cubic-bezier(0.32, 0.72, 0, 1),
+        opacity 0.25s ease;
+    will-change: grid-template-rows, opacity;
+}
+.card-detail.is-open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+}
+.card-detail-inner {
+    min-height: 0;
+    overflow: hidden;
+}
+/* Stagger the inner content slightly for a polished feel */
+.card-detail-inner > .detail-divider,
+.card-detail-inner > .detail-section,
+.card-detail-inner > .detail-meta-grid {
+    transform: translateY(0);
+    transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s ease;
+}
+.card-detail:not(.is-open) .card-detail-inner > .detail-divider,
+.card-detail:not(.is-open) .card-detail-inner > .detail-section,
+.card-detail:not(.is-open) .card-detail-inner > .detail-meta-grid {
+    transform: translateY(-6px);
+    opacity: 0;
+}
+.detail-divider { height: 1px; background: var(--border-light); margin: 14px 0; }
 .detail-section { margin-bottom: 14px; }
 .detail-heading { font-size: 10px; font-weight: 700; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
 .items-list { display: flex; flex-direction: column; gap: 1px; }
@@ -291,6 +410,70 @@ body {
 .empty-icon { width: 64px; height: 64px; color: var(--text-faint); margin: 0 auto 16px; }
 .empty-title { font-size: 18px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; }
 .empty-text { font-size: 14px; color: var(--text-faint); }
+
+/* ── Pagination ── */
+.pagination-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 0 8px;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+.pagination-info {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    font-family: var(--mono);
+}
+.pagination-info span { font-weight: 700; color: var(--text); }
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.page-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 36px;
+    padding: 0 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    font-family: var(--mono);
+    cursor: pointer;
+    transition: var(--transition);
+    appearance: none;
+}
+.page-btn:hover:not(:disabled):not(.page-btn-active) {
+    background: var(--bg);
+    border-color: #94a3b8;
+    color: var(--text);
+}
+.page-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+.page-btn-active {
+    background: #6366f1;
+    border-color: #6366f1;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+    cursor: default;
+}
+.page-btn-dots {
+    border: none;
+    background: transparent;
+    cursor: default;
+    color: var(--text-faint);
+    min-width: 28px;
+    padding: 0;
+}
 
 /* ── Skeleton ── */
 .skeleton-card { pointer-events: none; }

@@ -4,7 +4,8 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="csrf-token" content="{{ csrf_token() }}" />
-        <title>{% block title %}Open-OMS{% endblock %}</title>
+        <title>{% block title %}QB-OMS{% endblock %}</title>
+        <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logo_new.png') }}" />
         <link
             rel="stylesheet"
             href="{{ url_for('static', filename='css/tailwind.css') }}"
@@ -13,102 +14,264 @@
             defer
             src="{{ url_for('static', filename='js/alpine.min.js') }}"
         ></script>
+        <script
+            defer
+            src="{{ url_for('static', filename='js/Sortable.min.js') }}"
+        ></script>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link
-            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
             rel="stylesheet"
         />
         <style>
             body {
                 font-family: "Inter", sans-serif;
+                -webkit-font-smoothing: antialiased;
             }
             [x-cloak] {
                 display: none !important;
             }
+
+            /* ── QB Navy Navigation ── */
+            .qb-nav {
+                background: linear-gradient(135deg, #0f1b2d 0%, #1a2744 100%);
+                border-bottom: 1px solid rgba(255,255,255,0.06);
+                position: relative;
+            }
+            .qb-nav::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 3px;
+                background: linear-gradient(90deg, #4a7dff, #22d3ee, #6366f1);
+            }
+
+            .qb-nav-link {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                padding: 8px 14px;
+                border-radius: 10px;
+                font-size: 13px;
+                font-weight: 500;
+                color: rgba(148, 163, 184, 0.9);
+                transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                text-decoration: none;
+            }
+            .qb-nav-link:hover {
+                background: rgba(255,255,255,0.08);
+                color: #e2e8f0;
+            }
+            .qb-nav-link.active {
+                background: rgba(74, 125, 255, 0.15);
+                color: #4a7dff;
+                box-shadow: 0 0 12px rgba(74, 125, 255, 0.08);
+            }
+            .qb-nav-link.active-emerald {
+                background: rgba(16, 185, 129, 0.12);
+                color: #34d399;
+            }
+            .qb-nav-link.active-amber {
+                background: rgba(245, 158, 11, 0.12);
+                color: #fbbf24;
+            }
+            .qb-nav-link.active-violet {
+                background: rgba(99, 102, 241, 0.15);
+                color: #818cf8;
+            }
+
+            /* User menu */
+            .qb-user-btn {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 6px 12px;
+                border-radius: 10px;
+                font-size: 13px;
+                font-weight: 500;
+                color: #94a3b8;
+                background: transparent;
+                border: none;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            .qb-user-btn:hover {
+                background: rgba(255,255,255,0.06);
+                color: #e2e8f0;
+            }
+            .qb-avatar {
+                width: 32px;
+                height: 32px;
+                border-radius: 50%;
+                background: linear-gradient(135deg, #4a7dff, #6366f1);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: #fff;
+                font-size: 11px;
+                font-weight: 700;
+                flex-shrink: 0;
+            }
+
+            .qb-dropdown {
+                position: absolute;
+                right: 0;
+                margin-top: 8px;
+                width: 200px;
+                background: #1a2744;
+                border: 1px solid rgba(255,255,255,0.1);
+                border-radius: 12px;
+                box-shadow: 0 16px 48px rgba(0,0,0,0.4);
+                padding: 4px;
+                z-index: 50;
+            }
+            .qb-dropdown-header {
+                padding: 12px;
+                border-bottom: 1px solid rgba(255,255,255,0.06);
+            }
+            .qb-dropdown-header p:first-child {
+                font-size: 13px;
+                font-weight: 600;
+                color: #e2e8f0;
+            }
+            .qb-dropdown-header p:last-child {
+                font-size: 11px;
+                color: #64748b;
+                margin-top: 2px;
+            }
+            .qb-dropdown a {
+                display: block;
+                padding: 10px 12px;
+                font-size: 13px;
+                color: #94a3b8;
+                border-radius: 8px;
+                text-decoration: none;
+                transition: all 0.15s;
+            }
+            .qb-dropdown a:hover {
+                background: rgba(255,255,255,0.06);
+                color: #e2e8f0;
+            }
+            .qb-dropdown a.danger {
+                color: #f87171;
+            }
+            .qb-dropdown a.danger:hover {
+                background: rgba(248, 113, 113, 0.1);
+            }
+
+            /* Flash messages */
+            .qb-flash {
+                padding: 12px 16px;
+                border-radius: 12px;
+                font-size: 13px;
+                font-weight: 500;
+                margin-bottom: 8px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                animation: flashSlide 0.3s ease-out;
+            }
+            @keyframes flashSlide {
+                from { opacity: 0; transform: translateY(-6px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+
+            /* Page title */
+            .qb-page-title {
+                font-size: 1.5rem;
+                font-weight: 800;
+                color: #0f1b2d;
+                letter-spacing: -0.02em;
+                margin-bottom: 1.5rem;
+            }
+
+            /* ── Breadcrumbs ── */
+            .qb-breadcrumbs {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 13px;
+                font-weight: 500;
+                margin-bottom: 20px;
+                flex-wrap: wrap;
+            }
+            .qb-breadcrumbs a {
+                color: #94a3b8;
+                text-decoration: none;
+                transition: color 0.15s;
+            }
+            .qb-breadcrumbs a:hover {
+                color: #4a7dff;
+            }
+            .qb-breadcrumbs .bc-sep {
+                color: #cbd5e1;
+                font-size: 10px;
+                user-select: none;
+            }
+            .qb-breadcrumbs .bc-current {
+                color: #1e293b;
+                font-weight: 700;
+            }
         </style>
         {% block extra_head %}{% endblock %}
     </head>
-    <body class="bg-slate-50 min-h-screen">
+    <body class="bg-[#f0f2f5] min-h-screen">
         <!-- Navigation -->
-        <nav class="bg-white border-b border-slate-200 shadow-sm">
+        <nav class="qb-nav">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex justify-between h-16">
+                <div class="flex justify-between items-center h-16">
                     <!-- Left: Brand + Nav -->
-                    <div class="flex items-center gap-8">
+                    <div class="flex items-center gap-6">
                         <a
                             href="{{ url_for('orders.index') }}"
-                            class="flex items-center gap-2"
+                            class="flex items-center gap-2.5"
                         >
-                            <span
-                                class="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent"
-                            >
-                                📦 Open-OMS
-                            </span>
+                            <img src="{{ url_for('static', filename='images/logo_new.png') }}" alt="Logo" style="height: 34px; width: auto;" />
+                            <span style="font-size: 17px; font-weight: 800; color: #ffffff; letter-spacing: -0.02em;">QB-OMS</span>
                         </a>
 
                         {% if current_user.is_authenticated %}
                         <div class="flex items-center gap-1 flex-wrap">
                             <a
                                 href="{{ url_for('orders.index') }}"
-                                class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all {% if request.endpoint == 'orders.index' or request.endpoint == 'orders.detail' %}bg-blue-100 text-blue-700 shadow-sm{% else %}text-slate-600 hover:bg-slate-100 hover:text-slate-800{% endif %}"
+                                class="qb-nav-link {% if request.endpoint == 'orders.index' or request.endpoint == 'orders.detail' %}active{% endif %}"
                             >
-                                <svg
-                                    class="w-4 h-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                                    />
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                                 </svg>
                                 Pedidos
                             </a>
                             <a
                                 href="{{ url_for('orders.visor') }}"
-                                class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all {% if request.endpoint == 'orders.visor' %}bg-emerald-100 text-emerald-700 shadow-sm{% else %}text-slate-600 hover:bg-slate-100 hover:text-slate-800{% endif %}"
+                                class="qb-nav-link {% if request.endpoint == 'orders.visor' %}active-emerald{% endif %}"
                             >
-                                <svg
-                                    class="w-4 h-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                                    />
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                                    />
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                 </svg>
                                 Visor
                             </a>
                             <a
-                                href="{{ url_for('orders.monitor') }}"
-                                class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all {% if request.endpoint == 'orders.monitor' %}bg-violet-100 text-violet-700 shadow-sm{% else %}text-slate-600 hover:bg-slate-100 hover:text-slate-800{% endif %}"
+                                href="{{ url_for('orders.facturas') }}"
+                                class="qb-nav-link {% if request.endpoint == 'orders.facturas' %}active-amber{% endif %}"
                             >
-                                <svg
-                                    class="w-4 h-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                                    />
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                Facturas
+                            </a>
+                            <a
+                                href="{{ url_for('orders.monitor') }}"
+                                class="qb-nav-link {% if request.endpoint == 'orders.monitor' %}active-violet{% endif %}"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                                 </svg>
                                 Monitor
                             </a>
@@ -119,67 +282,38 @@
                     <!-- Right: User menu -->
                     <div class="flex items-center gap-4">
                         {% if current_user.is_authenticated %}
-                        <div
-                            class="flex items-center gap-3"
-                            x-data="{ open: false }"
-                        >
+                        <div class="flex items-center" x-data="{ open: false }">
                             <div class="relative">
                                 <button
                                     @click="open = !open"
-                                    class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+                                    class="qb-user-btn"
                                 >
-                                    <div
-                                        class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs"
-                                    >
+                                    <div class="qb-avatar">
                                         {{ current_user.username[:2]|upper }}
                                     </div>
-                                    <span class="hidden sm:inline"
-                                        >{{ current_user.full_name or
-                                        current_user.username }}</span
-                                    >
-                                    <svg
-                                        class="w-4 h-4"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                            stroke-width="2"
-                                            d="M19 9l-7 7-7-7"
-                                        />
+                                    <span class="hidden sm:inline">{{ current_user.full_name or current_user.username }}</span>
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                                     </svg>
                                 </button>
                                 <div
                                     x-show="open"
                                     @click.away="open = false"
                                     x-cloak
-                                    class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-50"
+                                    x-transition:enter="transition ease-out duration-150"
+                                    x-transition:enter-start="opacity-0 scale-95"
+                                    x-transition:enter-end="opacity-100 scale-100"
+                                    x-transition:leave="transition ease-in duration-100"
+                                    x-transition:leave-start="opacity-100 scale-100"
+                                    x-transition:leave-end="opacity-0 scale-95"
+                                    class="qb-dropdown"
                                 >
-                                    <div
-                                        class="px-4 py-2 border-b border-slate-100"
-                                    >
-                                        <p
-                                            class="text-sm font-medium text-slate-800"
-                                        >
-                                            {{ current_user.full_name or
-                                            current_user.username }}
-                                        </p>
-                                        <p class="text-xs text-slate-500">
-                                            {{ current_user.role.value }}
-                                        </p>
+                                    <div class="qb-dropdown-header">
+                                        <p>{{ current_user.full_name or current_user.username }}</p>
+                                        <p>{{ current_user.role.value }}</p>
                                     </div>
-                                    <a
-                                        href="{{ url_for('auth.change_password') }}"
-                                        class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                                        >Cambiar Contraseña</a
-                                    >
-                                    <a
-                                        href="{{ url_for('auth.logout') }}"
-                                        class="block px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                                        >Cerrar Sesión</a
-                                    >
+                                    <a href="{{ url_for('auth.change_password') }}">Cambiar Contraseña</a>
+                                    <a href="{{ url_for('auth.logout') }}" class="danger">Cerrar Sesión</a>
                                 </div>
                             </div>
                         </div>
@@ -195,7 +329,7 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
             {% for category, message in messages %}
             <div
-                class="mb-2 p-4 rounded-lg text-sm font-medium {% if category == 'error' %}bg-red-50 text-red-700 border border-red-200 {% elif category == 'warning' %}bg-amber-50 text-amber-700 border border-amber-200 {% elif category == 'success' %}bg-green-50 text-green-700 border border-green-200 {% else %}bg-blue-50 text-blue-700 border border-blue-200{% endif %}"
+                class="qb-flash {% if category == 'error' %}bg-red-50 text-red-700 border border-red-200 {% elif category == 'warning' %}bg-amber-50 text-amber-700 border border-amber-200 {% elif category == 'success' %}bg-green-50 text-green-700 border border-green-200 {% else %}bg-blue-50 text-blue-700 border border-blue-200{% endif %}"
             >
                 {{ message }}
             </div>
@@ -205,8 +339,10 @@
 
         <!-- Page Content -->
         <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            {% block breadcrumbs %}
+            {% endblock %}
             {% if self.page_title is defined %}
-            <h1 class="text-2xl font-bold text-slate-800 mb-6">
+            <h1 class="qb-page-title">
                 {% block page_title %}{% endblock %}
             </h1>
             {% endif %} {% block content %}{% endblock %}

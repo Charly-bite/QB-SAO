@@ -1,27 +1,18 @@
 {% extends "base.html" %} {% block title %}Pedido #{{ order.order_id }}{%
-endblock %} {% block page_title %}Detalle de Pedido{% endblock %} {% block
-content %}
+endblock %} {% block page_title %}Detalle de Pedido{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="qb-breadcrumbs" aria-label="Breadcrumb">
+    <a href="{{ url_for('orders.index') }}">QB-OMS</a>
+    <span class="bc-sep">›</span>
+    <a href="{{ url_for('orders.index') }}">Pedidos</a>
+    <span class="bc-sep">›</span>
+    <span class="bc-current">#{{ order.order_id }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
 <div class="w-full" x-data="orderDetail()">
-    <!-- Back button -->
-    <a
-        href="{{ url_for('orders.index') }}"
-        class="inline-flex items-center text-slate-600 hover:text-slate-800 mb-6"
-    >
-        <svg
-            class="w-5 h-5 mr-1"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-        >
-            <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M15 19l-7-7 7-7"
-            />
-        </svg>
-        Volver a Pedidos
-    </a>
 
     <!-- Order Header -->
     <div class="bg-white rounded-xl shadow-sm p-6 mb-6">

@@ -1333,3 +1333,64 @@ def public_api_weather():
                 "clouds": 0,
             }
         )
+
+
+# ─── Facturas del Día ────────────────────────────────────────────────────────
+
+
+@orders_bp.route("/facturas")
+@login_required
+def facturas():
+    """Facturas del Día — daily invoices dashboard."""
+    return render_template(
+        "orders/facturas.html",
+        sap_available=current_app.sap_available,
+        now=datetime.datetime.now(),
+    )
+
+
+@orders_bp.route("/api/facturas")
+@login_required
+def api_facturas():
+    """JSON API returning today's invoices from SAP."""
+    if not current_app.sap_available:
+        return jsonify({"error": "SAP no disponible", "invoices": [], "stats": {}}), 503
+
+    date_filter = request.args.get("date", "").strip() or None
+
+    try:
+        sap = current_app.sap_connector
+        if not sap or not sap.connected:  # pragma: no cover
+            from sap_connector import SAPHanaConnector  # pragma: no cover
+
+            sap = SAPHanaConnector()  # pragma: no cover
+            sap.connect()  # pragma: no cover
+            current_app.sap_connector = sap  # pragma: no cover
+
+        invoices = sap.get_todays_invoices(date_str=date_filter)
+
+        # Calculate stats
+        total_mxn = sum(i["total"] for i in invoices if i["currency"] == "MXN")
+        total_usd = sum(i["total"] for i in invoices if i["currency"] == "USD")
+        active = [i for i in invoices if i["status"] != "Cancelada"]
+        cancelled = [i for i in invoices if i["status"] == "Cancelada"]
+        closed = [i for i in invoices if i["status"] == "Cerrada"]
+
+        stats = {
+            "total_count": len(invoices),
+            "active_count": len(active),
+            "cancelled_count": len(cancelled),
+            "closed_count": len(closed),
+            "total_mxn": round(total_mxn, 2),
+            "total_usd": round(total_usd, 2),
+        }
+
+        return jsonify({
+            "invoices": invoices,
+            "stats": stats,
+            "generated_at": datetime.datetime.now().isoformat(),
+        })
+
+    except Exception as e:
+        logging.error(f"Facturas API error: {e}")
+        return jsonify({"error": str(e), "invoices": [], "stats": {}}), 500
