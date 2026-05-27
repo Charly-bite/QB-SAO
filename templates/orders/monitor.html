@@ -5,7 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0f172a">
-    <title>Open-OMS — Monitor</title>
+    <title>QB-OMS — Monitor</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logo_new.png') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/monitor.css') }}">
     <script defer src="{{ url_for('static', filename='js/alpine.min.js') }}"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -21,12 +22,19 @@
     <header class="monitor-header">
         <div class="header-inner">
             <div class="header-brand">
-                <div class="brand-icon">📦</div>
+                <div class="brand-icon"><img src="{{ url_for('static', filename='images/logo_new.png') }}" alt="Logo" style="height: 48px; width: auto;" /></div>
                 <div>
-                    <h1 class="brand-title">Open-OMS</h1>
+                    <h1 class="brand-title">QB-OMS</h1>
                     <p class="brand-subtitle">Monitor de estado en tiempo real</p>
                 </div>
             </div>
+
+            <!-- Breadcrumbs -->
+            <nav class="monitor-breadcrumbs" aria-label="Breadcrumb">
+                <a href="{{ url_for('orders.index') }}">QB-OMS</a>
+                <span class="bc-sep">›</span>
+                <span class="bc-current">Monitor</span>
+            </nav>
 
             <div class="header-controls">
                 <!-- Seller filter (only for managers/admins) -->
@@ -112,8 +120,13 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
-                <input type="text" x-model="searchQuery" placeholder="Buscar por #pedido, cliente o código..."
+                <input type="text" x-model="searchQuery" @input="currentPage = 1" placeholder="Buscar por #pedido, cliente o código..."
                     class="search-input">
+                <button class="search-clear"
+                    x-show="searchQuery.length > 0"
+                    x-cloak
+                    @click="searchQuery = ''; currentPage = 1"
+                    title="Limpiar búsqueda">&times;</button>
             </div>
             <div class="order-count">
                 <span x-text="filteredOrders.length"></span> pedidos
@@ -156,10 +169,10 @@
 
         <!-- Order cards grid -->
         <div x-show="!firstLoad && filteredOrders.length > 0" class="orders-grid">
-            <template x-for="(order, idx) in filteredOrders" :key="order.order_id">
+            <template x-for="(order, idx) in paginatedOrders" :key="order.order_id">
                 <div class="order-card" :class="getCardAccentClass(order.status)"
                     :style="'animation-delay:' + (idx * 0.03) + 's'"
-                    @click="toggleExpand(order.order_id)">
+                    @click="toggleExpand(order.order_id, $event)">
 
                     <!-- Card header -->
                     <div class="card-top">
@@ -230,61 +243,105 @@
                         </div>
                     </div>
 
-                    <!-- Expandable detail panel -->
-                    <div class="card-detail" x-show="expandedOrder === order.order_id"
-                        x-transition:enter="detail-enter"
-                        x-transition:enter-start="detail-enter-start"
-                        x-transition:enter-end="detail-enter-end"
-                        x-cloak>
-                        <div class="detail-divider"></div>
+                    <!-- Expandable detail panel (CSS Grid accordion) -->
+                    <div class="card-detail"
+                        :class="expandedOrder === order.order_id ? 'is-open' : ''">
+                        <div class="card-detail-inner" style="position: relative;">
+                            <!-- Close button -->
+                            <button class="card-close-btn"
+                                x-show="expandedOrder === order.order_id"
+                                x-cloak
+                                @click.stop="expandedOrder = null"
+                                title="Cerrar">
+                                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                            <div class="detail-divider"></div>
 
-                        <!-- Line items -->
-                        <div class="detail-section">
-                            <div class="detail-heading">Artículos del Pedido</div>
-                            <template x-if="order.items && order.items.length > 0">
-                                <div class="items-list">
-                                    <template x-for="item in order.items"
-                                        :key="item.item_code || item.ItemCode || Math.random()">
-                                        <div class="item-row">
-                                            <div class="item-info">
-                                                <div class="item-name"
-                                                    x-text="item.description || item.item_name || item.ItemName || item.Dscription || '-'">
+                            <!-- Line items -->
+                            <div class="detail-section">
+                                <div class="detail-heading">Artículos del Pedido</div>
+                                <template x-if="order.items && order.items.length > 0">
+                                    <div class="items-list">
+                                        <template x-for="item in order.items"
+                                            :key="item.item_code || item.ItemCode || Math.random()">
+                                            <div class="item-row">
+                                                <div class="item-info">
+                                                    <div class="item-name"
+                                                        x-text="item.description || item.item_name || item.ItemName || item.Dscription || '-'">
+                                                    </div>
+                                                    <div class="item-code"
+                                                        x-text="item.item_code || item.ItemCode || ''"></div>
                                                 </div>
-                                                <div class="item-code"
-                                                    x-text="item.item_code || item.ItemCode || ''"></div>
+                                                <div class="item-qty" x-text="formatItemQty(item)"></div>
                                             </div>
-                                            <div class="item-qty" x-text="formatItemQty(item)"></div>
-                                        </div>
-                                    </template>
-                                </div>
-                            </template>
-                            <template x-if="!order.items || order.items.length === 0">
-                                <p class="no-items">Sin detalle de artículos</p>
-                            </template>
-                        </div>
+                                        </template>
+                                    </div>
+                                </template>
+                                <template x-if="!order.items || order.items.length === 0">
+                                    <p class="no-items">Sin detalle de artículos</p>
+                                </template>
+                            </div>
 
-                        <!-- Dates and meta -->
-                        <div class="detail-meta-grid">
-                            <div>
-                                <div class="meta-label">Fecha Pedido</div>
-                                <div class="meta-value" x-text="formatDate(order.order_date)"></div>
+                            <!-- Dates and meta -->
+                            <div class="detail-meta-grid">
+                                <div>
+                                    <div class="meta-label">Fecha Pedido</div>
+                                    <div class="meta-value" x-text="formatDate(order.order_date)"></div>
+                                </div>
+                                <div>
+                                    <div class="meta-label">Fecha Entrega</div>
+                                    <div class="meta-value" x-text="formatDate(order.delivery_date)"></div>
+                                </div>
+                                <div>
+                                    <div class="meta-label">Vendedor</div>
+                                    <div class="meta-value" x-text="order.created_by || '-'"></div>
+                                </div>
+                                <div>
+                                    <div class="meta-label">Última Actualización</div>
+                                    <div class="meta-value" x-text="formatDateTime(order.last_updated)"></div>
+                                </div>
                             </div>
-                            <div>
-                                <div class="meta-label">Fecha Entrega</div>
-                                <div class="meta-value" x-text="formatDate(order.delivery_date)"></div>
-                            </div>
-                            <div>
-                                <div class="meta-label">Vendedor</div>
-                                <div class="meta-value" x-text="order.created_by || '-'"></div>
-                            </div>
-                            <div>
-                                <div class="meta-label">Última Actualización</div>
-                                <div class="meta-value" x-text="formatDateTime(order.last_updated)"></div>
+
+                            <!-- Action link -->
+                            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-light); text-align: right;">
+                                <a :href="'/orders/' + order.order_id"
+                                   style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #4a7dff; text-decoration: none; padding: 6px 14px; border-radius: 8px; transition: background 0.15s;"
+                                   onmouseover="this.style.background='rgba(74,125,255,0.08)'"
+                                   onmouseout="this.style.background='transparent'"
+                                   @click.stop>
+                                    Ver detalle
+                                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                </a>
                             </div>
                         </div>
                     </div>
                 </div>
             </template>
+        </div>
+
+        <!-- ═══════ PAGINATION ═══════ -->
+        <div x-show="!firstLoad && totalPages > 1" class="pagination-bar">
+            <div class="pagination-info">
+                Mostrando <span x-text="((currentPage - 1) * pageSize) + 1"></span>–<span x-text="Math.min(currentPage * pageSize, filteredOrders.length)"></span>
+                de <span x-text="filteredOrders.length"></span> pedidos
+            </div>
+            <div class="pagination-controls">
+                <button class="page-btn" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+
+                <template x-for="p in pageNumbers" :key="'page-' + p">
+                    <button class="page-btn"
+                        :class="p === currentPage ? 'page-btn-active' : (p === '...' ? 'page-btn-dots' : '')"
+                        :disabled="p === '...'"
+                        @click="p !== '...' && goToPage(p)"
+                        x-text="p"></button>
+                </template>
+
+                <button class="page-btn" :disabled="currentPage >= totalPages" @click="goToPage(currentPage + 1)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+            </div>
         </div>
     </main>
 
@@ -309,6 +366,8 @@
                 selectedSeller: '',
                 searchQuery: '',
                 activeTopFilter: 'all',
+                currentPage: 1,
+                pageSize: 50,
                 loading: false,
                 firstLoad: true,
                 timer: 30,
@@ -345,6 +404,38 @@
                     });
                 },
 
+                get paginatedOrders() {
+                    const start = (this.currentPage - 1) * this.pageSize;
+                    return this.filteredOrders.slice(start, start + this.pageSize);
+                },
+
+                get totalPages() {
+                    return Math.max(1, Math.ceil(this.filteredOrders.length / this.pageSize));
+                },
+
+                get pageNumbers() {
+                    const total = this.totalPages;
+                    const cur = this.currentPage;
+                    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+                    const pages = [];
+                    pages.push(1);
+                    if (cur > 3) pages.push('...');
+                    for (let i = Math.max(2, cur - 1); i <= Math.min(total - 1, cur + 1); i++) {
+                        pages.push(i);
+                    }
+                    if (cur < total - 2) pages.push('...');
+                    pages.push(total);
+                    return pages;
+                },
+
+                goToPage(page) {
+                    if (page < 1 || page > this.totalPages) return;
+                    this.currentPage = page;
+                    this.expandedOrder = null;
+                    // Scroll to top of orders
+                    document.querySelector('.orders-container')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                },
+
                 orderMatchesTopFilter(order) {
                     const status = order?.status;
                     if (this.activeTopFilter === 'all') return true;
@@ -357,6 +448,7 @@
 
                 toggleTopFilter(filterKey) {
                     this.activeTopFilter = this.activeTopFilter === filterKey ? 'all' : filterKey;
+                    this.currentPage = 1;
                     this.expandedOrder = null;
                 },
 
@@ -469,7 +561,9 @@
                     return `${qty} ${unit}`;
                 },
 
-                toggleExpand(id) {
+                toggleExpand(id, event) {
+                    // Don't toggle when clicking inside the detail panel
+                    if (event && event.target.closest('.card-detail')) return;
                     this.expandedOrder = this.expandedOrder === id ? null : id;
                 },
 
