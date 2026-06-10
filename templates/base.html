@@ -4,7 +4,7 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="csrf-token" content="{{ csrf_token() }}" />
-        <title>{% block title %}QB-OMS{% endblock %}</title>
+        <title>{% block title %}QB-SAO{% endblock %}</title>
         <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logo_new.png') }}" />
         <link
             rel="stylesheet"
@@ -18,6 +18,11 @@
             defer
             src="{{ url_for('static', filename='js/Sortable.min.js') }}"
         ></script>
+        <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+        <!-- Flatpickr Date Picker (DD/MM/YYYY format) -->
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+        <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+        <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link
@@ -215,10 +220,81 @@
                 color: #1e293b;
                 font-weight: 700;
             }
+
+            /* ═══════ GLOBAL STATUS CHANGE TOAST NOTIFICATIONS ═══════ */
+            .qb-toast-container {
+                position: fixed;
+                top: 16px;
+                right: 16px;
+                z-index: 9999;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                pointer-events: none;
+                max-width: 420px;
+            }
+            .qb-toast {
+                pointer-events: auto;
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-left: 4px solid #4a7dff;
+                border-radius: 12px;
+                padding: 14px 18px;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+                display: flex;
+                align-items: flex-start;
+                gap: 12px;
+                animation: qb-toast-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+                cursor: pointer;
+                transition: opacity 0.3s, transform 0.3s;
+            }
+            .qb-toast.qb-toast-out {
+                animation: qb-toast-out 0.3s ease-in forwards;
+            }
+            .qb-toast-icon {
+                width: 36px;
+                height: 36px;
+                border-radius: 10px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
+                font-size: 18px;
+                background: rgba(74, 125, 255, 0.1);
+            }
+            .qb-toast-body {
+                flex: 1;
+                min-width: 0;
+            }
+            .qb-toast-title {
+                font-size: 13px;
+                font-weight: 700;
+                color: #0f1b2d;
+                margin-bottom: 2px;
+            }
+            .qb-toast-msg {
+                font-size: 12px;
+                color: #64748b;
+                line-height: 1.4;
+            }
+            .qb-toast-time {
+                font-size: 10px;
+                color: #94a3b8;
+                font-family: 'JetBrains Mono', monospace;
+                margin-top: 4px;
+            }
+            @keyframes qb-toast-in {
+                from { opacity: 0; transform: translateX(60px) scale(0.95); }
+                to { opacity: 1; transform: translateX(0) scale(1); }
+            }
+            @keyframes qb-toast-out {
+                from { opacity: 1; transform: translateX(0) scale(1); }
+                to { opacity: 0; transform: translateX(60px) scale(0.9); }
+            }
         </style>
         {% block extra_head %}{% endblock %}
     </head>
-    <body class="bg-[#f0f2f5] min-h-screen">
+    <body class="bg-[#f0f2f5] min-h-screen" x-data="globalNotifications()">
         <!-- Navigation -->
         <nav class="qb-nav">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -230,7 +306,7 @@
                             class="flex items-center gap-2.5"
                         >
                             <img src="{{ url_for('static', filename='images/logo_new.png') }}" alt="Logo" style="height: 34px; width: auto;" />
-                            <span style="font-size: 17px; font-weight: 800; color: #ffffff; letter-spacing: -0.02em;">QB-OMS</span>
+                            <span style="font-size: 17px; font-weight: 800; color: #ffffff; letter-spacing: -0.02em;">QB-SAO</span>
                         </a>
 
                         {% if current_user.is_authenticated %}
@@ -245,16 +321,7 @@
                                 </svg>
                                 Pedidos
                             </a>
-                            <a
-                                href="{{ url_for('orders.visor') }}"
-                                class="qb-nav-link {% if request.endpoint == 'orders.visor' %}active-emerald{% endif %}"
-                            >
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                </svg>
-                                Visor
-                            </a>
+
                             <a
                                 href="{{ url_for('orders.facturas') }}"
                                 class="qb-nav-link {% if request.endpoint == 'orders.facturas' %}active-amber{% endif %}"
@@ -275,13 +342,51 @@
                                 </svg>
                                 Monitor
                             </a>
+                            <a
+                                href="{{ url_for('orders.dashboard') }}"
+                                class="qb-nav-link {% if request.endpoint == 'orders.dashboard' %}active-amber{% endif %}"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                                </svg>
+                                Dashboard
+                            </a>
                         </div>
                         {% endif %}
                     </div>
 
-                    <!-- Right: User menu -->
+                    <!-- Right: User menu & Search -->
                     <div class="flex items-center gap-4">
                         {% if current_user.is_authenticated %}
+                        
+                        <!-- Omnibox Search -->
+                        <div class="relative hidden sm:block" x-data="omniboxSearch()" @click.away="close()">
+                            <div class="flex items-center bg-slate-100 rounded-lg px-3 py-1.5 focus-within:ring-2 focus-within:ring-[#4a7dff] focus-within:bg-white transition-colors w-64 border border-transparent focus-within:border-[#4a7dff]/20">
+                                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                <input type="text" x-model="query" @input.debounce.300ms="search()" @focus="if(query.length >= 2) isOpen = true" placeholder="Buscar pedido, cliente..." class="bg-transparent border-none focus:ring-0 text-sm ml-2 w-full text-slate-700 placeholder-slate-400 outline-none p-0">
+                            </div>
+                            
+                            <div x-show="isOpen" style="display: none;" class="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg border border-slate-200 z-50 overflow-hidden" x-transition>
+                                <div x-show="loading" class="p-4 text-center text-sm text-slate-500">Buscando...</div>
+                                <div x-show="!loading && results.length === 0" class="p-4 text-center text-sm text-slate-500">No se encontraron resultados</div>
+                                <div x-show="!loading && results.length > 0" class="max-h-96 overflow-y-auto py-2">
+                                    <template x-for="res in results" :key="res.id">
+                                        <a :href="res.url" class="block px-4 py-3 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0">
+                                            <div class="flex justify-between items-start">
+                                                <div>
+                                                    <p class="text-sm font-bold text-slate-800" x-text="res.title"></p>
+                                                    <p class="text-xs text-slate-500 mt-0.5 truncate max-w-[180px]" x-text="res.customer"></p>
+                                                    <p class="text-[10px] text-slate-400 mt-0.5" x-show="res.factura" x-text="'Factura: ' + res.factura"></p>
+                                                </div>
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700" x-text="res.status"></span>
+                                            </div>
+                                        </a>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="flex items-center" x-data="{ open: false }">
                             <div class="relative">
                                 <button
@@ -312,6 +417,10 @@
                                         <p>{{ current_user.full_name or current_user.username }}</p>
                                         <p>{{ current_user.role.value }}</p>
                                     </div>
+                                    <a href="{{ url_for('orders.changelog') }}" class="flex items-center gap-2">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                                        Novedades
+                                    </a>
                                     <a href="{{ url_for('auth.change_password') }}">Cambiar Contraseña</a>
                                     <a href="{{ url_for('auth.logout') }}" class="danger">Cerrar Sesión</a>
                                 </div>
@@ -336,6 +445,24 @@
             {% endfor %}
         </div>
         {% endif %} {% endwith %}
+
+        <!-- System Alerts -->
+        <div x-cloak x-show="!sapOnline || !sgaOnline" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+            <div class="bg-red-50 text-red-700 border border-red-200 rounded-xl p-4 flex items-center gap-3 shadow-sm qb-flash mb-0">
+                <svg class="w-6 h-6 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                <div>
+                    <p class="font-bold">Advertencia del Sistema</p>
+                    <p class="text-sm">
+                        <template x-if="!sapOnline">
+                            <span class="block">El sistema SAP no está disponible en este momento.</span>
+                        </template>
+                        <template x-if="!sgaOnline">
+                            <span class="block">El sistema SGA no está disponible o no responde.</span>
+                        </template>
+                    </p>
+                </div>
+            </div>
+        </div>
 
         <!-- Page Content -->
         <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -366,6 +493,176 @@
                     return _origFetch.call(this, input, init);
                 };
             })();
+        </script>
+        
+        <!-- Global Notifications App -->
+        <div class="qb-toast-container" id="qbGlobalToastContainer"></div>
+        <script>
+        function globalNotifications() {
+            return {
+                _audioCtx: null,
+                _soundEnabled: true,
+                sapOnline: {{ 'true' if sap_available else 'false' }},
+                sgaOnline: {{ 'true' if sga_available else 'false' }},
+                
+                init() {
+                    this.setupGlobalSSE();
+                    setInterval(() => this.checkSystemsHealth(), 30000);
+                },
+                
+                async checkSystemsHealth() {
+                    try {
+                        const res = await fetch('/health');
+                        if (res.ok) {
+                            const data = await res.json();
+                            this.sapOnline = data.sap_available;
+                            this.sgaOnline = data.sga_available;
+                        }
+                    } catch (e) {
+                        console.error("Health check failed", e);
+                    }
+                },
+                
+                setupGlobalSSE() {
+                    const eventSource = new EventSource('/orders/stream_web');
+                    eventSource.onmessage = (e) => {
+                        const data = JSON.parse(e.data);
+                        
+                        if (data.type === 'sync_completed' || data.type === 'order_updated') {
+                            // Tell current page to refresh its data
+                            window.dispatchEvent(new CustomEvent('refresh-data'));
+                        }
+                        else if (data.type === 'status_changed') {
+                            // Tell current page to refresh
+                            window.dispatchEvent(new CustomEvent('refresh-data'));
+                            // Play sound and show toast
+                            this._playNotificationSound();
+                            this._showStatusToast(data);
+                        }
+                    };
+                    eventSource.onerror = () => {
+                        console.error("Global SSE Connection lost. Reconnecting in 5s...");
+                        eventSource.close();
+                        setTimeout(() => this.setupGlobalSSE(), 5000);
+                    };
+                },
+                
+                _playNotificationSound() {
+                    if (!this._soundEnabled) return;
+                    try {
+                        const audio = new Audio("{{ url_for('static', filename='nokia.wav') }}");
+                        audio.play().catch(e => console.warn('Could not play notification sound:', e));
+                    } catch (e) {
+                        console.warn('Could not play notification sound:', e);
+                    }
+                },
+                
+                _showStatusToast(change) {
+                    const container = document.getElementById('qbGlobalToastContainer');
+                    if (!container) return;
+
+                    const iconMap = {
+                        'Pendiente': '📋',
+                        'En Proceso': '⚙️',
+                        'Entregado': '✅',
+                        'Preparando': '📦',
+                        'Facturacion': '🧾',
+                        'Relacion de envio': '🚚',
+                        'Recibido por almacen': '📥',
+                        'Enviado al cliente': '✈️',
+                        'Cancelado': '❌',
+                        'En Espera': '⏸️',
+                    };
+
+                    const toast = document.createElement('div');
+                    toast.className = 'qb-toast';
+                    toast.innerHTML = `
+                        <div class="qb-toast-icon">${iconMap[change.to] || '🔔'}</div>
+                        <div class="qb-toast-body">
+                            <div class="qb-toast-title">Pedido #${change.order_id}</div>
+                            <div class="qb-toast-msg">${change.from} → <strong>${change.to}</strong></div>
+                            <div class="qb-toast-msg" style="margin-top:2px;color:#94a3b8;">${change.customer}</div>
+                            <div class="qb-toast-time">${new Date().toLocaleTimeString('es-MX')}</div>
+                        </div>
+                    `;
+                    toast.addEventListener('click', () => {
+                        window.location.href = `/orders/${change.order_id}`;
+                    });
+                    container.appendChild(toast);
+
+                    setTimeout(() => {
+                        toast.classList.add('qb-toast-out');
+                        setTimeout(() => toast.remove(), 300);
+                    }, 8000);
+                }
+            }
+        }
+        
+        function omniboxSearch() {
+            return {
+                query: '',
+                results: [],
+                isOpen: false,
+                loading: false,
+                
+                async search() {
+                    if (this.query.trim().length < 2) {
+                        this.results = [];
+                        this.isOpen = false;
+                        return;
+                    }
+                    this.loading = true;
+                    this.isOpen = true;
+                    try {
+                        const res = await fetch(`/orders/api/search?q=${encodeURIComponent(this.query.trim())}`);
+                        if (res.ok) {
+                            const data = await res.json();
+                            this.results = data.results;
+                        }
+                    } catch (e) {
+                        console.error("Omnibox search failed:", e);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                close() {
+                    this.isOpen = false;
+                }
+            }
+        }
+
+        /* ── Global Flatpickr initialization for DD/MM/YYYY date display ── */
+        // Wait for Alpine.js to finish rendering so x-model values are set
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                document.querySelectorAll('input[type="date"]').forEach(function(el) {
+                    _initFlatpickr(el);
+                });
+            }, 100);
+        });
+
+        function _initFlatpickr(el) {
+            if (el._flatpickr) return; // Already initialized
+
+            const currentValue = el.value; // YYYY-MM-DD from Alpine x-model
+
+            // Do NOT change el.type here. Flatpickr will hide the original input
+            // and create a new visible text input for altInput.
+            
+            const fp = flatpickr(el, {
+                altInput: true,
+                altFormat: 'd/m/Y',
+                dateFormat: 'Y-m-d', // The real value format for Alpine/Backend
+                locale: 'es',
+                allowInput: true,
+                defaultDate: currentValue || null,
+                onChange: function(selectedDates, dateStr, instance) {
+                    // Trigger Alpine.js updates
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+        }
         </script>
     </body>
 </html>

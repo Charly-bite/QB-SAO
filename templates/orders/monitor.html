@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0f172a">
-    <title>QB-OMS — Monitor</title>
+    <title>QB-SAO — Monitor</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logo_new.png') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/monitor.css') }}">
     <script defer src="{{ url_for('static', filename='js/alpine.min.js') }}"></script>
@@ -24,14 +24,14 @@
             <div class="header-brand">
                 <div class="brand-icon"><img src="{{ url_for('static', filename='images/logo_new.png') }}" alt="Logo" style="height: 48px; width: auto;" /></div>
                 <div>
-                    <h1 class="brand-title">QB-OMS</h1>
+                    <h1 class="brand-title">QB-SAO</h1>
                     <p class="brand-subtitle">Monitor de estado en tiempo real</p>
                 </div>
             </div>
 
             <!-- Breadcrumbs -->
             <nav class="monitor-breadcrumbs" aria-label="Breadcrumb">
-                <a href="{{ url_for('orders.index') }}">QB-OMS</a>
+                <a href="{{ url_for('orders.index') }}">QB-SAO</a>
                 <span class="bc-sep">›</span>
                 <span class="bc-current">Monitor</span>
             </nav>
@@ -76,43 +76,71 @@
                 :class="activeTopFilter === 'all' ? 'is-active' : ''"
                 @click="toggleTopFilter('all')"
                 title="Mostrar todos">
-                <div class="kpi-value" x-text="stats.total_active || 0">0</div>
+                <div class="kpi-value" x-text="activeStats.total_active || 0">0</div>
                 <div class="kpi-label">Total Activos</div>
             </button>
             <button type="button" class="kpi-card kpi-pending"
                 :class="activeTopFilter === 'pending' ? 'is-active' : ''"
                 @click="toggleTopFilter('pending')"
                 title="Filtrar pendientes">
-                <div class="kpi-value" x-text="stats.pending || 0">0</div>
+                <div class="kpi-value" x-text="activeStats.pending || 0">0</div>
                 <div class="kpi-label">Pendientes</div>
             </button>
             <button type="button" class="kpi-card kpi-process"
                 :class="activeTopFilter === 'process' ? 'is-active' : ''"
                 @click="toggleTopFilter('process')"
-                title="Filtrar en proceso y terminado">
-                <div class="kpi-value"
-                    x-text="(stats.in_progress || 0) + (stats.picking || 0)">0</div>
+                title="Filtrar en proceso">
+                <div class="kpi-value" x-text="activeStats.in_progress || 0">0</div>
                 <div class="kpi-label">En Proceso</div>
+            </button>
+            <button type="button" class="kpi-card kpi-picking"
+                :class="activeTopFilter === 'picking' ? 'is-active' : ''"
+                @click="toggleTopFilter('picking')"
+                title="Filtrar entregados">
+                <div class="kpi-value" x-text="activeStats.picking || 0">0</div>
+                <div class="kpi-label">Entregados</div>
             </button>
             <button type="button" class="kpi-card kpi-invoice"
                 :class="activeTopFilter === 'invoice' ? 'is-active' : ''"
                 @click="toggleTopFilter('invoice')"
-                title="Filtrar facturados y relación de envío">
+                title="Filtrar facturados">
                 <div class="kpi-value"
-                    x-text="(stats.invoicing || 0) + (stats.ready || 0)">0</div>
-                <div class="kpi-label">Facturado / Relación</div>
+                    x-text="activeStats.invoicing || 0">0</div>
+                <div class="kpi-label">Facturado</div>
+            </button>
+            <button type="button" class="kpi-card kpi-relation"
+                :class="activeTopFilter === 'relation' ? 'is-active' : ''"
+                @click="toggleTopFilter('relation')"
+                title="Filtrar relación">
+                <div class="kpi-value"
+                    x-text="activeStats.ready || 0">0</div>
+                <div class="kpi-label">Relación</div>
             </button>
             <button type="button" class="kpi-card kpi-shipped"
                 :class="activeTopFilter === 'shipped' ? 'is-active' : ''"
                 @click="toggleTopFilter('shipped')"
                 title="Filtrar enviados">
-                <div class="kpi-value" x-text="stats.shipped || 0">0</div>
+                <div class="kpi-value" x-text="activeStats.shipped || 0">0</div>
                 <div class="kpi-label">Enviados</div>
+            </button>
+            <button type="button" class="kpi-card kpi-waiting"
+                :class="activeTopFilter === 'waiting' ? 'is-active' : ''"
+                @click="toggleTopFilter('waiting')"
+                title="Filtrar en espera">
+                <div class="kpi-value" x-text="activeStats.waiting || 0">0</div>
+                <div class="kpi-label">En Espera</div>
+            </button>
+            <button type="button" class="kpi-card kpi-cancelled"
+                :class="activeTopFilter === 'cancelled' ? 'is-active' : ''"
+                @click="toggleTopFilter('cancelled')"
+                title="Filtrar cancelados">
+                <div class="kpi-value" x-text="activeStats.cancelled || 0">0</div>
+                <div class="kpi-label">Cancelados</div>
             </button>
         </div>
     </section>
 
-    <!-- ═══════ SEARCH BAR ═══════ -->
+    <!-- ═══════ SEARCH & FILTERS BAR ═══════ -->
     <section class="search-bar">
         <div class="search-inner">
             <div class="search-field">
@@ -128,11 +156,71 @@
                     @click="searchQuery = ''; currentPage = 1"
                     title="Limpiar búsqueda">&times;</button>
             </div>
+
+            <!-- Date & Number filters row -->
+            <div class="filters-row">
+                <!-- Date range -->
+                <div class="filter-group">
+                    <label class="filter-label">
+                        <svg class="filter-label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        Desde
+                    </label>
+                    <input type="date" x-model="dateFrom" @change="currentPage = 1" class="filter-date-input" id="filter-date-from">
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">
+                        <svg class="filter-label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        Hasta
+                    </label>
+                    <input type="date" x-model="dateTo" @change="currentPage = 1" class="filter-date-input" id="filter-date-to">
+                </div>
+
+                <!-- Number of orders -->
+                <div class="filter-group">
+                    <label class="filter-label">
+                        <svg class="filter-label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                        </svg>
+                        Mostrar
+                    </label>
+                    <select x-model="maxOrders" @change="currentPage = 1" class="filter-select-sm" id="filter-max-orders">
+                        <option value="0">Todos</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                    </select>
+                </div>
+
+                <!-- Clear all filters -->
+                <button class="filter-clear-btn"
+                    x-show="dateFrom !== new Date().toISOString().split('T')[0] || dateTo !== new Date().toISOString().split('T')[0] || maxOrders !== '0' || selectedSeller" x-cloak
+                    @click="dateFrom = new Date().toISOString().split('T')[0]; dateTo = new Date().toISOString().split('T')[0]; maxOrders = '0'; selectedSeller = ''; currentPage = 1"
+                    title="Limpiar filtros">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    Limpiar
+                </button>
+            </div>
+
             <div class="order-count">
                 <span x-text="filteredOrders.length"></span> pedidos
                 <template x-if="activeTopFilter !== 'all'">
                     <span class="filter-chip" @click="toggleTopFilter(activeTopFilter)">
                         <span x-text="getTopFilterLabel()"></span>
+                        <span class="filter-chip-x">x</span>
+                    </span>
+                </template>
+                <template x-if="dateFrom || dateTo">
+                    <span class="filter-chip" @click="dateFrom = ''; dateTo = ''; currentPage = 1">
+                        <span x-text="(dateFrom ? formatDate(dateFrom) : '...') + ' → ' + (dateTo ? formatDate(dateTo) : '...')"></span>
                         <span class="filter-chip-x">x</span>
                     </span>
                 </template>
@@ -191,11 +279,39 @@
                     <!-- Customer info -->
                     <div class="card-customer">
                         <div class="customer-name" x-text="order.customer_name"></div>
-                        <div class="customer-code" x-text="order.customer_code"></div>
+                        <div class="customer-id-row">
+                            <span class="customer-code" x-text="order.customer_code"></span>
+                            <template x-if="order.created_by">
+                                <span class="customer-seller" x-text="order.created_by"></span>
+                            </template>
+                        </div>
                     </div>
 
+                    <!-- Status banner if on hold -->
+                    <template x-if="order.status === 'En Espera'">
+                        <div class="wait-banner">
+                            <svg class="wait-banner-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span>Pedido en Espera</span>
+                        </div>
+                    </template>
+
+                    <!-- Status banner if cancelled -->
+                    <template x-if="order.status === 'Cancelado'">
+                        <div class="cancel-banner">
+                            <svg class="cancel-banner-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span>Pedido Cancelado</span>
+                        </div>
+                    </template>
+
                     <!-- Progress timeline -->
-                    <div class="progress-timeline">
+                    <template x-if="order.status !== 'En Espera' && order.status !== 'Cancelado'">
+                        <div class="progress-timeline">
                         <template x-for="(step, si) in statusSteps" :key="step.key">
                             <div class="timeline-step" :class="getStepClass(order.status, step.key)">
                                 <div class="step-dot">
@@ -213,7 +329,8 @@
                                 </div>
                             </div>
                         </template>
-                    </div>
+                        </div>
+                    </template>
 
                     <!-- Card footer -->
                     <div class="card-footer">
@@ -235,6 +352,11 @@
                             <template x-if="order.factura_number">
                                 <div class="pill pill-factura">
                                     <span x-text="'Fact. #' + order.factura_number"></span>
+                                </div>
+                            </template>
+                            <template x-if="order.delivery_number">
+                                <div class="pill pill-delivery" style="background: rgba(245, 158, 11, 0.1); color: #d97706;">
+                                    <span x-text="'Ent. #' + order.delivery_number"></span>
                                 </div>
                             </template>
                         </div>
@@ -365,6 +487,9 @@
                 currentSeller: '',
                 selectedSeller: '',
                 searchQuery: '',
+                dateFrom: new Date().toISOString().split('T')[0],
+                dateTo: new Date().toISOString().split('T')[0],
+                maxOrders: '0',
                 activeTopFilter: 'all',
                 currentPage: 1,
                 pageSize: 50,
@@ -380,7 +505,7 @@
                 statusSteps: [
                     { key: 'Pendiente', short: 'Pend' },
                     { key: 'En Proceso', short: 'Proc' },
-                    { key: 'Terminado', short: 'Term' },
+                    { key: 'Entregado', short: 'Entr' },
                     { key: 'Facturacion', short: 'Fact' },
                     { key: 'Relacion de envio', short: 'Rel' },
                     { key: 'Enviado al cliente', short: 'Env' },
@@ -392,16 +517,63 @@
                     return map;
                 },
 
-                get filteredOrders() {
+                // Base filtered: date + search only (no KPI top filter, no max cap)
+                // Used to compute KPI stats that react to the date range
+                get baseFilteredOrders() {
                     const q = (this.searchQuery || '').toLowerCase().trim();
+                    const from = this.dateFrom || '';
+                    const to = this.dateTo || '';
+
                     return this.orders.filter(o => {
-                        if (!this.orderMatchesTopFilter(o)) return false;
+                        // Date range filter (compare against order_date)
+                        if (from || to) {
+                            const rawDate = o.order_date || o.delivery_date || '';
+                            if (!rawDate) return false;
+                            const oDate = rawDate.split('T')[0].split(' ')[0]; // YYYY-MM-DD
+                            if (from && oDate < from) return false;
+                            if (to && oDate > to) return false;
+                        }
+
+                        // Text search
                         if (!q) return true;
                         return String(o.order_id).includes(q) ||
                             (o.customer_name || '').toLowerCase().includes(q) ||
                             (o.customer_code || '').toLowerCase().includes(q) ||
-                            (o.factura_number && String(o.factura_number).includes(q));
+                            (o.factura_number && String(o.factura_number).includes(q)) ||
+                            (o.delivery_number && String(o.delivery_number).includes(q));
                     });
+                },
+
+                // Reactive stats computed from the date/search-filtered orders
+                get activeStats() {
+                    const counts = { total_active: 0, pending: 0, in_progress: 0, picking: 0, invoicing: 0, ready: 0, shipped: 0, waiting: 0, cancelled: 0 };
+                    for (const o of this.baseFilteredOrders) {
+                        counts.total_active += 1;
+                        const s = o.status;
+                        if (s === 'Pendiente') counts.pending += 1;
+                        if (s === 'En Proceso') counts.in_progress += 1;
+                        if (s === 'Entregado' || s === 'Preparando') counts.picking += 1;
+                        if (s === 'Facturacion') counts.invoicing += 1;
+                        if (s === 'Relacion de envio' || s === 'Recibido por almacen') counts.ready += 1;
+                        if (s === 'Enviado al cliente') counts.shipped += 1;
+                        if (s === 'En Espera') counts.waiting += 1;
+                        if (s === 'Cancelado') counts.cancelled += 1;
+                    }
+                    return counts;
+                },
+
+                get filteredOrders() {
+                    const max = parseInt(this.maxOrders) || 0;
+
+                    // Apply KPI top filter on top of the base
+                    let result = this.baseFilteredOrders.filter(o => this.orderMatchesTopFilter(o));
+
+                    // Cap to max orders
+                    if (max > 0 && result.length > max) {
+                        result = result.slice(0, max);
+                    }
+
+                    return result;
                 },
 
                 get paginatedOrders() {
@@ -440,9 +612,13 @@
                     const status = order?.status;
                     if (this.activeTopFilter === 'all') return true;
                     if (this.activeTopFilter === 'pending') return status === 'Pendiente';
-                    if (this.activeTopFilter === 'process') return status === 'En Proceso' || status === 'Terminado' || status === 'Preparando';
-                    if (this.activeTopFilter === 'invoice') return status === 'Facturacion' || status === 'Relacion de envio' || status === 'Recibido por almacen';
+                    if (this.activeTopFilter === 'process') return status === 'En Proceso';
+                    if (this.activeTopFilter === 'picking') return status === 'Entregado' || status === 'Preparando';
+                    if (this.activeTopFilter === 'invoice') return status === 'Facturacion';
+                    if (this.activeTopFilter === 'relation') return status === 'Relacion de envio' || status === 'Recibido por almacen';
                     if (this.activeTopFilter === 'shipped') return status === 'Enviado al cliente';
+                    if (this.activeTopFilter === 'waiting') return status === 'En Espera';
+                    if (this.activeTopFilter === 'cancelled') return status === 'Cancelado';
                     return true;
                 },
 
@@ -456,8 +632,12 @@
                     const labels = {
                         pending: 'Pendientes',
                         process: 'En Proceso',
-                        invoice: 'Facturado / Relación',
+                        picking: 'Entregados',
+                        invoice: 'Facturados',
+                        relation: 'Relación',
                         shipped: 'Enviados',
+                        waiting: 'En Espera',
+                        cancelled: 'Cancelados'
                     };
                     return labels[this.activeTopFilter] || 'Todos';
                 },
@@ -486,12 +666,12 @@
                     const map = {
                         'Pendiente': 'accent-amber',
                         'En Proceso': 'accent-violet',
-                        'Terminado': 'accent-sky',
-                        'Preparando': 'accent-sky',
+                        'Entregado': 'accent-sky',
                         'Facturacion': 'accent-pink',
                         'Relacion de envio': 'accent-emerald',
-                        'Recibido por almacen': 'accent-emerald',
                         'Enviado al cliente': 'accent-teal',
+                        'En Espera': 'accent-orange',
+                        'Cancelado': 'accent-red',
                     };
                     return map[status] || 'accent-slate';
                 },
@@ -548,7 +728,13 @@
                 },
                 formatDateTime(str) {
                     if (!str) return '-';
-                    return str.substring(0, 16).replace('T', ' ');
+                    const raw = str.substring(0, 16).replace('T', ' ');
+                    const parts = raw.split(' ');
+                    if (parts.length === 2 && parts[0].match(/^\d{4}-\d{2}-\d{2}$/)) {
+                        const [y, m, d] = parts[0].split('-');
+                        return `${d}/${m}/${y} ${parts[1]}`;
+                    }
+                    return raw;
                 },
                 formatItemQty(item) {
                     const qty = Number(item.quantity ?? item.Quantity ?? 0);
@@ -581,9 +767,14 @@
                         // Sort by status pipeline priority
                         const pri = {};
                         this.statusSteps.forEach((s, i) => pri[s.key] = i);
-                        const sorted = (data.orders || []).sort((a, b) =>
-                            (pri[a.status] ?? 99) - (pri[b.status] ?? 99)
-                        );
+                        const sorted = (data.orders || []).sort((a, b) => {
+                            const pDiff = (pri[a.status] ?? 99) - (pri[b.status] ?? 99);
+                            if (pDiff !== 0) return pDiff;
+                            // Within same status, newest order first
+                            const idA = parseInt(a.order_id) || 0;
+                            const idB = parseInt(b.order_id) || 0;
+                            return idB - idA;
+                        });
 
                         this.orders = sorted;
                         this.stats = data.stats || {};
@@ -656,9 +847,9 @@
                         const s = o.status;
                         if (s === 'Pendiente') counts.pending += 1;
                         if (s === 'En Proceso') counts.in_progress += 1;
-                        if (s === 'Terminado' || s === 'Preparando') counts.picking += 1;
+                        if (s === 'Entregado') counts.picking += 1;
                         if (s === 'Facturacion') counts.invoicing += 1;
-                        if (s === 'Relacion de envio' || s === 'Recibido por almacen') counts.ready += 1;
+                        if (s === 'Relacion de envio') counts.ready += 1;
                         if (s === 'Enviado al cliente') counts.shipped += 1;
                     }
                     this.stats = counts;

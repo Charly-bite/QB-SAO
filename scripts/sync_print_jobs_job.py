@@ -23,8 +23,9 @@ from core.order_status_manager import OrderStatus
 from core.print_event_matcher import extract_print_items, find_matching_order_ids
 
 EVENT_TYPES = ("DIRECT_PRINT_JOB", "PRINT_JOB", "PRINT_JOB_HTML")
-STATE_FILE = Path("logs/print_sync_state.json")
-UNRESOLVED_FILE = Path("logs/print_sync_unresolved.jsonl")
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+STATE_FILE = _PROJECT_ROOT / "logs" / "print_sync_state.json"
+UNRESOLVED_FILE = _PROJECT_ROOT / "logs" / "print_sync_unresolved.jsonl"
 
 
 def _sql_connection_string() -> str:

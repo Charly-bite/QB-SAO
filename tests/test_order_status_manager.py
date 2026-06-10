@@ -95,10 +95,10 @@ class TestStatusTransitions:
         assert osm.get_order('5001')['status'] == 'En Proceso'
 
     def test_update_status_appends_history(self, osm):
-        osm.update_status('5001', 'Terminado', 'operator1', 'Picking')
+        osm.update_status('5001', 'Entregado', 'operator1', 'Picking')
         history = osm.get_order('5001')['status_history']
         last = history[-1]
-        assert last['status'] == 'Terminado'
+        assert last['status'] == 'Entregado'
         assert last['user'] == 'operator1'
         assert last['previous_status'] == 'Pendiente'
 
@@ -108,7 +108,7 @@ class TestStatusTransitions:
 
     def test_full_lifecycle(self, osm):
         """Walk an order through the full lifecycle."""
-        steps = ['En Proceso', 'Terminado', 'Facturacion',
+        steps = ['En Proceso', 'Entregado', 'Facturacion',
                  'Relacion de envio', 'Enviado al cliente']
         for step in steps:
             osm.update_status('5001', step, 'admin', f'Moving to {step}')
@@ -152,7 +152,7 @@ class TestImportFromSAP:
 
     def test_reimport_preserves_local_status(self, osm):
         """If we re-import an existing order, the local status should NOT reset."""
-        osm.update_status('5001', 'Terminado', 'admin', 'Advanced')
+        osm.update_status('5001', 'Entregado', 'admin', 'Advanced')
 
         sap_data = {
             'DocNum': '5001',
@@ -161,7 +161,7 @@ class TestImportFromSAP:
             'DocDate': '2026-02-01',
         }
         result = osm.import_from_sap(sap_data)
-        assert result['status'] == 'Terminado'  # preserved
+        assert result['status'] == 'Entregado'  # preserved
 
 
 class TestStatusNormalization:

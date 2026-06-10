@@ -6,11 +6,15 @@ import datetime
 import json as json_mod
 import logging
 import os
+import threading
 import time
 import urllib.request
 from functools import wraps
 
-from flask import Blueprint, current_app, jsonify, render_template, request, Response
+import io
+from flask import Blueprint, current_app, jsonify, render_template, request, Response, send_file
+import openpyxl
+from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 import queue
 from flask_login import current_user, login_required
 
@@ -53,6 +57,146 @@ def _require_monitor_token(f):
     return decorated
 
 
+def _require_sga_api_key(f):
+    """Decorator for SGA machine-to-machine endpoints.
+    Requires SGA_API_KEY to be set in the environment; if not set the endpoint
+    is disabled (503) to prevent accidental open access."""
+
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        expected = os.environ.get("SGA_API_KEY", "")
+        if not expected:
+            return jsonify({"error": "SGA API not configured"}), 503
+        token = request.headers.get("X-API-Key") or request.args.get(
+            "api_key", ""
+        )
+        if token != expected:
+            return jsonify({"error": "Unauthorized"}), 401
+        return f(*args, **kwargs)
+
+    return decorated
+
+
+def _check_delivery_and_invoice(sap, order_mgr, recent_orders):
+    """Auto-transition orders based on SAP delivery notes and invoices.
+
+    Called inside the SAP sync cycle.  Uses the already-fetched ``recent_orders``
+    to collect ``doc_entry`` values, then batch-queries ODLN and OINV.
+
+    Transitions:
+      - En Proceso / Pendiente  + delivery note → Entregado
+      - Entregado               + invoice       → Facturacion
+
+    Returns the number of orders whose status was updated.
+    """
+    # Build doc_entry → order_id map from the recent SAP fetch
+    entry_to_oid = {}  # doc_entry → order_id string
+    for order_data in recent_orders:
+        if not order_data or "header" not in order_data:
+            continue
+        header = order_data["header"]
+        doc_entry = header.get("doc_entry")
+        order_id = str(header.get("order_number", ""))
+        if doc_entry and order_id and order_id in order_mgr.orders:
+            entry_to_oid[int(doc_entry)] = order_id
+            # Persist doc_entry on the local order for future lookups
+            order_mgr.orders[order_id]["doc_entry"] = int(doc_entry)
+
+    # Also include older local orders that have a stored doc_entry and
+    # are still at a status eligible for auto-transition.  This catches
+    # orders that fell outside the recent-50 SAP window.
+    _eligible_statuses = {
+        OrderStatus.PENDING.value,
+        OrderStatus.IN_PROGRESS.value,
+        OrderStatus.PICKING.value,  # Entregado — eligible for Facturacion
+    }
+    for oid, order in order_mgr.orders.items():
+        if oid in entry_to_oid.values():
+            continue  # already covered by recent SAP fetch
+        de = order.get("doc_entry")
+        if de and order.get("status") in _eligible_statuses:
+            entry_to_oid[int(de)] = oid
+
+    if not entry_to_oid:
+        return 0
+
+    updated = 0
+
+    # ── 1. Delivery Notes → Entregado ────────────────────────────────
+    # Only check orders that are still at Pendiente or En Proceso
+    eligible_for_terminado = {
+        de: oid for de, oid in entry_to_oid.items()
+        if order_mgr.orders[oid].get("status") in [
+            OrderStatus.PENDING.value,
+            OrderStatus.IN_PROGRESS.value,
+        ]
+    }
+
+    if eligible_for_terminado:
+        deliveries = sap.get_delivery_notes_batch(list(eligible_for_terminado.keys()))
+        for de, delivery_info in deliveries.items():
+            oid = eligible_for_terminado.get(de)
+            if not oid:
+                continue
+            dn = delivery_info["delivery_num"]
+            order_mgr.orders[oid]["delivery_number"] = str(dn)
+            order_mgr.update_status(
+                oid,
+                OrderStatus.PICKING.value,  # "Entregado"
+                "system",
+                notes=f"Auto: Nota de entrega #{dn} detectada en SAP",
+            )
+            logging.info(
+                f"Auto-Entregado: order={oid}, delivery_note={dn}"
+            )
+            # Broadcast SSE
+            try:
+                _publish_event({
+                    "type": "order_updated",
+                    "order_id": oid,
+                    "order": order_mgr.get_order(oid),
+                })
+            except Exception:
+                pass
+            updated += 1
+
+    # ── 2. Invoices → Facturacion ─────────────────────────────────────
+    # Check orders at Entregado (including those just transitioned above)
+    eligible_for_factura = {
+        de: oid for de, oid in entry_to_oid.items()
+        if order_mgr.orders[oid].get("status") == OrderStatus.PICKING.value
+        and not order_mgr.orders[oid].get("factura_number")
+    }
+
+    if eligible_for_factura:
+        invoices = sap.get_invoices_for_orders_batch(list(eligible_for_factura.keys()))
+        for de, invoice_num in invoices.items():
+            oid = eligible_for_factura.get(de)
+            if not oid:
+                continue
+            order_mgr.orders[oid]["factura_number"] = str(invoice_num)
+            order_mgr.update_status(
+                oid,
+                OrderStatus.INVOICING.value,  # "Facturacion"
+                "system",
+                notes=f"Auto: Factura #{invoice_num} detectada en SAP",
+            )
+            logging.info(
+                f"Auto-Facturacion: order={oid}, invoice={invoice_num}"
+            )
+            try:
+                _publish_event({
+                    "type": "order_updated",
+                    "order_id": oid,
+                    "order": order_mgr.get_order(oid),
+                })
+            except Exception:
+                pass
+            updated += 1
+
+    return updated
+
+
 @orders_bp.route("/")
 @login_required
 def index():
@@ -63,25 +207,8 @@ def index():
     status_filter = request.args.get("status", "")
     search = request.args.get("search", "").strip()
 
-    # Get all orders
+    # Get all orders (filtering is now handled client-side via Alpine.js)
     orders = list(order_mgr.orders.values())
-
-    # Filter by status
-    if status_filter:
-        orders = [o for o in orders if o.get("status") == status_filter]
-
-    # Filter by search
-    if search:
-        search_lower = search.lower()
-        orders = [
-            o
-            for o in orders
-            if (
-                search_lower in str(o.get("order_id", "")).lower()
-                or search_lower in str(o.get("customer_name", "")).lower()
-                or search_lower in str(o.get("customer_code", "")).lower()
-            )
-        ]
 
     # Sort by order_id (DocNum) descending - newest orders first
     # Convert order_id to int for proper numeric sorting
@@ -110,6 +237,21 @@ def index():
     )
 
 
+@orders_bp.route("/changelog")
+@login_required
+def changelog():
+    """Version history and changelog"""
+    import json
+    import os
+    changelog_path = os.path.join(current_app.root_path, 'changelog.json')
+    try:
+        with open(changelog_path, 'r', encoding='utf-8') as f:
+            changes = json.load(f)
+    except Exception:
+        changes = []
+    return render_template("orders/changelog.html", changelog=changes)
+
+
 @orders_bp.route('/stream')
 @_require_monitor_token
 def stream():
@@ -132,6 +274,31 @@ def stream():
     return Response(event_stream(q), mimetype='text/event-stream')
 
 
+@orders_bp.route('/stream_web')
+@login_required
+def stream_web():
+    """Server-Sent Events stream for authenticated web users."""
+    import queue
+    import json as json_mod
+    from flask import Response
+    
+    q = queue.Queue()
+    _SUBSCRIBERS.append(q)
+
+    def event_stream(local_q):
+        try:
+            while True:
+                data = local_q.get()
+                yield f"data: {json_mod.dumps(data, ensure_ascii=False)}\n\n"
+        finally:
+            try:
+                _SUBSCRIBERS.remove(local_q)
+            except ValueError:
+                pass
+
+    return Response(event_stream(q), mimetype='text/event-stream')
+
+
 # Pipeline order for the status stepper — defined once here, passed to template
 _MAIN_STATUSES = [
     OrderStatus.PENDING.value,
@@ -142,6 +309,201 @@ _MAIN_STATUSES = [
     OrderStatus.SHIPPED.value,
 ]
 _EXTRA_STATUSES = [OrderStatus.CANCELLED.value, OrderStatus.ON_HOLD.value]
+
+
+@orders_bp.route("/dashboard")
+@login_required
+def dashboard():
+    """Render the KPI dashboard"""
+    return render_template("orders/dashboard.html")
+
+
+@orders_bp.route("/api/dashboard-stats")
+@login_required
+def dashboard_stats():
+    """Calculate and return real-time KPIs"""
+    target_date = request.args.get("date")
+    if not target_date:
+        target_date = datetime.datetime.now().strftime("%Y-%m-%d")
+
+    order_mgr = current_app.order_status_mgr
+    all_orders = order_mgr.get_all_orders()
+
+    workload = {status.value: 0 for status in OrderStatus}
+    created_today = 0
+    shipped_today = 0
+    warehouse_times = []
+    
+    for order in all_orders:
+        status = order.get("status", "")
+        if status in workload:
+            workload[status] += 1
+            
+        doc_date = order.get("doc_date", "") or order.get("order_date", "")
+        if doc_date.startswith(target_date):
+            created_today += 1
+            
+        history = order.get("status_history", [])
+        
+        if status == OrderStatus.SHIPPED.value:
+            for entry in history:
+                if entry.get("status") == OrderStatus.SHIPPED.value and entry.get("timestamp", "").startswith(target_date):
+                    shipped_today += 1
+                    break
+                    
+        time_pendiente = None
+        time_terminado = None
+        for entry in history:
+            if entry.get("status") == OrderStatus.PENDING.value and not time_pendiente:
+                time_pendiente = entry.get("timestamp")
+            if entry.get("status") == OrderStatus.PICKING.value and not time_terminado:
+                time_terminado = entry.get("timestamp")
+                
+        if not time_pendiente and history:
+            time_pendiente = history[0].get("timestamp")
+            
+        if time_pendiente and time_terminado:
+            # Only average lead times of orders completed on the target date
+            if time_terminado.startswith(target_date):
+                try:
+                    t1 = datetime.datetime.fromisoformat(time_pendiente)
+                    t2 = datetime.datetime.fromisoformat(time_terminado)
+                    diff = (t2 - t1).total_seconds() / 3600.0 # in hours
+                    if diff > 0 and diff < 100: # filter anomalies
+                        warehouse_times.append(diff)
+                except Exception:
+                    pass
+
+    avg_warehouse_time = sum(warehouse_times) / len(warehouse_times) if warehouse_times else 0
+
+    return jsonify({
+        "target_date": target_date,
+        "workload": workload,
+        "throughput": {
+            "created_today": created_today,
+            "shipped_today": shipped_today
+        },
+        "lead_times": {
+            "warehouse_hours": round(avg_warehouse_time, 2)
+        }
+    })
+
+
+@orders_bp.route("/api/audit-stats")
+@login_required
+def audit_stats():
+    """Calculate delays between SAP document creation and SAO reaction time"""
+    if not current_app.sap_available:
+        return jsonify({"error": "SAP no disponible", "audits": []}), 503
+
+    limit = request.args.get("limit", 100, type=int)
+
+    try:
+        sap = current_app.sap_connector
+        if not sap or not sap.connected:
+            from core.sap_connector import SAPHanaConnector
+            sap = SAPHanaConnector()
+            sap.connect()
+            current_app.sap_connector = sap
+
+        deliveries, invoices = sap.get_recent_deliveries_and_invoices_audit(limit=limit)
+    except Exception as e:
+        return jsonify({"error": f"Error al conectar con SAP: {e}", "audits": []}), 500
+
+    order_mgr = current_app.order_status_mgr
+    all_orders = order_mgr.get_all_orders()
+
+    # Map doc_entry -> order
+    entry_to_order = {}
+    for o in all_orders:
+        de = o.get("doc_entry")
+        if de:
+            entry_to_order[int(de)] = o
+
+    audit_records = []
+    delays = []
+
+    # Process deliveries (SAP -> SAO Entregado)
+    for d in deliveries:
+        de = d["order_doc_entry"]
+        if de in entry_to_order:
+            order = entry_to_order[de]
+            sao_time_str = None
+            history = order.get("status_history", [])
+            for entry in history:
+                if entry.get("status") == OrderStatus.PICKING.value:
+                    sao_time_str = entry.get("timestamp")
+                    break
+
+            if sao_time_str and d["sap_date"]:
+                try:
+                    t_sap = datetime.datetime.fromisoformat(d["sap_date"])
+                    t_sao = datetime.datetime.fromisoformat(sao_time_str)
+                    diff_min = (t_sao - t_sap).total_seconds() / 60.0
+
+                    if diff_min >= 0 and diff_min < 10080:
+                        delays.append(diff_min)
+                        audit_records.append({
+                            "order_id": order["order_id"],
+                            "customer_name": order["customer_name"],
+                            "doc_type": "Entrega",
+                            "doc_num": d["doc_num"],
+                            "sap_date": d["sap_date"],
+                            "sao_date": sao_time_str,
+                            "delay_min": round(diff_min, 1)
+                        })
+                except Exception:
+                    pass
+
+    # Process invoices (SAP -> SAO Facturacion)
+    for inv in invoices:
+        de = inv["order_doc_entry"]
+        if de in entry_to_order:
+            order = entry_to_order[de]
+            sao_time_str = None
+            history = order.get("status_history", [])
+            for entry in history:
+                if entry.get("status") == OrderStatus.INVOICING.value:
+                    sao_time_str = entry.get("timestamp")
+                    break
+
+            if sao_time_str and inv["sap_date"]:
+                try:
+                    t_sap = datetime.datetime.fromisoformat(inv["sap_date"])
+                    t_sao = datetime.datetime.fromisoformat(sao_time_str)
+                    diff_min = (t_sao - t_sap).total_seconds() / 60.0
+
+                    if diff_min >= 0 and diff_min < 10080:
+                        delays.append(diff_min)
+                        audit_records.append({
+                            "order_id": order["order_id"],
+                            "customer_name": order["customer_name"],
+                            "doc_type": "Factura",
+                            "doc_num": inv["doc_num"],
+                            "sap_date": inv["sap_date"],
+                            "sao_date": sao_time_str,
+                            "delay_min": round(diff_min, 1)
+                        })
+                except Exception:
+                    pass
+
+    # Sort audit records by SAO detection timestamp DESC
+    audit_records.sort(key=lambda x: x["sao_date"], reverse=True)
+
+    avg_delay = sum(delays) / len(delays) if delays else 0.0
+    max_delay = max(delays) if delays else 0.0
+    under_10_count = sum(1 for d in delays if d <= 10.0)
+    efficiency_pct = (under_10_count / len(delays) * 100.0) if delays else 100.0
+
+    return jsonify({
+        "audits": audit_records[:50],
+        "metrics": {
+            "avg_delay_min": round(avg_delay, 1),
+            "max_delay_min": round(max_delay, 1),
+            "efficiency_pct": round(efficiency_pct, 1),
+            "total_audited": len(delays)
+        }
+    })
 
 
 @orders_bp.route("/<order_id>")
@@ -170,6 +532,38 @@ def detail(order_id):
     )
 
 
+@orders_bp.route("/api/search")
+@login_required
+def global_search():
+    """Global fast search across local order cache"""
+    query = request.args.get('q', '').strip().lower()
+    if not query or len(query) < 2:
+        return jsonify({"results": []})
+        
+    order_mgr = current_app.order_status_mgr
+    all_orders = order_mgr.get_all_orders()
+    
+    results = []
+    for order in all_orders:
+        if (query in str(order.get('order_id', '')).lower() or
+            query in str(order.get('customer_name', '')).lower() or
+            query in str(order.get('customer_code', '')).lower() or
+            query in str(order.get('factura_number', '')).lower()):
+            
+            results.append({
+                "id": order.get('order_id'),
+                "title": f"Pedido #{order.get('order_id')}",
+                "customer": order.get('customer_name', ''),
+                "status": order.get('status', ''),
+                "factura": order.get('factura_number', ''),
+                "url": url_for('orders.detail', order_id=order.get('order_id'))
+            })
+            
+            if len(results) >= 10:
+                break
+                
+    return jsonify({"results": results})
+
 @orders_bp.route("/<order_id>/status", methods=["POST"])
 @login_required
 def update_status(order_id):
@@ -188,9 +582,10 @@ def update_status(order_id):
     STATUS_ALIASES = {
         "Facturado": "Facturacion",
         "Facturación": "Facturacion",
-        "Preparando": "Terminado",
-        "Preparado": "Terminado",
-        "Terminado": "Terminado",
+        "Preparando": "Entregado",
+        "Preparado": "Entregado",
+        "Terminado": "Entregado",
+        "Entregado": "Entregado",
         "Listo para Envío": "Relacion de envio",
         "Listo para Envio": "Relacion de envio",
         "Entregado a almacen": "Relacion de envio",
@@ -200,7 +595,7 @@ def update_status(order_id):
         "Enviado": "Enviado al cliente",
         "Recibido por cliente": "Enviado al cliente",
         # Reverse mappings (old enum values → new enum values)
-        "Terminado": "Terminado",
+        "Terminado": "Entregado",
         "Relacion de envio": "Relacion de envio",
         "Enviado al cliente": "Enviado al cliente",
     }
@@ -233,6 +628,15 @@ def update_status(order_id):
             return jsonify({"error": f"Estado inválido: '{new_status}'"}), 400
 
     order_mgr = current_app.order_status_mgr
+
+    # ── Business rule: block "Relacion de envio" without a factura ────
+    if status_enum == OrderStatus.READY:  # "Relacion de envio"
+        order = order_mgr.get_order(order_id)
+        if order and not order.get("factura_number"):
+            return jsonify({
+                "error": "No se puede avanzar a 'Relación de envío' sin número de factura asignado en SAP."
+            }), 422
+
     result = order_mgr.update_status(
         order_id, status_enum.value, current_user.username, notes
     )
@@ -246,6 +650,14 @@ def update_status(order_id):
                 "order_id": str(order_id),
                 "order": updated_order,
             })
+            if order and order.get("status") != status_enum.value:
+                _publish_event({
+                    "type": "status_changed",
+                    "order_id": str(order_id),
+                    "customer": order.get("customer_name", ""),
+                    "from": order.get("status", ""),
+                    "to": status_enum.value
+                })
         except Exception:  # pragma: no cover
             pass  # pragma: no cover
 
@@ -298,6 +710,7 @@ def import_from_sap():
 
         flattened_order = {
             "DocNum": header.get("order_number"),
+            "DocEntry": header.get("doc_entry"),
             "CardCode": header.get("customer_code"),
             "CardName": header.get("customer_name"),
             "DocDate": header.get("order_date"),
@@ -308,7 +721,10 @@ def import_from_sap():
             "items": items,
             "sap_status": header.get("sap_status", "Abierto"),
             "factura_number": header.get("factura_number"),
+            "delivery_number": header.get("delivery_number"),
             "updated_by": sap_user,
+            "created_by": header.get("creator_name"),
+            "creator_name": header.get("creator_name"),
         }
 
         # Import to local status manager
@@ -355,6 +771,84 @@ def label_printed(order_id):
         pass  # pragma: no cover
 
     return jsonify({"success": True})
+
+
+@orders_bp.route("/api/sga/label-printed", methods=["POST"])
+@_require_sga_api_key
+def sga_label_printed():
+    """Webhook endpoint for SGA Production to notify Open-OMS when a label is
+    printed.  SGA sends the exact order_id (DocNum) — no fuzzy item matching.
+
+    Authenticated via X-API-Key header (shared SGA_API_KEY env var).
+    CSRF-exempt: this is a machine-to-machine call, not a browser form.
+    """
+    data = request.get_json(silent=True) or {}
+
+    order_id = str(data.get("order_id", "")).strip()
+    station = str(data.get("station", "")).strip()
+
+    if not order_id or not station:
+        return jsonify({"error": "order_id and station are required"}), 400
+
+    order_mgr = current_app.order_status_mgr
+    order = order_mgr.get_order(order_id)
+
+    if not order:
+        return jsonify({"error": f"Order {order_id} not found"}), 404
+
+    # Prevent status downgrade — don't move an order backwards
+    current_status = order.get("status", "")
+    target_status = OrderStatus.IN_PROGRESS.value
+    if current_status in _MAIN_STATUSES:
+        current_idx = _MAIN_STATUSES.index(current_status)
+        target_idx = _MAIN_STATUSES.index(target_status)
+        if current_idx > target_idx:
+            return jsonify({
+                "success": False,
+                "order_id": order_id,
+                "current_status": current_status,
+                "message": f"Order already at '{current_status}', not downgrading",
+            }), 409
+
+    # Build audit notes
+    items = data.get("items", [])
+    event_type = data.get("event_type", "DIRECT_PRINT_JOB")
+    notes = f"Impresión SGA (station={station}, type={event_type}"
+    if items:
+        notes += f", items={sorted(items)}"
+    notes += ")"
+
+    previous_status = current_status
+    success = order_mgr.update_status(
+        order_id, target_status, station, notes=notes
+    )
+
+    if not success:
+        return jsonify({"error": "Failed to update order"}), 500
+
+    # Broadcast SSE update to connected monitors
+    try:
+        updated_order = order_mgr.get_order(order_id)
+        _publish_event({
+            "type": "order_updated",
+            "order_id": str(order_id),
+            "order": updated_order,
+        })
+    except Exception:  # pragma: no cover
+        pass  # pragma: no cover
+
+    logging.info(
+        f"SGA label-printed: order={order_id}, station={station}, "
+        f"{previous_status} -> {target_status}"
+    )
+
+    return jsonify({
+        "success": True,
+        "order_id": order_id,
+        "previous_status": previous_status,
+        "new_status": target_status,
+        "message": "Orden actualizada por impresión SGA",
+    })
 
 
 @orders_bp.route("/load-recent-sap", methods=["POST"])
@@ -406,6 +900,7 @@ def load_recent_from_sap():
             # Flatten SAP data structure
             flattened_order = {
                 "DocNum": header.get("order_number"),
+                "DocEntry": header.get("doc_entry"),
                 "CardCode": header.get("customer_code"),
                 "CardName": header.get("customer_name"),
                 "DocDate": header.get("order_date"),
@@ -416,13 +911,21 @@ def load_recent_from_sap():
                 "items": items,
                 "sap_status": header.get("sap_status", "Abierto"),
                 "factura_number": header.get("factura_number"),
+                "delivery_number": header.get("delivery_number"),
                 "updated_by": sap_user,
+                "created_by": header.get("creator_name"),
+                "creator_name": header.get("creator_name"),
             }
 
             order_id = str(flattened_order["DocNum"])
 
             # Check if already exists
             if order_id in order_mgr.orders:
+                # Update delivery note number if not present
+                if flattened_order.get("delivery_number") and not order_mgr.orders[order_id].get("delivery_number"):
+                    order_mgr.orders[order_id]["delivery_number"] = flattened_order["delivery_number"]
+                    updated_count += 1
+
                 # Update SAP status only
                 if (
                     order_mgr.orders[order_id].get("sap_status")
@@ -664,6 +1167,7 @@ def visor_sync():
             # Simplified import structure
             flattened_order = {
                 "DocNum": header.get("order_number"),
+                "DocEntry": header.get("doc_entry"),
                 "CardCode": header.get("customer_code"),
                 "CardName": header.get("customer_name"),
                 "DocDate": header.get("order_date"),
@@ -672,8 +1176,11 @@ def visor_sync():
                 "DocCurrency": header.get("currency", "MXN"),
                 "sap_status": header.get("sap_status", "Abierto"),
                 "factura_number": header.get("factura_number"),
+                "delivery_number": header.get("delivery_number"),
                 "items": items,
                 "updated_by": sap_user,
+                "created_by": header.get("creator_name"),
+                "creator_name": header.get("creator_name"),
             }
 
             order_id = str(flattened_order["DocNum"])
@@ -686,38 +1193,38 @@ def visor_sync():
                 current_sap_status = order_mgr.orders[order_id].get("sap_status")
                 new_sap_status = flattened_order["sap_status"]
 
-                if current_sap_status != new_sap_status:
-                    order_mgr.orders[order_id]["sap_status"] = new_sap_status
-                    # Only stamp last_updated when LOCAL status is also changed
-                    current_local = order_mgr.orders[order_id].get("status")
-                    if new_sap_status == "Cerrado" and current_local not in [
-                        OrderStatus.INVOICING.value,
-                        OrderStatus.READY.value,
-                        OrderStatus.SHIPPED.value,
-                    ]:
-                        order_mgr.orders[order_id]["status"] = (
-                            OrderStatus.INVOICING.value
-                        )
-                        order_mgr.orders[order_id]["last_updated"] = (
-                            datetime.datetime.now().isoformat()
-                        )
-                    elif (
-                        new_sap_status == "Cancelado"
-                        and current_local != OrderStatus.CANCELLED.value
-                    ):
-                        order_mgr.orders[order_id]["status"] = (
-                            OrderStatus.CANCELLED.value
-                        )
-                        order_mgr.orders[order_id]["last_updated"] = (
-                            datetime.datetime.now().isoformat()
-                        )
-                    needs_update = True
-
-                # Always sync factura_number from SAP
+                # Always sync factura_number from SAP first (before status logic)
                 new_fact = flattened_order.get("factura_number")
                 cur_fact = order_mgr.orders[order_id].get("factura_number")
                 if new_fact and cur_fact != new_fact:
                     order_mgr.orders[order_id]["factura_number"] = new_fact
+                    cur_fact = new_fact
+                    needs_update = True
+
+                if current_sap_status != new_sap_status:
+                    order_mgr.orders[order_id]["sap_status"] = new_sap_status
+                    # Only stamp last_updated when LOCAL status is also changed
+                    current_local = order_mgr.orders[order_id].get("status")
+                    effective_fact = order_mgr.orders[order_id].get("factura_number")
+                    if new_sap_status == "Cerrado" and current_local not in [
+                        OrderStatus.READY.value,
+                        OrderStatus.SHIPPED.value,
+                    ] and effective_fact:
+                        order_mgr.orders[order_id]["status"] = OrderStatus.READY.value
+                        order_mgr.orders[order_id]["last_updated"] = datetime.datetime.now().isoformat()
+                    elif new_sap_status == "Cerrado" and current_local not in [
+                        OrderStatus.INVOICING.value,
+                        OrderStatus.READY.value,
+                        OrderStatus.SHIPPED.value,
+                    ] and not effective_fact:
+                        order_mgr.orders[order_id]["status"] = OrderStatus.INVOICING.value
+                        order_mgr.orders[order_id]["last_updated"] = datetime.datetime.now().isoformat()
+                    elif (
+                        new_sap_status == "Cancelado"
+                        and current_local != OrderStatus.CANCELLED.value
+                    ):
+                        order_mgr.orders[order_id]["status"] = OrderStatus.CANCELLED.value
+                        order_mgr.orders[order_id]["last_updated"] = datetime.datetime.now().isoformat()
                     needs_update = True
 
                 if needs_update:
@@ -729,6 +1236,14 @@ def visor_sync():
 
         if updated_count > 0 or new_count > 0:
             order_mgr._save_database()
+
+        # Auto-status: Delivery Notes → Terminado, Invoices → Facturacion
+        try:
+            auto_count = _check_delivery_and_invoice(sap, order_mgr, recent_orders)
+            if auto_count > 0:
+                updated_count += auto_count
+        except Exception as e:
+            logging.warning(f"Visor auto-status error: {e}")
 
         return jsonify({"success": True, "updated": updated_count, "new": new_count})
 
@@ -992,6 +1507,7 @@ def public_api_sync():
             # Simplified import structure
             flattened_order = {
                 "DocNum": header.get("order_number"),
+                "DocEntry": header.get("doc_entry"),
                 "CardCode": header.get("customer_code"),
                 "CardName": header.get("customer_name"),
                 "DocDate": header.get("order_date"),
@@ -1000,8 +1516,11 @@ def public_api_sync():
                 "DocCurrency": header.get("currency", "MXN"),
                 "sap_status": header.get("sap_status", "Abierto"),
                 "factura_number": header.get("factura_number"),
+                "delivery_number": header.get("delivery_number"),
                 "items": items,
                 "updated_by": sap_user,
+                "created_by": header.get("creator_name"),
+                "creator_name": header.get("creator_name"),
             }
 
             order_id = str(flattened_order["DocNum"])
@@ -1013,38 +1532,38 @@ def public_api_sync():
                 current_sap_status = order_mgr.orders[order_id].get("sap_status")
                 new_sap_status = flattened_order["sap_status"]
 
-                if current_sap_status != new_sap_status:
-                    order_mgr.orders[order_id]["sap_status"] = new_sap_status
-                    # Only stamp last_updated when LOCAL status is also changed
-                    current_local = order_mgr.orders[order_id].get("status")
-                    if new_sap_status == "Cerrado" and current_local not in [
-                        OrderStatus.INVOICING.value,
-                        OrderStatus.READY.value,
-                        OrderStatus.SHIPPED.value,
-                    ]:
-                        order_mgr.orders[order_id]["status"] = (
-                            OrderStatus.INVOICING.value
-                        )
-                        order_mgr.orders[order_id]["last_updated"] = (
-                            datetime.datetime.now().isoformat()
-                        )
-                    elif (
-                        new_sap_status == "Cancelado"
-                        and current_local != OrderStatus.CANCELLED.value
-                    ):
-                        order_mgr.orders[order_id]["status"] = (
-                            OrderStatus.CANCELLED.value
-                        )
-                        order_mgr.orders[order_id]["last_updated"] = (
-                            datetime.datetime.now().isoformat()
-                        )
-                    needs_update = True
-
-                # Always sync factura_number from SAP
+                # Always sync factura_number from SAP first (before status logic)
                 new_fact = flattened_order.get("factura_number")
                 cur_fact = order_mgr.orders[order_id].get("factura_number")
                 if new_fact and cur_fact != new_fact:
                     order_mgr.orders[order_id]["factura_number"] = new_fact
+                    cur_fact = new_fact
+                    needs_update = True
+
+                if current_sap_status != new_sap_status:
+                    order_mgr.orders[order_id]["sap_status"] = new_sap_status
+                    # Only stamp last_updated when LOCAL status is also changed
+                    current_local = order_mgr.orders[order_id].get("status")
+                    effective_fact = order_mgr.orders[order_id].get("factura_number")
+                    if new_sap_status == "Cerrado" and current_local not in [
+                        OrderStatus.READY.value,
+                        OrderStatus.SHIPPED.value,
+                    ] and effective_fact:
+                        order_mgr.orders[order_id]["status"] = OrderStatus.READY.value
+                        order_mgr.orders[order_id]["last_updated"] = datetime.datetime.now().isoformat()
+                    elif new_sap_status == "Cerrado" and current_local not in [
+                        OrderStatus.INVOICING.value,
+                        OrderStatus.READY.value,
+                        OrderStatus.SHIPPED.value,
+                    ] and not effective_fact:
+                        order_mgr.orders[order_id]["status"] = OrderStatus.INVOICING.value
+                        order_mgr.orders[order_id]["last_updated"] = datetime.datetime.now().isoformat()
+                    elif (
+                        new_sap_status == "Cancelado"
+                        and current_local != OrderStatus.CANCELLED.value
+                    ):
+                        order_mgr.orders[order_id]["status"] = OrderStatus.CANCELLED.value
+                        order_mgr.orders[order_id]["last_updated"] = datetime.datetime.now().isoformat()
                     needs_update = True
 
                 if needs_update:
@@ -1057,6 +1576,14 @@ def public_api_sync():
         if updated_count > 0 or new_count > 0:
             order_mgr._save_database()
 
+        # Auto-status: Delivery Notes → Terminado, Invoices → Facturacion
+        try:
+            auto_count = _check_delivery_and_invoice(sap, order_mgr, recent_orders)
+            if auto_count > 0:
+                updated_count += auto_count
+        except Exception as e:
+            logging.warning(f"Public sync auto-status error: {e}")
+
         return jsonify({"success": True, "updated": updated_count, "new": new_count})
 
     except Exception as e:
@@ -1065,7 +1592,8 @@ def public_api_sync():
 
 # ─── Module-level sync cache ─────────────────────────────────────────
 _last_sap_sync = 0  # epoch timestamp of last SAP sync
-_SAP_SYNC_INTERVAL = 10  # seconds between SAP syncs (real time)
+_SAP_SYNC_INTERVAL = 120  # seconds between SAP syncs (real time)
+_sap_sync_lock = threading.Lock()  # prevents overlapping SAP syncs
 
 
 @orders_bp.route("/api/refresh")
@@ -1085,74 +1613,95 @@ def api_refresh_orders():
     sap_updated = 0
     sap_new = 0
 
-    # ── Throttled SAP sync ────────────────────────────────────────────
+    # ── Throttled SAP sync (non-blocking lock) ────────────────────────
     now = _time.time()
     if current_app.sap_available and (now - _last_sap_sync) >= _SAP_SYNC_INTERVAL:
-        try:
-            sap = current_app.sap_connector
-            if not sap or not sap.connected:  # pragma: no cover
-                from core.sap_connector import SAPHanaConnector  # pragma: no cover
+        # Non-blocking: skip sync if another thread is already syncing
+        acquired = _sap_sync_lock.acquire(blocking=False)
+        if acquired:
+            try:
+                # Re-check after acquiring lock (another thread may have just finished)
+                now = _time.time()
+                if (now - _last_sap_sync) >= _SAP_SYNC_INTERVAL:
+                    try:
+                        sap = current_app.sap_connector
+                        if not sap or not sap.connected:  # pragma: no cover
+                            from core.sap_connector import SAPHanaConnector  # pragma: no cover
 
-                sap = SAPHanaConnector()  # pragma: no cover
-                sap.connect()  # pragma: no cover
-                current_app.sap_connector = sap  # pragma: no cover
+                            sap = SAPHanaConnector()  # pragma: no cover
+                            sap.connect()  # pragma: no cover
+                            current_app.sap_connector = sap  # pragma: no cover
 
-            recent_orders = sap.get_recent_orders(limit=50, only_open=False)
+                        recent_orders = sap.get_recent_orders(limit=50, only_open=False)
 
-            for order_data in recent_orders:
-                if not order_data or "header" not in order_data:  # pragma: no cover
-                    continue  # pragma: no cover
-                header = order_data.get("header", {})
-                items = order_data.get("items", [])
-                sap_user = header.get(
-                    "updater_name", header.get("creator_name", "auto_sync")
-                )
+                        for order_data in recent_orders:
+                            if not order_data or "header" not in order_data:  # pragma: no cover
+                                continue  # pragma: no cover
+                            header = order_data.get("header", {})
+                            items = order_data.get("items", [])
+                            sap_user = header.get(
+                                "updater_name", header.get("creator_name", "auto_sync")
+                            )
 
-                flattened = {
-                    "DocNum": header.get("order_number"),
-                    "CardCode": header.get("customer_code"),
-                    "CardName": header.get("customer_name"),
-                    "DocDate": header.get("order_date"),
-                    "DocDueDate": header.get("delivery_date"),
-                    "DocTotal": header.get("total_value", 0),
-                    "DocCurrency": header.get("currency", "MXN"),
-                    "sap_status": header.get("sap_status", "Abierto"),
-                    "factura_number": header.get("factura_number"),
-                    "items": items,
-                    "updated_by": sap_user,
-                }
+                            flattened = {
+                                "DocNum": header.get("order_number"),
+                                "CardCode": header.get("customer_code"),
+                                "CardName": header.get("customer_name"),
+                                "DocDate": header.get("order_date"),
+                                "DocDueDate": header.get("delivery_date"),
+                                "DocTotal": header.get("total_value", 0),
+                                "DocCurrency": header.get("currency", "MXN"),
+                                "sap_status": header.get("sap_status", "Abierto"),
+                                "factura_number": header.get("factura_number"),
+                                "items": items,
+                                "updated_by": sap_user,
+                            }
 
-                oid = str(flattened["DocNum"])
-                if oid in order_mgr.orders:
-                    cur_sap = order_mgr.orders[oid].get("sap_status")
-                    new_sap = flattened["sap_status"]
-                    cur_fact = order_mgr.orders[oid].get("factura_number")
-                    new_fact = flattened.get("factura_number")
+                            oid = str(flattened["DocNum"])
+                            if oid in order_mgr.orders:
+                                cur_sap = order_mgr.orders[oid].get("sap_status")
+                                new_sap = flattened["sap_status"]
+                                cur_fact = order_mgr.orders[oid].get("factura_number")
+                                new_fact = flattened.get("factura_number")
 
-                    needs_update = False
+                                needs_update = False
 
-                    if cur_sap != new_sap:
-                        # Update SAP status silently — last_updated is handled by
-                        # reconcile_statuses() below when local status needs to change.
-                        order_mgr.orders[oid]["sap_status"] = new_sap
-                        needs_update = True
+                                if cur_sap != new_sap:
+                                    # Update SAP status silently — last_updated is handled by
+                                    # reconcile_statuses() below when local status needs to change.
+                                    order_mgr.orders[oid]["sap_status"] = new_sap
+                                    needs_update = True
 
-                    if new_fact and cur_fact != new_fact:
-                        order_mgr.orders[oid]["factura_number"] = new_fact
-                        needs_update = True
+                                if new_fact and cur_fact != new_fact:
+                                    order_mgr.orders[oid]["factura_number"] = new_fact
+                                    needs_update = True
 
-                    if needs_update:
-                        sap_updated += 1
-                else:
-                    order_mgr.import_from_sap(flattened, imported_by=sap_user)
-                    sap_new += 1
+                                if needs_update:
+                                    sap_updated += 1
+                            else:
+                                order_mgr.import_from_sap(flattened, imported_by=sap_user)
+                                sap_new += 1
 
-            if sap_updated > 0 or sap_new > 0:
-                order_mgr._save_database()
-            _last_sap_sync = now
-            sap_synced = True
-        except Exception as e:
-            logging.warning(f"Background SAP sync error: {e}")
+                        if sap_updated > 0 or sap_new > 0:
+                            order_mgr._save_database()
+
+                        # ── Auto-status: Delivery Notes → Terminado ───────
+                        # ── Auto-status: Invoices → Facturacion ───────────
+                        try:
+                            _auto_status_count = _check_delivery_and_invoice(
+                                sap, order_mgr, recent_orders
+                            )
+                            if _auto_status_count > 0:
+                                sap_updated += _auto_status_count
+                        except Exception as e:
+                            logging.warning(f"Auto-status check error: {e}")
+
+                        _last_sap_sync = now
+                        sap_synced = True
+                    except Exception as e:
+                        logging.warning(f"Background SAP sync error: {e}")
+            finally:
+                _sap_sync_lock.release()
 
     # ── Reconcile mismatched statuses ─────────────────────────────────
     reconciled = order_mgr.reconcile_statuses()
@@ -1357,6 +1906,8 @@ def api_facturas():
         return jsonify({"error": "SAP no disponible", "invoices": [], "stats": {}}), 503
 
     date_filter = request.args.get("date", "").strip() or None
+    extra_invoices_str = request.args.get("extra_invoices", "").strip()
+    extra_invoice_numbers = [int(x) for x in extra_invoices_str.split(",") if x.strip().isdigit()] if extra_invoices_str else None
 
     try:
         sap = current_app.sap_connector
@@ -1367,12 +1918,47 @@ def api_facturas():
             sap.connect()  # pragma: no cover
             current_app.sap_connector = sap  # pragma: no cover
 
-        invoices = sap.get_todays_invoices(date_str=date_filter)
+        invoices = sap.get_todays_invoices(date_str=date_filter, extra_invoice_numbers=extra_invoice_numbers)
+
+        # Cross-reference with order_status_mgr to determine Recibido/Entrega flags
+        order_mgr = current_app.order_status_mgr
+        factura_to_order = {
+            str(order.get('factura_number')): order 
+            for order in order_mgr.orders.values() 
+            if order.get('factura_number')
+        }
+
+        # Fetch category overrides
+        overrides = getattr(current_app, "factura_metadata_mgr", None)
+        category_overrides = overrides.get_overrides() if overrides else {}
+
+        for inv in invoices:
+            inv_num_str = str(inv['invoice_number'])
+            order = factura_to_order.get(inv_num_str)
+            if order:
+                status = order.get('status')
+                inv['recibido'] = status in [OrderStatus.READY.value, OrderStatus.SHIPPED.value]
+                inv['entrega'] = status == OrderStatus.SHIPPED.value
+                inv['related_order_id'] = order.get('order_id')
+                inv['observaciones'] = order.get('observaciones', '')
+            else:
+                inv['recibido'] = False
+                inv['entrega'] = False
+                inv['related_order_id'] = None
+                inv['observaciones'] = ''
+
+            # Override category if set
+            if int(inv['invoice_number']) in category_overrides:
+                inv['shipping_type'] = category_overrides[int(inv['invoice_number'])]
+
+            # Override category if set
+            if int(inv['invoice_number']) in category_overrides:
+                inv['shipping_type'] = category_overrides[int(inv['invoice_number'])]
 
         # Calculate stats
         total_mxn = sum(i["total"] for i in invoices if i["currency"] == "MXN")
         total_usd = sum(i["total"] for i in invoices if i["currency"] == "USD")
-        active = [i for i in invoices if i["status"] != "Cancelada"]
+        active = [i for i in invoices if i.get("status") == "Abierta"]
         cancelled = [i for i in invoices if i["status"] == "Cancelada"]
         closed = [i for i in invoices if i["status"] == "Cerrada"]
 
@@ -1394,3 +1980,599 @@ def api_facturas():
     except Exception as e:
         logging.error(f"Facturas API error: {e}")
         return jsonify({"error": str(e), "invoices": [], "stats": {}}), 500
+
+
+@orders_bp.route("/api/facturas/<int:invoice_number>/category", methods=["POST"])
+@login_required
+def api_update_factura_category(invoice_number):
+    """Save user-selected category override for an invoice."""
+    try:
+        data = request.get_json()
+        if not data or "category" not in data:
+            return jsonify({"success": False, "error": "Missing category"}), 400
+        
+        mgr = getattr(current_app, "factura_metadata_mgr", None)
+        if not mgr:
+            return jsonify({"success": False, "error": "Metadata manager not available"}), 500
+            
+        success = mgr.save_override(invoice_number, data["category"])
+        if success:
+            return jsonify({"success": True})
+        else:
+            return jsonify({"success": False, "error": "Database error"}), 500
+    except Exception as e:
+        logging.error(f"Error updating category: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@orders_bp.route("/api/facturas/export")
+@login_required
+def api_facturas_export():
+    if not current_app.sap_available:
+        return jsonify({"error": "SAP no disponible"}), 503
+
+    date_filter = request.args.get("date", "").strip() or None
+    status_filter = request.args.get("status", "").strip() or None
+
+    # Validate date format to prevent SAP query errors
+    if date_filter:
+        import re
+        if not re.match(r'^\d{4}-\d{2}-\d{2}$', date_filter):
+            return jsonify({"error": f"Formato de fecha inválido: {date_filter}. Use YYYY-MM-DD."}), 400
+        try:
+            datetime.datetime.strptime(date_filter, "%Y-%m-%d")
+        except ValueError:
+            return jsonify({"error": f"Fecha inválida: {date_filter}"}), 400
+
+    try:
+        sap = current_app.sap_connector
+        invoices = sap.get_todays_invoices(date_str=date_filter)
+
+        # Apply the same status filter the web view uses
+        if status_filter:
+            invoices = [i for i in invoices if i['status'] == status_filter]
+
+        # Excluir facturas canceladas
+        invoices = [i for i in invoices if i.get('status') != 'Cancelada']
+
+        order_mgr = current_app.order_status_mgr
+        factura_to_order = {
+            str(order.get('factura_number')): order 
+            for order in order_mgr.orders.values() 
+            if order.get('factura_number')
+        }
+
+        # Fetch category overrides
+        overrides = getattr(current_app, "factura_metadata_mgr", None)
+        category_overrides = overrides.get_overrides() if overrides else {}
+
+        locals_inv = []
+        paqueteria_inv = []
+        gdl_inv = []
+        mty_inv = []
+        ira_inv = []
+        flete_inv = []
+
+        for inv in invoices:
+            # Override category if set
+            if int(inv['invoice_number']) in category_overrides:
+                inv['shipping_type'] = category_overrides[int(inv['invoice_number'])]
+            inv_num_str = str(inv['invoice_number'])
+            order = factura_to_order.get(inv_num_str)
+            
+            status = order.get('status') if order else None
+            inv['recibido'] = "X" if status in [OrderStatus.READY.value, OrderStatus.SHIPPED.value] else ""
+            inv['entrega'] = "X" if status == OrderStatus.SHIPPED.value else ""
+            
+            pay_term = inv.get('payment_terms', '').upper()
+            inv['credito'] = "X" if pay_term != 'CONTADO' else ""
+            inv['pagado'] = "X" if float(inv.get('paid_to_date', 0)) >= float(inv.get('total', 0)) and float(inv.get('total', 0)) > 0 else ""
+            
+            inv['nota'] = order.get('observaciones', '') if order and order.get('observaciones') else (inv.get('shipping_type') or 'LOCAL')
+
+            # Combined factura/pedido number for Excel
+            order_num = inv.get('order_number', '')
+            if order_num:
+                inv['factura_pedido'] = f"{inv['invoice_number']}/{order_num}"
+            else:
+                inv['factura_pedido'] = str(inv['invoice_number'])
+
+            st = (inv.get('shipping_type') or 'LOCAL').upper()
+            if 'GDL' in st:
+                gdl_inv.append(inv)
+            elif 'MTY' in st:
+                mty_inv.append(inv)
+            elif 'IRA' in st:
+                ira_inv.append(inv)
+            elif 'FLETE' in st:
+                flete_inv.append(inv)
+            elif 'PAQUETERIA' in st or 'PAQUETERÍA' in st:
+                paqueteria_inv.append(inv)
+            else:
+                # LOCAL and any other unknown shipping types go here
+                locals_inv.append(inv)
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Relacion de Envios"
+
+        title_font = Font(bold=True, size=16)
+        bold_font = Font(bold=True)
+        center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        left_align = Alignment(horizontal="left", vertical="center", wrap_text=True)
+        right_align = Alignment(horizontal="right", vertical="center", wrap_text=True)
+        thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+
+        gray_fill = PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid")
+        dark_gray_fill = PatternFill(start_color="808080", end_color="808080", fill_type="solid")
+
+        def style_cell(cell, font=None, alignment=None, border=None, fill=None):
+            if font: cell.font = font
+            if alignment: cell.alignment = alignment
+            if border: cell.border = border
+            if fill: cell.fill = fill
+            
+        def style_range(ws_obj, cell_range, font=None, alignment=None, border=None, fill=None):
+            for row in ws_obj[cell_range]:
+                for cell in row:
+                    if font: cell.font = font
+                    if alignment: cell.alignment = alignment
+                    if border: cell.border = border
+                    if fill: cell.fill = fill
+
+        def apply_page_settings(ws_obj):
+            from openpyxl.worksheet.page import PageMargins
+            ws_obj.page_setup.orientation = "landscape"
+            ws_obj.page_setup.paperSize = 1  # 1 = Letter
+            ws_obj.page_setup.fitToWidth = 1
+            ws_obj.page_setup.fitToHeight = 0
+            ws_obj.sheet_properties.pageSetUpPr.fitToPage = True
+            ws_obj.page_margins = PageMargins(left=0.25, right=0.25, top=0.5, bottom=0.5, header=0.3, footer=0.3)
+
+        def write_invoices(ws_obj, start_row, inv_list, min_rows=10):
+            r = start_row
+            for inv in inv_list:
+                # Format dates to DD/MM/YYYY if they exist
+                f_ped = ""
+                if inv.get('order_date'):
+                    try:
+                        f_ped = datetime.datetime.strptime(inv['order_date'][:10], "%Y-%m-%d").strftime("%d/%m/%Y")
+                    except:
+                        f_ped = inv['order_date']
+
+                f_fac = ""
+                if inv.get('invoice_date'):
+                    try:
+                        f_fac = datetime.datetime.strptime(inv['invoice_date'][:10], "%Y-%m-%d").strftime("%d/%m/%Y")
+                    except:
+                        f_fac = inv['invoice_date']
+
+                data = [
+                    f_ped,
+                    inv.get('order_number', ''),
+                    f_fac,
+                    inv.get('invoice_number', ''),
+                    inv.get('customer_name', ''),
+                    inv.get('total', 0),
+                    inv.get('nota', ''),
+                    inv.get('credito', ''),
+                    inv.get('pagado', ''),
+                    inv.get('recibido', ''),
+                    inv.get('entrega', '')
+                ]
+                for c_idx, val in enumerate(data, 1):
+                    cell = ws_obj.cell(row=r, column=c_idx, value=val)
+                    style_cell(cell, font=bold_font if c_idx == 7 else None, 
+                               alignment=center_align if c_idx in [1, 2, 3, 4, 8, 9, 10, 11] else left_align, 
+                               border=thin_border)
+                    if c_idx == 6: # Importe
+                        cell.number_format = '$#,##0.00'
+                
+                # Set row height to double (approx 28) to fit wrapped text
+                ws_obj.row_dimensions[r].height = 28
+                r += 1
+
+            rows_written = len(inv_list)
+            while rows_written < min_rows:
+                for c_idx in range(1, 12):
+                    style_cell(ws_obj.cell(row=r, column=c_idx, value=""), border=thin_border)
+                r += 1
+                rows_written += 1
+            return r
+
+        def setup_sheet_header(ws_obj, display_date, title="RELACIÓN DE ENVÍOS"):
+            # Row 1
+            ws_obj.merge_cells("C1:G1")
+            cell = ws_obj.cell(row=1, column=3, value=title)
+            style_cell(cell, font=title_font, alignment=center_align, border=thin_border)
+            style_range(ws_obj, "C1:G1", border=thin_border)
+
+            ws_obj.merge_cells("H1:I1")
+            style_range(ws_obj, "H1:I1", border=thin_border)
+
+            ws_obj.merge_cells("J1:K1")
+            cell = ws_obj.cell(row=1, column=10, value="QB-IT-VE-01-F06")
+            style_cell(cell, alignment=center_align, border=thin_border)
+            style_range(ws_obj, "J1:K1", border=thin_border)
+
+            # Row 2
+            cell = ws_obj.cell(row=2, column=3, value="Fecha:")
+            style_cell(cell, font=bold_font, alignment=center_align, border=thin_border, fill=gray_fill)
+
+            ws_obj.merge_cells("D2:G2")
+            cell = ws_obj.cell(row=2, column=4, value=display_date)
+            style_cell(cell, font=bold_font, alignment=center_align, border=thin_border, fill=gray_fill)
+            style_range(ws_obj, "D2:G2", border=thin_border)
+
+            ws_obj.merge_cells("H2:I2")
+            cell = ws_obj.cell(row=2, column=8, value="Crédito y Cobranza")
+            style_cell(cell, font=bold_font, alignment=center_align, border=thin_border, fill=gray_fill)
+            style_range(ws_obj, "H2:I2", border=thin_border)
+
+            ws_obj.merge_cells("J2:K2")
+            cell = ws_obj.cell(row=2, column=10, value="Almacén y Logística")
+            style_cell(cell, font=bold_font, alignment=center_align, border=thin_border, fill=gray_fill)
+            style_range(ws_obj, "J2:K2", border=thin_border)
+
+            # Row 3 (Headers)
+            headers = ["Fecha de\nPedido", "No. de\nPedido", "Fecha de\nFacturación", "No. de\nFactura", "Cliente", "Importe", "Observación", "Crédito", "Pagado", "Recibido", "Entrega"]
+            for i, h in enumerate(headers, 1):
+                cell = ws_obj.cell(row=3, column=i, value=h)
+                style_cell(cell, font=bold_font, alignment=center_align, border=thin_border, fill=gray_fill)
+
+            return 4
+
+        def set_col_widths(ws_obj):
+            ws_obj.column_dimensions['A'].width = 12
+            ws_obj.column_dimensions['B'].width = 12
+            ws_obj.column_dimensions['C'].width = 12
+            ws_obj.column_dimensions['D'].width = 12
+            ws_obj.column_dimensions['E'].width = 40
+            ws_obj.column_dimensions['F'].width = 15
+            ws_obj.column_dimensions['G'].width = 25
+            ws_obj.column_dimensions['H'].width = 10
+            ws_obj.column_dimensions['I'].width = 10
+            ws_obj.column_dimensions['J'].width = 10
+            ws_obj.column_dimensions['K'].width = 10
+
+        # Format display date as DD/MM/YYYY for the Excel header
+        if date_filter:
+            try:
+                parsed_date = datetime.datetime.strptime(date_filter, "%Y-%m-%d")
+                display_date = parsed_date.strftime("%d/%m/%Y")
+            except ValueError:
+                display_date = date_filter
+        else:
+            display_date = datetime.datetime.now().strftime("%d/%m/%Y")
+
+
+        # --- SHEET 1: LOCAL & PAQUETERIA ---
+        ws.title = "Relacion de Envios"
+        apply_page_settings(ws)
+        row_idx = setup_sheet_header(ws, display_date)
+        
+        # LOCAL
+        row_idx = write_invoices(ws, row_idx, locals_inv, min_rows=12)
+
+        # PAQUETERIA Separator
+        for col_idx in range(1, 12):
+            style_cell(ws.cell(row=row_idx, column=col_idx), fill=dark_gray_fill, border=thin_border)
+        row_idx += 1
+        
+        # PAQUETERIA
+        row_idx = write_invoices(ws, row_idx, paqueteria_inv, min_rows=15)
+
+        # FLETE INTERNO
+        if flete_inv:
+            # FLETE INTERNO Separator
+            for col_idx in range(1, 12):
+                style_cell(ws.cell(row=row_idx, column=col_idx), fill=dark_gray_fill, border=thin_border)
+            row_idx += 1
+            row_idx = write_invoices(ws, row_idx, flete_inv, min_rows=3)
+
+        # End Separator
+        for col_idx in range(1, 12):
+            style_cell(ws.cell(row=row_idx, column=col_idx), fill=dark_gray_fill, border=thin_border)
+        row_idx += 1
+        
+        # Extra empty row for aesthetic matching
+        for col_idx in range(1, 12):
+            style_cell(ws.cell(row=row_idx, column=col_idx), border=thin_border)
+
+        set_col_widths(ws)
+
+        # --- SHEET 2: GDL ---
+        if gdl_inv:
+            ws_gdl = wb.create_sheet("GDL")
+            apply_page_settings(ws_gdl)
+            row_idx = setup_sheet_header(ws_gdl, display_date, title="ANEXADAS GDL")
+            row_idx = write_invoices(ws_gdl, row_idx, gdl_inv, min_rows=10)
+            set_col_widths(ws_gdl)
+
+        # --- SHEET 3: MTY ---
+        if mty_inv:
+            ws_mty = wb.create_sheet("MTY")
+            apply_page_settings(ws_mty)
+            row_idx = setup_sheet_header(ws_mty, display_date, title="ANEXADAS MTY")
+            row_idx = write_invoices(ws_mty, row_idx, mty_inv, min_rows=10)
+            set_col_widths(ws_mty)
+
+        # --- SHEET 4: IRA ---
+        if ira_inv:
+            ws_ira = wb.create_sheet("IRAPUATO")
+            apply_page_settings(ws_ira)
+            row_idx = setup_sheet_header(ws_ira, display_date, title="ANEXADAS IRAPUATO")
+            row_idx = write_invoices(ws_ira, row_idx, ira_inv, min_rows=10)
+            set_col_widths(ws_ira)
+
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        filename = f"Facturas_{display_date.replace('/', '-')}.xlsx"
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+    except Exception as e:
+        logging.error(f"Facturas Excel Export error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@orders_bp.route("/api/facturas/export/custom", methods=["POST"])
+@login_required
+def api_facturas_export_custom():
+    data = request.get_json() or {}
+    date_filter = data.get('date', datetime.datetime.now().strftime("%Y-%m-%d"))
+    groups = data.get('groups', [])
+    
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+        import io
+        
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Relacion de Envios"
+        
+        from openpyxl.worksheet.page import PageMargins
+        ws.page_setup.orientation = "landscape"
+        ws.page_setup.paperSize = 1  # 1 = Letter
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
+        ws.page_margins = PageMargins(left=0.25, right=0.25, top=0.5, bottom=0.5, header=0.3, footer=0.3)
+
+        title_font = Font(bold=True, size=16)
+        bold_font = Font(bold=True)
+        center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        left_align = Alignment(horizontal="left", vertical="center", wrap_text=True)
+        thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+        gray_fill = PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid")
+        dark_gray_fill = PatternFill(start_color="808080", end_color="808080", fill_type="solid")
+
+        # Set up header
+        # Row 1
+        ws.merge_cells("C1:E1")
+        cell = ws.cell(row=1, column=3, value="RELACIÓN DE ENVÍOS")
+        cell.font = title_font
+        cell.alignment = center_align
+        cell.border = thin_border
+        
+        ws.merge_cells("H1:I1")
+        cell = ws.cell(row=1, column=8, value="QB-IT-VE-01-F06")
+        cell.alignment = center_align
+        cell.border = thin_border
+        
+        # Format borders for merged cells
+        for r in ws["C1:E1"]:
+            for c in r: c.border = thin_border
+        for r in ws["H1:I1"]:
+            for c in r: c.border = thin_border
+
+        # Row 2
+        try:
+            display_date = datetime.datetime.strptime(date_filter, "%Y-%m-%d").strftime("%d/%m/%Y")
+        except:
+            display_date = date_filter
+            
+        cell = ws.cell(row=2, column=3, value="Fecha:")
+        cell.font = bold_font
+        cell.alignment = center_align
+        cell.border = thin_border
+        cell.fill = gray_fill
+        
+        ws.merge_cells("D2:E2")
+        cell = ws.cell(row=2, column=4, value=display_date)
+        cell.font = bold_font
+        cell.alignment = center_align
+        cell.border = thin_border
+        cell.fill = gray_fill
+        for r in ws["D2:E2"]:
+            for c in r: c.border, c.fill = thin_border, gray_fill
+            
+        ws.merge_cells("F2:G2")
+        cell = ws.cell(row=2, column=6, value="Crédito y Cobranza")
+        cell.font = bold_font
+        cell.alignment = center_align
+        cell.border = thin_border
+        cell.fill = gray_fill
+        for r in ws["F2:G2"]:
+            for c in r: c.border, c.fill = thin_border, gray_fill
+            
+        ws.merge_cells("H2:I2")
+        cell = ws.cell(row=2, column=8, value="Almacén y Logística")
+        cell.font = bold_font
+        cell.alignment = center_align
+        cell.border = thin_border
+        cell.fill = gray_fill
+        for r in ws["H2:I2"]:
+            for c in r: c.border, c.fill = thin_border, gray_fill
+
+        # Row 3
+        headers = ["No. Ordn Vnt", "No.Fact", "Cliente", "Importe", "Observación", "Crédito", "Pagado", "Recibido", "Entrega"]
+        for i, h in enumerate(headers, 1):
+            c = ws.cell(row=3, column=i, value=h)
+            c.font = bold_font
+            c.alignment = center_align
+            c.border = thin_border
+            c.fill = gray_fill
+            
+        # Write rows
+        row_idx = 4
+        for idx, g in enumerate(groups):
+            if idx > 0:
+                # separator
+                for col_idx in range(1, 10):
+                    c = ws.cell(row=row_idx, column=col_idx)
+                    c.fill = dark_gray_fill
+                    c.border = thin_border
+                row_idx += 1
+                
+            for inv in g.get('invoices', []):
+                # Format money
+                total = float(inv.get('total') or 0)
+                
+                # Check for custom customer name
+                cust_name = inv.get('customer_name', '')
+                if inv.get('_temp_customer'):
+                    cust_name = inv.get('_temp_customer')
+                    
+                pay_term = inv.get('payment_terms', '').upper()
+                is_credito = "X" if pay_term != 'CONTADO' else ""
+                
+                try:
+                    paid = float(inv.get('paid_to_date') or 0)
+                    tot = float(inv.get('total') or 0)
+                    is_pagado = "X" if paid >= tot and tot > 0 else ""
+                except ValueError:
+                    is_pagado = ""
+
+                data = [
+                    inv.get('order_number', ''),
+                    inv.get('invoice_number', ''),
+                    cust_name,
+                    total,
+                    inv.get('observaciones') or inv.get('shipping_type') or 'LOCAL',
+                    is_credito,
+                    is_pagado,
+                    "X" if inv.get('recibido') else "",
+                    "X" if inv.get('entrega') else ""
+                ]
+                
+                for c_idx, val in enumerate(data, 1):
+                    c = ws.cell(row=row_idx, column=c_idx, value=val)
+                    c.border = thin_border
+                    if c_idx == 4:
+                        c.number_format = '$#,##0.00'
+                    if c_idx == 5:
+                        c.font = bold_font
+                        
+                    if c_idx in [1, 2, 6, 7, 8, 9]:
+                        c.alignment = center_align
+                    else:
+                        c.alignment = left_align
+                        
+                # Set row height to double (approx 28) to fit wrapped text
+                ws.row_dimensions[row_idx].height = 28
+                row_idx += 1
+                
+        # Empty rows at the end to match layout
+        for empty_row in range(3):
+            for col_idx in range(1, 10):
+                ws.cell(row=row_idx, column=col_idx).border = thin_border
+            row_idx += 1
+
+        # Widths
+        ws.column_dimensions['A'].width = 12
+        ws.column_dimensions['B'].width = 12
+        ws.column_dimensions['C'].width = 40
+        ws.column_dimensions['D'].width = 15
+        ws.column_dimensions['E'].width = 20
+        ws.column_dimensions['F'].width = 10
+        ws.column_dimensions['G'].width = 10
+        ws.column_dimensions['H'].width = 12
+        ws.column_dimensions['I'].width = 12
+
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        filename = f"Relacion_Envios_{display_date.replace('/', '-')}.xlsx"
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        logging.error(f"Facturas Custom Export error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+
+@orders_bp.route("/api/facturas/<int:invoice_number>/toggle", methods=["POST"])
+@login_required
+def toggle_factura_status(invoice_number):
+    """Toggle Recibido or Entrega checkbox from the Facturas tab, which updates the related order status."""
+    if not current_user.can_print_labels():
+        return jsonify({"error": "Sin permisos"}), 403
+
+    data = request.get_json() or {}
+    field = data.get("field") # 'recibido' or 'entrega'
+    value = data.get("value") # boolean
+
+    if field not in ['recibido', 'entrega', 'observaciones']:
+        return jsonify({"error": "Campo inválido"}), 400
+
+    order_mgr = current_app.order_status_mgr
+    # Find related order
+    related_order = next((o for o in order_mgr.orders.values() if o.get("factura_number") == str(invoice_number)), None)
+
+    if not related_order:
+        return jsonify({"error": "No se encontró un pedido local vinculado a esta factura"}), 404
+
+    order_id = related_order['order_id']
+    current_status = related_order.get('status')
+
+    if field == 'recibido':
+        new_status = OrderStatus.READY.value if value else OrderStatus.INVOICING.value
+    elif field == 'entrega':
+        if value:
+            # Can only jump to Enviado if it was at least at Relacion de envio
+            new_status = OrderStatus.SHIPPED.value
+        else:
+            new_status = OrderStatus.READY.value
+    elif field == 'observaciones':
+        related_order['observaciones'] = str(value)
+        order_mgr._save_database()
+        return jsonify({"success": True})
+
+    success = order_mgr.update_status(
+        order_id, new_status, current_user.username, notes=f"Actualizado desde checkbox '{field}' en tablero de Facturas"
+    )
+
+    if success:
+        try:
+            updated_order = order_mgr.get_order(order_id)
+            _publish_event({
+                "type": "order_updated",
+                "order_id": str(order_id),
+                "order": updated_order,
+            })
+            if current_status != new_status:
+                _publish_event({
+                    "type": "status_changed",
+                    "order_id": str(order_id),
+                    "customer": related_order.get("customer_name", ""),
+                    "from": current_status,
+                    "to": new_status
+                })
+        except Exception:
+            pass
+        return jsonify({"success": True, "new_status": new_status})
+    
+    return jsonify({"error": "Error al actualizar estado"}), 500

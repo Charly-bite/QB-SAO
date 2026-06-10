@@ -32,7 +32,8 @@ class TestGetTodaysInvoices:
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
         mock_cursor.fetchall.return_value = [
-            (5001, 1, "C001", "Customer A", "2026-05-21", 15000.0, "MXN", "O", "N", "Some comment", "Seller X"),
+            (5001, 1, "C1", "Cust 1", "2026-05-21", 100.50, "MXN", "O", "N", "Note", "Seller 1", 0.0, "LOCAL", "CONTADO", "WHS1", 17001, "2026-05-20"),
+            (5002, 2, "C2", "Cust 2", "2026-05-21", 200.00, "USD", "O", "N", "", "Seller 2", 200.0, "PAQUETERIA", "CREDITO", "WHS2", None, None),
         ]
         mock_conn.cursor.return_value = mock_cursor
         mock_dbapi.connect.return_value = mock_conn
@@ -41,14 +42,14 @@ class TestGetTodaysInvoices:
         c.connect()
         invoices = c.get_todays_invoices()
 
-        assert len(invoices) == 1
+        assert len(invoices) == 2
         inv = invoices[0]
         assert inv["invoice_number"] == 5001
-        assert inv["customer_name"] == "Customer A"
-        assert inv["total"] == 15000.0
+        assert inv["customer_name"] == "Cust 1"
+        assert inv["total"] == 100.50
         assert inv["currency"] == "MXN"
         assert inv["status"] == "Abierta"
-        assert inv["seller_name"] == "Seller X"
+        assert inv["seller_name"] == "Seller 1"
 
         # Verify CURRENT_DATE is used in query
         query = mock_cursor.execute.call_args[0][0]
@@ -76,7 +77,7 @@ class TestGetTodaysInvoices:
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
         mock_cursor.fetchall.return_value = [
-            (5002, 2, "C002", "Customer B", "2026-05-21", 8000.0, "USD", "C", "N", "", None),
+            (5002, 2, "C002", "Customer B", "2026-05-21", 8000.0, "USD", "C", "N", "", None, 0.0, "LOCAL", "CONTADO", "01", 1001, "2026-05-20"),
         ]
         mock_conn.cursor.return_value = mock_cursor
         mock_dbapi.connect.return_value = mock_conn
@@ -93,7 +94,7 @@ class TestGetTodaysInvoices:
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
         mock_cursor.fetchall.return_value = [
-            (5003, 3, None, None, "2026-05-21", None, None, None, "Y", None, None),
+            (5003, 3, None, None, "2026-05-21", None, None, None, "Y", None, None, 0.0, "LOCAL", "CONTADO", None, None, None),
         ]
         mock_conn.cursor.return_value = mock_cursor
         mock_dbapi.connect.return_value = mock_conn
@@ -264,7 +265,7 @@ class TestApiFacturas:
 
         resp = auth_client.get("/orders/api/facturas?date=2026-01-15")
         assert resp.status_code == 200
-        mock_sap.get_todays_invoices.assert_called_once_with(date_str="2026-01-15")
+        mock_sap.get_todays_invoices.assert_called_once_with(date_str="2026-01-15", extra_invoice_numbers=None)
 
     def test_empty_invoices(self, auth_client, app):
         app.sap_available = True

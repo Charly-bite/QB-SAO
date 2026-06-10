@@ -1,0 +1,45 @@
+{
+  "16537": "LOCAL",
+  "16581": "LOCAL",
+  "16539": "LOCAL",
+  "16546": "LOCAL",
+  "16540": "LOCAL",
+  "16541": "LOCAL",
+  "16555": "LOCAL",
+  "16560": "LOCAL",
+  "16575": "LOCAL",
+  "16573": "LOCAL",
+  "16544": "PAQUETERIA",
+  "16578": "PAQUETERIA",
+  "16298": "PAQUETERIA",
+  "16538": {
+    "category": "PAQUETERIA",
+    "color": ""
+  },
+  "16545": "PAQUETERIA",
+  "16550": "PAQUETERIA",
+  "16556": "PAQUETERIA",
+  "16569": "PAQUETERIA",
+  "16565": "PAQUETERIA",
+  "16571": "FORANEO",
+  "16572": "PAQUETERIA",
+  "16688": "ENVIO LOCAL",
+  "16566": "PAQUETERIA",
+  "16567": "PAQUETERIA",
+  "16568": "PAQUETERIA",
+  "16570": "PAQUETERIA",
+  "16574": "PAQUETERIA",
+  "16576": "PAQUETERIA",
+  "16577": "PAQUETERIA",
+  "16579": "PAQUETERIA",
+  "16561": "FLETE INTERNO",
+  "16562": "FLETE INTERNO",
+  "16726": {
+    "category": "PAQUETERIA",
+    "color": ""
+  },
+  "16705": {
+    "category": "PAQUETERIA",
+    "color": ""
+  }
+}
