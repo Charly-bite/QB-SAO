@@ -205,21 +205,38 @@ class TestGetRecentOrders:
     def test_get_recent_orders(self, mock_dbapi):
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
-        mock_cursor.fetchall.return_value = [(100, 1), (101, 2)]
+
+        # The batch implementation calls execute 3 times:
+        # 1. Header query → returns full header rows (13 columns)
+        # 2. Invoice query → returns (BaseEntry, DocNum) pairs
+        # 3. Items query → returns line item rows (13 columns)
+        header_rows = [
+            # order_number, customer_code, customer_name, order_date, order_time,
+            # delivery_date, total, currency, doc_entry, doc_status, canceled, printed, creator_name
+            (100, "C001", "Customer A", "2026-01-01", 1430, "2026-01-10", 5000.0, "MXN", 1, "O", "N", "Y", "John"),
+            (101, "C002", "Customer B", "2026-01-02", 0, "2026-01-11", 3000.0, "MXN", 2, "C", "N", "N", None),
+        ]
+        invoice_rows = [(1, 5001)]  # doc_entry=1 has invoice 5001
+        delivery_rows = [(1, 6001)]  # doc_entry=1 has delivery 6001
+        item_rows = [
+            # doc_entry, line, item_code, desc, qty, unit, price, total, whs, tara, etiqueta, presentacion, kilos
+            (1, 0, "ITEM-A", "Product A", 10.0, "KG", 100.0, 1000.0, "WH01", 0.5, 3, "25KG", 25.0),
+        ]
+
+        # Mock sequential fetchall calls
+        mock_cursor.fetchall.side_effect = [header_rows, invoice_rows, delivery_rows, item_rows]
         mock_conn.cursor.return_value = mock_cursor
         mock_dbapi.connect.return_value = mock_conn
 
         c = _make_connector()
         c.connect()
 
-        # Mock get_order_details to return something
-        c.get_order_details = MagicMock(side_effect=[
-            {"header": {"order_number": 100}, "items": []},
-            None,  # second order not found
-        ])
-
         orders = c.get_recent_orders(limit=5, only_open=False)
-        assert len(orders) == 1  # Only first returned data
+        assert len(orders) == 2
+        assert orders[0]["header"]["order_number"] == 100
+        assert orders[0]["header"]["factura_number"] == "5001"
+        assert len(orders[0]["items"]) == 1
+        assert orders[1]["header"]["sap_status"] == "Cerrado"
 
     @patch("core.sap_connector.dbapi")
     def test_get_recent_orders_only_open(self, mock_dbapi):

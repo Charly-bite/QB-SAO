@@ -114,8 +114,8 @@ class TestLoadDatabase:
     def test_normalize_labels_on_load(self):
         orders = {"300": _sample_order("300", status="Preparando")}
         osm, path = _make_osm(orders=orders)
-        # "Preparando" should be migrated to "Terminado"
-        assert osm.orders["300"]["status"] == "Terminado"
+        # "Preparando" should be migrated to "Entregado"
+        assert osm.orders["300"]["status"] == "Entregado"
         os.unlink(path)
 
     def test_normalize_history_labels(self):
@@ -234,19 +234,31 @@ class TestBulkImportFromSap:
 
 
 class TestReconcileStatuses:
-    def test_cerrado_to_ready(self):
+    def test_cerrado_to_ready_with_factura(self):
+        """Cerrado + factura_number → Facturacion."""
+        order = _sample_order("900", status="Pendiente", sap_status="Cerrado")
+        order["factura_number"] = "F-001"
+        orders = {"900": order}
+        osm, path = _make_osm(orders=orders)
+        fixed = osm.reconcile_statuses()
+        assert len(fixed) == 1
+        assert osm.orders["900"]["status"] == "Facturacion"
+        os.unlink(path)
+
+    def test_cerrado_to_facturacion_without_factura(self):
+        """Cerrado + no factura_number → Entregado (waiting for bill)."""
         orders = {"900": _sample_order("900", status="Pendiente", sap_status="Cerrado")}
         osm, path = _make_osm(orders=orders)
         fixed = osm.reconcile_statuses()
-        assert fixed == 1
-        assert osm.orders["900"]["status"] == "Relacion de envio"
+        assert len(fixed) == 1
+        assert osm.orders["900"]["status"] == "Entregado"
         os.unlink(path)
 
     def test_cancelado_to_cancelled(self):
         orders = {"901": _sample_order("901", status="En Proceso", sap_status="Cancelado")}
         osm, path = _make_osm(orders=orders)
         fixed = osm.reconcile_statuses()
-        assert fixed == 1
+        assert len(fixed) == 1
         assert osm.orders["901"]["status"] == "Cancelado"
         os.unlink(path)
 
@@ -254,14 +266,14 @@ class TestReconcileStatuses:
         orders = {"902": _sample_order("902", status="Cancelado", sap_status="Cancelado")}
         osm, path = _make_osm(orders=orders)
         fixed = osm.reconcile_statuses()
-        assert fixed == 0
+        assert len(fixed) == 0
         os.unlink(path)
 
     def test_cerrado_already_shipped(self):
         orders = {"903": _sample_order("903", status="Enviado al cliente", sap_status="Cerrado")}
         osm, path = _make_osm(orders=orders)
         fixed = osm.reconcile_statuses()
-        assert fixed == 0
+        assert len(fixed) == 0
         os.unlink(path)
 
 

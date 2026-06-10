@@ -14,28 +14,8 @@ if TYPE_CHECKING:  # pragma: no cover
 
     from core.sap_connector import SAPHanaConnector as _SAPHanaConnectorType
 
-# Central logging
-os.makedirs(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs"), exist_ok=True
-)
-log_file = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "logs", "open_oms.log"
-)
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[
-        logging.FileHandler(log_file, encoding="utf-8"),
-        logging.StreamHandler(sys.stdout),
-    ],
-    force=True,
-)
-
-# Add core directory to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "core"))
-
-# Fix Windows console encoding
+# Fix Windows console encoding (must happen BEFORE logging setup so the
+# StreamHandler captures the UTF-8-wrapped stdout, not the raw cp1252 one)
 if sys.platform == "win32" and "pytest" not in sys.modules:  # pragma: no cover
     try:
         sys.stdout = io.TextIOWrapper(
@@ -46,6 +26,29 @@ if sys.platform == "win32" and "pytest" not in sys.modules:  # pragma: no cover
         )
     except Exception:
         pass
+
+# Central logging
+os.makedirs(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs"), exist_ok=True
+)
+log_file = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "logs", "open_oms.log"
+)
+_stream_handler = logging.StreamHandler(sys.stdout)
+_stream_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[
+        logging.FileHandler(log_file, encoding="utf-8"),
+        _stream_handler,
+    ],
+    force=True,
+)
+
+# Add core directory to path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "core"))
 
 from dotenv import load_dotenv  # noqa: E402
 
@@ -142,9 +145,11 @@ def create_app(config_name: Optional[str] = None) -> "OpenOMSApp":
     login_manager.login_message = "Por favor inicie sesión para acceder."
     login_manager.login_message_category = "warning"
 
+    from core.factura_metadata_manager import FacturaMetadataManager
     # Initialize managers
     app.user_manager = UserManager()
     app.order_status_mgr = OrderStatusManager()
+    app.factura_metadata_mgr = FacturaMetadataManager()
 
     # SAP Connector (lazy connection)
     app.sap_connector = None
@@ -184,6 +189,10 @@ def create_app(config_name: Optional[str] = None) -> "OpenOMSApp":
     app.register_blueprint(auth_bp)
     app.register_blueprint(orders_bp, url_prefix="/orders")
 
+    # CSRF-exempt machine-to-machine SGA webhook (no browser session)
+    from routes.orders import sga_label_printed
+    csrf.exempt(sga_label_printed)
+
     # Request logger middleware
     from middleware.request_logger import init_request_logger
 
@@ -212,8 +221,10 @@ def create_app(config_name: Optional[str] = None) -> "OpenOMSApp":
     # Context processor
     @app.context_processor
     def utility_processor():
+        from core.system_health import check_sga_status
         return {
             "sap_available": SAP_AVAILABLE,
+            "sga_available": check_sga_status(),
             "UserRole": UserRole,
             "OrderStatus": OrderStatus,
         }
@@ -225,12 +236,15 @@ def create_app(config_name: Optional[str] = None) -> "OpenOMSApp":
 
     # Health check
     @app.route("/health")
+    @app.route("/api/monitor/health")
     def health_check():
+        from core.system_health import check_sga_status
         return jsonify(
             {
                 "status": "ok",
                 "app": "Open-OMS",
                 "sap_available": SAP_AVAILABLE,
+                "sga_available": check_sga_status(),
                 "orders_loaded": len(app.order_status_mgr.orders),
             }
         )
@@ -241,6 +255,14 @@ def create_app(config_name: Optional[str] = None) -> "OpenOMSApp":
 # Create app instance
 app = create_app()
 
+# Start background sync worker
+try:
+    from core.sap_sync_worker import SAPSyncWorker
+    app.sap_sync_worker = SAPSyncWorker(app)
+    app.sap_sync_worker.start()
+except ImportError as e:
+    print(f"⚠️ Could not start SAPSyncWorker: {e}")
+
 if __name__ == "__main__":
     print("=" * 60)
     print("📦  Open-OMS — Order Tracking System")
@@ -249,5 +271,5 @@ if __name__ == "__main__":
     print(f"📊 Orders loaded: {len(app.order_status_mgr.orders)}")
     print("=" * 60)
 
-    app.run(host="0.0.0.0", port=5003, debug=True)
+    app.run(host="0.0.0.0", port=5003, debug=True, threaded=True)
 

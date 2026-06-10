@@ -38,7 +38,7 @@ class DatabaseClient:
                     driver = '{ODBC Driver 17 for SQL Server}'
             except Exception:
                 driver = '{ODBC Driver 17 for SQL Server}'
-        server = os.getenv("SQL_SERVER", "192.168.2.237")
+        server = os.getenv("SQL_SERVER", "192.168.2.84")
         database = os.getenv("SQL_DATABASE", "SGA_Database")
         user = os.getenv("SQL_USER", "sga_app_user")
         password = os.getenv("SQL_PASSWORD", "")
@@ -53,12 +53,12 @@ class DatabaseClient:
             f"UID={user};PWD={password};TrustServerCertificate={trust}"
         )
 
-    def connect(self, max_retries=3, retry_delay=2):
+    def connect(self, max_retries=1, retry_delay=1):
         """Establish connection to SQL Server with retries."""
         try:
             self._connection_string = self._build_connection_string()
         except ValueError as e:
-            logger.error(f"❌ Cannot build connection string: {e}")
+            logger.error(f"[ERROR] Cannot build connection string: {e}")
             self.connected = False
             self.engine = None
             return False
@@ -66,7 +66,7 @@ class DatabaseClient:
         for attempt in range(1, max_retries + 1):
             try:
                 # Test with pyodbc first
-                conn = pyodbc.connect(self._connection_string, timeout=10)
+                conn = pyodbc.connect(self._connection_string, timeout=2)
                 conn.close()
 
                 # Create SQLAlchemy engine
@@ -74,15 +74,15 @@ class DatabaseClient:
                 self.engine = create_engine(sa_url, echo=False, pool_pre_ping=True)
 
                 self.connected = True
-                logger.info("✅ SQL Server connected")
+                logger.info("[OK] SQL Server connected")
                 return True
 
             except Exception as e:
                 if attempt < max_retries:
-                    logger.warning(f"⚠️ SQL Server connection attempt {attempt} failed: {e}. Retrying in {retry_delay}s...")
+                    logger.warning(f"[WARN] SQL Server connection attempt {attempt} failed: {e}. Retrying in {retry_delay}s...")
                     time.sleep(retry_delay)
                 else:
-                    logger.error(f"❌ SQL Server connection failed after {max_retries} attempts: {e}")
+                    logger.error(f"[ERROR] SQL Server connection failed after {max_retries} attempts: {e}")
 
         self.connected = False
         self.engine = None

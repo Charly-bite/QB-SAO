@@ -1,9 +1,9 @@
-{% extends "base.html" %} {% block title %}Estado de Pedidos — QB-OMS{% endblock %} {%
+{% extends "base.html" %} {% block title %}Estado de Pedidos — QB-SAO{% endblock %} {%
 block page_title %}Estado de Pedidos{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="qb-breadcrumbs" aria-label="Breadcrumb">
-    <a href="{{ url_for('orders.index') }}">QB-OMS</a>
+    <a href="{{ url_for('orders.index') }}">QB-SAO</a>
     <span class="bc-sep">›</span>
     <span class="bc-current">Pedidos</span>
 </nav>
@@ -11,256 +11,155 @@ block page_title %}Estado de Pedidos{% endblock %}
 
 {% block extra_head %}
 <style>
-    /* ── QB-OMS Orders Page — Moodboard Design System ── */
-
-    /* Status filter pills */
-    .qb-filters {
-        background: #ffffff;
-        border-radius: 16px;
-        border: 1px solid #e2e8f0;
-        padding: 16px 20px;
-        margin-bottom: 20px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    /* ═══════ KPI BAR (Monitor-style) ═══════ */
+    .kpi-bar { max-width: 1800px; margin: 0 auto 0; padding: 0 0 16px; }
+    .kpi-inner {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 12px;
+        padding: 0;
     }
-    .qb-filter-pills {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-    }
-    .qb-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 8px 16px;
-        border-radius: 10px;
-        font-size: 13px;
-        font-weight: 600;
-        text-decoration: none;
+    .kpi-card {
+        background: #fff; border: 1px solid #e2e8f0; border-radius: 14px;
+        padding: 16px 18px; cursor: pointer;
         transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        border: 1px solid transparent;
-        cursor: pointer;
+        display: flex; flex-direction: column; gap: 2px;
+        position: relative; appearance: none; font-family: inherit;
+        text-align: left; width: 100%;
     }
-    .qb-pill-inactive {
-        background: #f0f2f5;
-        color: #475569;
-        border-color: #e2e8f0;
-    }
-    .qb-pill-inactive:hover {
-        background: #e2e8f0;
-        color: #1e293b;
-        transform: translateY(-1px);
-    }
-    .qb-pill-active {
-        background: linear-gradient(135deg, #0f1b2d, #243556);
-        color: #ffffff;
-        box-shadow: 0 4px 12px rgba(15, 27, 45, 0.25);
-    }
-    .qb-pill-count {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 22px;
-        height: 22px;
-        padding: 0 6px;
-        border-radius: 6px;
-        font-size: 11px;
-        font-weight: 700;
-        font-family: 'JetBrains Mono', monospace;
-    }
-    .qb-pill-active .qb-pill-count {
-        background: rgba(255,255,255,0.15);
-        color: #ffffff;
-    }
-    .qb-pill-inactive .qb-pill-count {
-        background: rgba(0,0,0,0.06);
-        color: #64748b;
-    }
-
-    /* Search bar */
-    .qb-search-bar {
-        background: #ffffff;
-        border-radius: 16px;
-        border: 1px solid #e2e8f0;
-        padding: 20px;
-        margin-bottom: 20px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-    }
-    .qb-search-inner {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: flex-end;
-        gap: 16px;
-    }
-    .qb-search-field {
-        flex: 1;
-        min-width: 300px;
-    }
-    .qb-search-label {
-        display: block;
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: #94a3b8;
-        margin-bottom: 6px;
-    }
-    .qb-search-wrap {
-        position: relative;
-    }
-    .qb-search-icon {
-        position: absolute;
-        left: 14px;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 18px;
-        height: 18px;
-        color: #94a3b8;
-        pointer-events: none;
-    }
-    .qb-search-input {
-        width: 100%;
-        padding: 12px 16px 12px 42px;
-        border-radius: 12px;
-        border: 1px solid #e2e8f0;
-        background: #f8fafc;
-        font-size: 14px;
-        font-family: 'Inter', sans-serif;
-        color: #1e293b;
-        transition: all 0.2s;
-        outline: none;
-    }
-    .qb-search-input:focus {
+    .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+    .kpi-card.is-active {
         border-color: #4a7dff;
-        box-shadow: 0 0 0 3px rgba(74, 125, 255, 0.12);
-        background: #ffffff;
+        box-shadow: 0 0 0 2px rgba(74,125,255,0.2), 0 4px 16px rgba(0,0,0,0.08);
     }
-    .qb-search-input::placeholder {
-        color: #94a3b8;
-    }
-    .qb-refresh-badge {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 10px 16px;
-        border-radius: 12px;
-        background: #f0f2f5;
-        border: 1px solid #e2e8f0;
-        font-size: 12px;
-        font-weight: 500;
-        color: #64748b;
+    .kpi-value {
+        font-size: 28px; font-weight: 800; letter-spacing: -0.03em; line-height: 1;
         font-family: 'JetBrains Mono', monospace;
-        white-space: nowrap;
     }
-    .qb-refresh-dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: #22c55e;
-        animation: dotPulse 2s infinite;
+    .kpi-label {
+        font-size: 11px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 0.06em; color: #64748b; margin-top: 4px;
     }
-    @keyframes dotPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .kpi-card:nth-child(1) .kpi-value { color: #0f1b2d; }
+    .kpi-card.kpi-pending .kpi-value { color: #94a3b8; }
+    .kpi-card.kpi-process .kpi-value { color: #4a7dff; }
+    .kpi-card.kpi-picking .kpi-value { color: #f59e0b; }
+    .kpi-card.kpi-invoice .kpi-value { color: #10b981; }
+    .kpi-card.kpi-relation .kpi-value { color: #0891b2; }
+    .kpi-card.kpi-shipped .kpi-value { color: #6366f1; }
+    .kpi-card.kpi-waiting .kpi-value { color: #eab308; }
+    .kpi-card.kpi-cancelled .kpi-value { color: #ef4444; }
 
-    /* Table */
+    /* ═══════ FILTER BAR (Monitor-style) ═══════ */
+    .search-bar { max-width: 1800px; margin: 0 auto; padding: 0 0 16px; }
+    .search-inner { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+    .search-field { flex: 1; min-width: 260px; position: relative; }
+    .search-icon {
+        position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+        width: 18px; height: 18px; color: #94a3b8; pointer-events: none;
+    }
+    .search-input {
+        width: 100%; padding: 10px 16px 10px 42px; border-radius: 10px;
+        border: 1px solid #e2e8f0; background: #ffffff;
+        font-size: 13px; font-family: 'Inter', sans-serif; color: #1e293b;
+        transition: all 0.2s; outline: none;
+    }
+    .search-input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+    .search-input::placeholder { color: #94a3b8; }
+    .search-clear {
+        position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+        width: 20px; height: 20px; border-radius: 50%; background: #e2e8f0;
+        border: none; cursor: pointer; display: flex; align-items: center;
+        justify-content: center; color: #64748b; font-size: 11px; font-weight: 700;
+        font-family: monospace; line-height: 1; transition: all 0.2s; padding: 0;
+    }
+    .search-clear:hover { background: #cbd5e1; color: #1e293b; }
+
+    .filters-row {
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        width: 100%; padding-top: 4px;
+    }
+    .filter-group { display: flex; align-items: center; gap: 6px; }
+    .filter-label {
+        display: flex; align-items: center; gap: 4px;
+        font-size: 11px; font-weight: 600; color: #64748b;
+        letter-spacing: 0.02em; text-transform: uppercase;
+        white-space: nowrap; user-select: none;
+    }
+    .filter-label-icon { width: 13px; height: 13px; flex-shrink: 0; }
+    .filter-date-input {
+        padding: 7px 10px; border-radius: 8px; border: 1px solid #e2e8f0;
+        background: #ffffff; font-size: 12px; font-family: 'Inter', sans-serif;
+        color: #1e293b; transition: all 0.2s; min-width: 130px;
+    }
+    .filter-date-input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+    .filter-select-sm {
+        appearance: none; padding: 7px 28px 7px 10px; border-radius: 8px;
+        border: 1px solid #e2e8f0; background: #ffffff;
+        font-size: 12px; font-family: 'Inter', sans-serif; font-weight: 500;
+        color: #1e293b; cursor: pointer;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+        background-repeat: no-repeat; background-position: right 8px center;
+        transition: all 0.2s; min-width: 75px;
+    }
+    .filter-select-sm:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+    .filter-clear-btn {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 6px 12px; border-radius: 8px; border: 1px solid #e2e8f0;
+        background: #ffffff; font-size: 11px; font-weight: 600;
+        font-family: 'Inter', sans-serif; color: #64748b; cursor: pointer;
+        transition: all 0.2s; white-space: nowrap;
+    }
+    .filter-clear-btn:hover { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
+
+    .order-count { font-size: 13px; font-weight: 600; color: #64748b; white-space: nowrap; }
+    .filter-chip {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+        background: rgba(74,125,255,0.08); color: #4a7dff; cursor: pointer;
+        margin-left: 6px; transition: all 0.15s;
+    }
+    .filter-chip:hover { background: rgba(74,125,255,0.15); }
+    .filter-chip-x { font-weight: 700; opacity: 0.6; }
+
+    .refresh-badge {
+        display: flex; align-items: center; gap: 6px;
+        padding: 6px 12px; border-radius: 20px;
+        background: #f0f2f5; border: 1px solid #e2e8f0;
+    }
+    .refresh-dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; flex-shrink: 0; }
+    .refresh-text { font-size: 11px; font-weight: 500; color: #64748b; font-family: 'JetBrains Mono', monospace; }
+
+    /* ── Table ── */
     .qb-table-wrap {
-        background: #ffffff;
-        border-radius: 16px;
-        border: 1px solid #e2e8f0;
-        overflow: hidden;
+        background: #ffffff; border-radius: 16px;
+        border: 1px solid #e2e8f0; overflow: hidden;
         box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
-    .qb-table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-    .qb-table thead {
-        background: linear-gradient(135deg, #0f1b2d, #1a2744);
-    }
+    .qb-table { width: 100%; border-collapse: collapse; }
+    .qb-table thead { background: linear-gradient(135deg, #0f1b2d, #1a2744); }
     .qb-table thead th {
-        padding: 14px 20px;
-        text-align: left;
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: rgba(148, 163, 184, 0.9);
-        cursor: pointer;
-        user-select: none;
-        transition: color 0.15s;
-        white-space: nowrap;
+        padding: 14px 20px; text-align: left; font-size: 11px; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 0.08em;
+        color: rgba(148, 163, 184, 0.9); cursor: pointer; user-select: none;
+        transition: color 0.15s; white-space: nowrap;
         border-bottom: 1px solid rgba(255,255,255,0.06);
     }
-    .qb-table thead th:hover {
-        color: #e2e8f0;
-    }
-    .qb-table thead th .sort-active {
-        color: #4a7dff;
-    }
-    .qb-table tbody tr {
-        border-bottom: 1px solid #f1f5f9;
-        transition: all 0.15s ease;
-    }
-    .qb-table tbody tr:hover {
-        background: #f8fafc;
-    }
-    .qb-table tbody tr:last-child {
-        border-bottom: none;
-    }
-    .qb-table td {
-        padding: 16px 20px;
-        font-size: 13px;
-        color: #475569;
-    }
+    .qb-table thead th:hover { color: #e2e8f0; }
+    .qb-table tbody tr { border-bottom: 1px solid #f1f5f9; transition: all 0.15s ease; cursor: pointer; }
+    .qb-table tbody tr:hover { background: #f8fafc; }
+    .qb-table tbody tr:last-child { border-bottom: none; }
+    .qb-table td { padding: 16px 20px; font-size: 13px; color: #475569; }
 
-    /* Order ID link */
-    .qb-order-link {
-        font-size: 14px;
-        font-weight: 800;
-        font-family: 'JetBrains Mono', monospace;
-        color: #4a7dff;
-        text-decoration: none;
-        letter-spacing: -0.02em;
-        transition: color 0.15s;
-    }
-    .qb-order-link:hover {
-        color: #2563eb;
-    }
-    .qb-order-hash {
-        color: #94a3b8;
-        font-weight: 400;
-    }
+    .qb-order-link { font-size: 14px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: #4a7dff; text-decoration: none; letter-spacing: -0.02em; transition: color 0.15s; }
+    .qb-order-link:hover { color: #2563eb; }
+    .qb-order-hash { color: #94a3b8; font-weight: 400; }
 
-    /* Customer cell */
-    .qb-customer-name {
-        font-size: 13px;
-        font-weight: 600;
-        color: #1e293b;
-        line-height: 1.3;
-    }
-    .qb-customer-code {
-        font-size: 11px;
-        font-family: 'JetBrains Mono', monospace;
-        color: #94a3b8;
-        margin-top: 2px;
-    }
+    .qb-customer-name { font-size: 13px; font-weight: 600; color: #1e293b; line-height: 1.3; }
+    .qb-customer-code { font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #94a3b8; margin-top: 2px; }
 
-    /* Status badges */
-    .qb-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        padding: 4px 10px;
-        border-radius: 8px;
-        font-size: 11px;
-        font-weight: 700;
-        white-space: nowrap;
-    }
-    .qb-badge-dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        flex-shrink: 0;
-    }
-    /* Status colors */
+    .qb-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .qb-badge-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
     .badge-pendiente { background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; }
     .badge-pendiente .qb-badge-dot { background: #94a3b8; }
     .badge-proceso { background: rgba(74, 125, 255, 0.1); color: #2563eb; }
@@ -277,785 +176,655 @@ block page_title %}Estado de Pedidos{% endblock %}
     .badge-cancelado .qb-badge-dot { background: #ef4444; }
     .badge-espera { background: rgba(234, 179, 8, 0.1); color: #ca8a04; }
     .badge-espera .qb-badge-dot { background: #eab308; }
-    /* SAP badges */
     .sap-abierto { background: rgba(16, 185, 129, 0.08); color: #059669; }
     .sap-cerrado { background: #f1f5f9; color: #64748b; }
     .sap-cancelado { background: rgba(239, 68, 68, 0.08); color: #dc2626; }
 
-    /* Items count */
     .qb-items-badge {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 28px;
-        height: 24px;
-        padding: 0 8px;
-        border-radius: 6px;
-        background: rgba(74, 125, 255, 0.08);
-        color: #4a7dff;
-        font-size: 12px;
-        font-weight: 700;
-        font-family: 'JetBrains Mono', monospace;
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 28px; height: 24px; padding: 0 8px; border-radius: 6px;
+        background: rgba(74, 125, 255, 0.08); color: #4a7dff;
+        font-size: 12px; font-weight: 700; font-family: 'JetBrains Mono', monospace;
     }
-
-    /* Action link */
     .qb-action {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        padding: 6px 12px;
-        border-radius: 8px;
-        font-size: 12px;
-        font-weight: 600;
-        color: #4a7dff;
-        text-decoration: none;
-        transition: all 0.2s;
-        background: transparent;
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 600;
+        color: #4a7dff; text-decoration: none; transition: all 0.2s; background: transparent;
     }
-    .qb-action:hover {
-        background: rgba(74, 125, 255, 0.08);
-        color: #2563eb;
-    }
+    .qb-action:hover { background: rgba(74, 125, 255, 0.08); color: #2563eb; }
 
-    /* Sort icon */
-    .qb-sort-icon {
-        width: 14px;
-        height: 14px;
-        display: inline-block;
-        vertical-align: middle;
-        opacity: 0.4;
-        transition: opacity 0.15s;
-    }
-    .qb-sort-icon.active {
-        opacity: 1;
-        color: #4a7dff;
-    }
+    .qb-sort-icon { width: 14px; height: 14px; display: inline-block; vertical-align: middle; opacity: 0.4; transition: opacity 0.15s; }
+    .qb-sort-icon.active { opacity: 1; color: #4a7dff; }
 
-    /* Results count */
-    .qb-results {
-        margin-top: 16px;
-        font-size: 12px;
-        font-weight: 500;
-        color: #94a3b8;
-        font-family: 'JetBrains Mono', monospace;
-    }
-    .qb-results span {
-        font-weight: 700;
-        color: #475569;
-    }
+    .qb-date { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #64748b; }
 
-    /* Empty state */
-    .qb-empty {
-        text-align: center;
-        padding: 60px 20px;
-        color: #94a3b8;
-    }
-    .qb-empty-icon {
-        width: 48px;
-        height: 48px;
-        margin: 0 auto 12px;
-        color: #cbd5e1;
-    }
-    .qb-empty-text {
-        font-size: 14px;
-        font-weight: 500;
-    }
+    .qb-empty { text-align: center; padding: 60px 20px; color: #94a3b8; }
+    .qb-empty-icon { width: 48px; height: 48px; margin: 0 auto 12px; color: #cbd5e1; }
+    .qb-empty-text { font-size: 14px; font-weight: 500; }
 
-    /* Date cell */
-    .qb-date {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 12px;
-        color: #64748b;
-    }
+    /* Pagination */
+    .qb-pagination { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; gap: 16px; flex-wrap: wrap; }
+    .qb-pagination-info { font-size: 13px; font-weight: 500; color: #94a3b8; font-family: 'JetBrains Mono', monospace; }
+    .qb-pagination-info b { font-weight: 700; color: #475569; }
+    .qb-pagination-controls { display: flex; align-items: center; gap: 4px; }
+    .qb-page-btn { display: flex; align-items: center; justify-content: center; min-width: 36px; height: 36px; padding: 0 8px; border: 1px solid #e2e8f0; border-radius: 10px; background: #ffffff; color: #64748b; font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono', monospace; cursor: pointer; transition: all 0.2s; appearance: none; }
+    .qb-page-btn:hover:not(:disabled):not(.qb-page-active) { background: #f0f2f5; border-color: #94a3b8; color: #1e293b; }
+    .qb-page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .qb-page-active { background: linear-gradient(135deg, #0f1b2d, #243556); border-color: #0f1b2d; color: #ffffff; box-shadow: 0 2px 8px rgba(15, 27, 45, 0.25); cursor: default; }
+    .qb-page-dots { border: none; background: transparent; cursor: default; color: #94a3b8; min-width: 28px; padding: 0; }
 
-    /* Row entrance animation */
-    @keyframes rowIn {
-        from { opacity: 0; transform: translateY(4px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    .qb-table tbody tr.order-row {
-        animation: rowIn 0.2s ease both;
-    }
-
-    /* ── Pagination ── */
-    .qb-pagination {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 20px 0 8px;
-        gap: 16px;
-        flex-wrap: wrap;
-    }
-    .qb-pagination-info {
-        font-size: 13px;
-        font-weight: 500;
-        color: #94a3b8;
-        font-family: 'JetBrains Mono', monospace;
-    }
-    .qb-pagination-info b {
-        font-weight: 700;
-        color: #475569;
-    }
-    .qb-pagination-controls {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-    }
-    .qb-page-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 36px;
-        height: 36px;
-        padding: 0 8px;
-        border: 1px solid #e2e8f0;
-        border-radius: 10px;
-        background: #ffffff;
-        color: #64748b;
-        font-size: 13px;
-        font-weight: 600;
-        font-family: 'JetBrains Mono', monospace;
-        cursor: pointer;
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        appearance: none;
-    }
-    .qb-page-btn:hover:not(:disabled):not(.qb-page-active) {
-        background: #f0f2f5;
-        border-color: #94a3b8;
-        color: #1e293b;
-    }
-    .qb-page-btn:disabled {
-        opacity: 0.3;
-        cursor: not-allowed;
-    }
-    .qb-page-active {
-        background: linear-gradient(135deg, #0f1b2d, #243556);
-        border-color: #0f1b2d;
-        color: #ffffff;
-        box-shadow: 0 2px 8px rgba(15, 27, 45, 0.25);
-        cursor: default;
-    }
-    .qb-page-dots {
-        border: none;
-        background: transparent;
-        cursor: default;
-        color: #94a3b8;
-        min-width: 28px;
-        padding: 0;
-    }
-
-    /* Responsive */
     @media (max-width: 768px) {
-        .qb-search-field { min-width: 100%; }
+        .kpi-inner { grid-template-columns: repeat(3, 1fr); }
+        .search-field { min-width: 100%; }
+        .filters-row { gap: 8px; }
+        .filter-date-input { min-width: 110px; }
         .qb-table thead { display: none; }
-        .qb-table tbody tr {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 4px;
-            padding: 12px;
-        }
+        .qb-table tbody tr { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 12px; }
         .qb-table td { padding: 4px 8px; }
     }
+    @media (max-width: 480px) {
+        .kpi-inner { grid-template-columns: repeat(2, 1fr); }
+        .kpi-value { font-size: 22px; }
+    }
+
+    /* Global toasts are now defined in base.html */
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- Status Filters -->
-<div class="qb-filters">
-    <div class="qb-filter-pills">
-        <a
-            href="{{ url_for('orders.index') }}"
-            class="qb-pill {% if not status_filter %}qb-pill-active{% else %}qb-pill-inactive{% endif %}"
-        >
-            Todos
-            <span class="qb-pill-count">{{ status_counts.values() | sum }}</span>
-        </a>
-        {% for status in OrderStatus %}
-        <a
-            href="{{ url_for('orders.index', status=status.value) }}"
-            class="qb-pill {% if status_filter == status.value %}qb-pill-active{% else %}qb-pill-inactive{% endif %}"
-        >
-            {{ status.value }}
-            <span class="qb-pill-count">{{ status_counts.get(status.value, 0) }}</span>
-        </a>
-        {% endfor %}
-    </div>
-</div>
+<div x-data="indexData()" @refresh-data.window="refreshData()">
+    <!-- ═══════ KPI CARDS ═══════ -->
+    <section class="kpi-bar">
+        <div class="kpi-inner">
+            <button type="button" class="kpi-card"
+                :class="activeTopFilter === 'all' ? 'is-active' : ''"
+                @click="toggleTopFilter('all')" title="Mostrar todos">
+                <div class="kpi-value" x-text="activeStats.total_active || 0">0</div>
+                <div class="kpi-label">Total Activos</div>
+            </button>
+            <button type="button" class="kpi-card kpi-pending"
+                :class="activeTopFilter === 'pending' ? 'is-active' : ''"
+                @click="toggleTopFilter('pending')" title="Filtrar pendientes">
+                <div class="kpi-value" x-text="activeStats.pending || 0">0</div>
+                <div class="kpi-label">Pendientes</div>
+            </button>
+            <button type="button" class="kpi-card kpi-process"
+                :class="activeTopFilter === 'process' ? 'is-active' : ''"
+                @click="toggleTopFilter('process')" title="Filtrar en proceso">
+                <div class="kpi-value" x-text="activeStats.in_progress || 0">0</div>
+                <div class="kpi-label">En Proceso</div>
+            </button>
+            <button type="button" class="kpi-card kpi-picking"
+                :class="activeTopFilter === 'picking' ? 'is-active' : ''"
+                @click="toggleTopFilter('picking')" title="Filtrar entregados">
+                <div class="kpi-value" x-text="activeStats.picking || 0">0</div>
+                <div class="kpi-label">Entregados</div>
+            </button>
+            <button type="button" class="kpi-card kpi-invoice"
+                :class="activeTopFilter === 'invoice' ? 'is-active' : ''"
+                @click="toggleTopFilter('invoice')" title="Facturados">
+                <div class="kpi-value" x-text="activeStats.invoicing || 0">0</div>
+                <div class="kpi-label">Facturado</div>
+            </button>
+            <button type="button" class="kpi-card kpi-relation"
+                :class="activeTopFilter === 'relation' ? 'is-active' : ''"
+                @click="toggleTopFilter('relation')" title="Relación de envío">
+                <div class="kpi-value" x-text="activeStats.ready || 0">0</div>
+                <div class="kpi-label">Relación</div>
+            </button>
+            <button type="button" class="kpi-card kpi-shipped"
+                :class="activeTopFilter === 'shipped' ? 'is-active' : ''"
+                @click="toggleTopFilter('shipped')" title="Filtrar enviados">
+                <div class="kpi-value" x-text="activeStats.shipped || 0">0</div>
+                <div class="kpi-label">Enviados</div>
+            </button>
+            <button type="button" class="kpi-card kpi-waiting"
+                :class="activeTopFilter === 'waiting' ? 'is-active' : ''"
+                @click="toggleTopFilter('waiting')" title="Filtrar en espera">
+                <div class="kpi-value" x-text="activeStats.waiting || 0">0</div>
+                <div class="kpi-label">En Espera</div>
+            </button>
+            <button type="button" class="kpi-card kpi-cancelled"
+                :class="activeTopFilter === 'cancelled' ? 'is-active' : ''"
+                @click="toggleTopFilter('cancelled')" title="Filtrar cancelados">
+                <div class="kpi-value" x-text="activeStats.cancelled || 0">0</div>
+                <div class="kpi-label">Cancelados</div>
+            </button>
+        </div>
+    </section>
 
-<!-- Search and Actions -->
-<div class="qb-search-bar">
-    <div class="qb-search-inner">
-        <div class="qb-search-field">
-            <label class="qb-search-label">Buscar Pedido</label>
-            <div class="qb-search-wrap">
-                <svg class="qb-search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <!-- ═══════ SEARCH & FILTERS BAR ═══════ -->
+    <section class="search-bar">
+        <div class="search-inner">
+            <div class="search-field">
+                <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
-                <input
-                    type="text"
-                    id="searchInput"
-                    placeholder="Buscar por número, cliente, código..."
-                    class="qb-search-input"
-                />
+                <input type="text" x-model="searchQuery" @input="currentPage = 1"
+                    placeholder="Buscar por #pedido, cliente, código o vendedor..."
+                    class="search-input">
+                <button class="search-clear" x-show="searchQuery.length > 0" x-cloak
+                    @click="searchQuery = ''; currentPage = 1" title="Limpiar">&times;</button>
+            </div>
+
+            <div class="filters-row">
+                <div class="filter-group">
+                    <label class="filter-label">
+                        <svg class="filter-label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        Desde
+                    </label>
+                    <input type="date" x-model="dateFrom" @change="currentPage = 1" class="filter-date-input">
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">
+                        <svg class="filter-label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        Hasta
+                    </label>
+                    <input type="date" x-model="dateTo" @change="currentPage = 1" class="filter-date-input">
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">
+                        <svg class="filter-label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
+                        Mostrar
+                    </label>
+                    <select x-model="maxOrders" @change="currentPage = 1" class="filter-select-sm">
+                        <option value="0">Todos</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                    </select>
+                </div>
+                <button class="filter-clear-btn"
+                    x-show="dateFrom !== new Date().toISOString().split('T')[0] || dateTo !== new Date().toISOString().split('T')[0] || maxOrders !== '50'" x-cloak
+                    @click="dateFrom = new Date().toISOString().split('T')[0]; dateTo = new Date().toISOString().split('T')[0]; maxOrders = '50'; currentPage = 1"
+                    title="Limpiar filtros">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    Limpiar
+                </button>
+                <button @click="exportToExcel()" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors" title="Exportar vista actual a Excel">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    Exportar
+                </button>
+                <button @click="saveCurrentView()" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors" title="Guardar filtros actuales">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+                    Guardar Vista
+                </button>
+                <div class="refresh-badge">
+                    <span class="refresh-dot"></span>
+                    <span class="refresh-text" x-text="'⟳ ' + timer + 's'"></span>
+                </div>
+            </div>
+
+            <div class="order-count">
+                <span x-text="filteredOrders.length"></span> pedidos
+                <template x-if="activeTopFilter !== 'all'">
+                    <span class="filter-chip" @click="toggleTopFilter(activeTopFilter)">
+                        <span x-text="getTopFilterLabel()"></span>
+                        <span class="filter-chip-x">x</span>
+                    </span>
+                </template>
+                <template x-if="dateFrom || dateTo">
+                    <span class="filter-chip" @click="dateFrom = ''; dateTo = ''; currentPage = 1">
+                        <span x-text="(dateFrom ? formatDate(dateFrom) : '...') + ' → ' + (dateTo ? formatDate(dateTo) : '...')"></span>
+                        <span class="filter-chip-x">x</span>
+                    </span>
+                </template>
+            </div>
+            
+            <!-- Saved Views Chips -->
+            <div class="mt-3 flex flex-wrap gap-2" x-show="savedViews.length > 0" x-cloak>
+                <span class="text-xs text-slate-500 font-medium py-1">Vistas Guardadas:</span>
+                <template x-for="(view, index) in savedViews" :key="index">
+                    <div class="inline-flex items-center bg-slate-100 border border-slate-200 rounded-full text-xs font-medium text-slate-700 overflow-hidden">
+                        <button @click="applyView(view)" class="px-3 py-1 hover:bg-slate-200 transition-colors" x-text="view.name"></button>
+                        <button @click="deleteView(index)" class="px-2 py-1 bg-slate-200 hover:bg-red-100 hover:text-red-600 transition-colors border-l border-slate-300" title="Eliminar vista">&times;</button>
+                    </div>
+                </template>
             </div>
         </div>
+    </section>
 
-        <div class="qb-refresh-badge">
-            <div class="qb-refresh-dot"></div>
-            <span id="refreshTimer">Actualizando en 60s</span>
+    <!-- Orders Table -->
+    <div class="qb-table-wrap">
+        <div style="overflow-x: auto;">
+            <table class="qb-table">
+                <thead>
+                    <tr>
+                        <th @click="toggleSort('order_id')">
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                Pedido
+                                <svg class="qb-sort-icon" :class="sortBy === 'order_id' ? 'active' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sortBy === 'order_id' && sortDesc ? 'M19 9l-7 7-7-7' : (sortBy === 'order_id' && !sortDesc ? 'M5 15l7-7 7 7' : 'M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4')" />
+                                </svg>
+                            </div>
+                        </th>
+                        <th @click="toggleSort('customer_name')">
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                Cliente
+                                <svg class="qb-sort-icon" :class="sortBy === 'customer_name' ? 'active' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sortBy === 'customer_name' && sortDesc ? 'M19 9l-7 7-7-7' : (sortBy === 'customer_name' && !sortDesc ? 'M5 15l7-7 7 7' : 'M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4')" />
+                                </svg>
+                            </div>
+                        </th>
+                        <th @click="toggleSort('order_date')">
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                Fecha
+                                <svg class="qb-sort-icon" :class="sortBy === 'order_date' ? 'active' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sortBy === 'order_date' && sortDesc ? 'M19 9l-7 7-7-7' : (sortBy === 'order_date' && !sortDesc ? 'M5 15l7-7 7 7' : 'M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4')" />
+                                </svg>
+                            </div>
+                        </th>
+                        <th @click="toggleSort('items_count')">
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                Productos
+                                <svg class="qb-sort-icon" :class="sortBy === 'items_count' ? 'active' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sortBy === 'items_count' && sortDesc ? 'M19 9l-7 7-7-7' : (sortBy === 'items_count' && !sortDesc ? 'M5 15l7-7 7 7' : 'M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4')" />
+                                </svg>
+                            </div>
+                        </th>
+                        <th @click="toggleSort('status')">
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                Estado
+                                <svg class="qb-sort-icon" :class="sortBy === 'status' ? 'active' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sortBy === 'status' && sortDesc ? 'M19 9l-7 7-7-7' : (sortBy === 'status' && !sortDesc ? 'M5 15l7-7 7 7' : 'M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4')" />
+                                </svg>
+                            </div>
+                        </th>
+                        <th @click="toggleSort('sap_status')">
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                SAP
+                                <svg class="qb-sort-icon" :class="sortBy === 'sap_status' ? 'active' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sortBy === 'sap_status' && sortDesc ? 'M19 9l-7 7-7-7' : (sortBy === 'sap_status' && !sortDesc ? 'M5 15l7-7 7 7' : 'M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4')" />
+                                </svg>
+                            </div>
+                        </th>
+                        <th @click="toggleSort('updated_at')">
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                Actualización
+                                <svg class="qb-sort-icon" :class="sortBy === 'updated_at' ? 'active' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sortBy === 'updated_at' && sortDesc ? 'M19 9l-7 7-7-7' : (sortBy === 'updated_at' && !sortDesc ? 'M5 15l7-7 7 7' : 'M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4')" />
+                                </svg>
+                            </div>
+                        </th>
+                        <th style="text-align: right;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="order in paginatedOrders" :key="order.order_id">
+                        <tr class="order-row" @click="window.location.href = `/orders/${order.order_id}`">
+                            <td>
+                                <a :href="`/orders/${order.order_id}`" class="qb-order-link" @click.stop>
+                                    <span class="qb-order-hash">#</span><span x-text="order.order_id"></span>
+                                </a>
+                            </td>
+                            <td>
+                                <div class="qb-customer-name" x-text="order.customer_name"></div>
+                                <div class="qb-customer-code" x-text="order.customer_code"></div>
+                            </td>
+                            <td>
+                                <span class="qb-date" x-text="formatDate(order.order_date || order.doc_date)"></span>
+                            </td>
+                            <td>
+                <span class="qb-items-badge" x-text="(order.items || []).length"></span>
+                            </td>
+                            <td>
+                                <span class="qb-badge" :class="getStatusBadgeClass(order.status)">
+                                    <span class="qb-badge-dot"></span>
+                                     <span x-text="order.status === 'Facturacion' ? (order.factura_number ? 'Facturado #' + order.factura_number : 'Facturado') : (order.status === 'Entregado' ? (order.delivery_number ? 'Entregado #' + order.delivery_number : 'Entregado') : order.status)"></span>
+                                </span>
+                            </td>
+                            <td>
+                                <span class="qb-badge" :class="getSapBadgeClass(order.sap_status || 'Desconocido')" x-text="order.sap_status || 'Desconocido'"></span>
+                            </td>
+                            <td>
+                                <span class="qb-date" x-text="formatDateTime(order.last_updated || order.imported_at)"></span>
+                            </td>
+                            <td style="text-align: right;">
+                                <a :href="`/orders/${order.order_id}`" class="qb-action" @click.stop>
+                                    Ver
+                                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                    </svg>
+                                </a>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="filteredOrders.length === 0" id="emptyRow">
+                        <td colspan="8">
+                            <div class="qb-empty">
+                                <svg class="qb-empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                </svg>
+                                <div class="qb-empty-text">No se encontraron pedidos</div>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
-    </div>
 </div>
 
-<!-- Orders Table -->
-<div class="qb-table-wrap">
-    <div style="overflow-x: auto;">
-        <table class="qb-table" id="ordersTable">
-            <thead>
-                <tr>
-                    <th data-sort="order_id" onclick="sortTable('order_id')">
-                        <div style="display:flex;align-items:center;gap:6px;">
-                            Pedido
-                            <svg class="qb-sort-icon active" id="sort-order_id" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                            </svg>
-                        </div>
-                    </th>
-                    <th data-sort="customer_name" onclick="sortTable('customer_name')">
-                        <div style="display:flex;align-items:center;gap:6px;">
-                            Cliente
-                            <svg class="qb-sort-icon" id="sort-customer_name" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                            </svg>
-                        </div>
-                    </th>
-                    <th data-sort="order_date" onclick="sortTable('order_date')">
-                        <div style="display:flex;align-items:center;gap:6px;">
-                            Fecha
-                            <svg class="qb-sort-icon" id="sort-order_date" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                            </svg>
-                        </div>
-                    </th>
-                    <th data-sort="items_count" onclick="sortTable('items_count')">
-                        <div style="display:flex;align-items:center;gap:6px;">
-                            Productos
-                            <svg class="qb-sort-icon" id="sort-items_count" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                            </svg>
-                        </div>
-                    </th>
-                    <th data-sort="status" onclick="sortTable('status')">
-                        <div style="display:flex;align-items:center;gap:6px;">
-                            Estado
-                            <svg class="qb-sort-icon" id="sort-status" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                            </svg>
-                        </div>
-                    </th>
-                    <th data-sort="sap_status" onclick="sortTable('sap_status')">
-                        <div style="display:flex;align-items:center;gap:6px;">
-                            SAP
-                            <svg class="qb-sort-icon" id="sort-sap_status" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                            </svg>
-                        </div>
-                    </th>
-                    <th data-sort="updated_at" onclick="sortTable('updated_at')">
-                        <div style="display:flex;align-items:center;gap:6px;">
-                            Actualización
-                            <svg class="qb-sort-icon" id="sort-updated_at" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                            </svg>
-                        </div>
-                    </th>
-                    <th style="text-align: right;">Acciones</th>
-                </tr>
-            </thead>
-            <tbody id="ordersBody">
-                {% for order in orders %}
-                <tr
-                    class="order-row"
-                    style="animation-delay: {{ loop.index0 * 0.02 }}s"
-                    data-order-id="{{ order.order_id }}"
-                    data-customer-name="{{ order.customer_name|lower }}"
-                    data-customer-code="{{ order.customer_code|lower }}"
-                    data-order-date="{{ order.order_date or order.doc_date or '' }}"
-                    data-items-count="{{ order.get('items', [])|length }}"
-                    data-status="{{ order.status }}"
-                    data-sap-status="{{ order.get('sap_status', 'Desconocido') }}"
-                    data-updated-at="{{ order.last_updated or order.imported_at or '' }}"
-                >
-                    <td>
-                        <a href="{{ url_for('orders.detail', order_id=order.order_id) }}" class="qb-order-link">
-                            <span class="qb-order-hash">#</span>{{ order.order_id }}
-                        </a>
-                    </td>
-                    <td>
-                        <div class="qb-customer-name">{{ order.customer_name }}</div>
-                        <div class="qb-customer-code">{{ order.customer_code }}</div>
-                    </td>
-                    <td>
-                        <span class="qb-date">{{ (order.order_date or order.doc_date or '-')[:10] }}</span>
-                    </td>
-                    <td>
-                        <span class="qb-items-badge">{{ order.get('items', [])|length }}</span>
-                    </td>
-                    <td>
-                        {% set status = order.status %}
-                        <span class="qb-badge {% if status == 'Pendiente' %}badge-pendiente{% elif status == 'En Proceso' %}badge-proceso{% elif status == 'Terminado' or status == 'Preparando' %}badge-terminado{% elif status == 'Facturacion' %}badge-facturado{% elif status == 'Relacion de envio' or status == 'Recibido por almacen' %}badge-relacion{% elif status == 'Enviado al cliente' %}badge-enviado{% elif status == 'Cancelado' %}badge-cancelado{% elif status == 'En Espera' %}badge-espera{% else %}badge-pendiente{% endif %}">
-                            <span class="qb-badge-dot"></span>
-                            {% if status == 'Facturacion' %}Facturado{% if order.get('factura_number') %} #{{ order.get('factura_number') }}{% endif %}{% else %}{{ status }}{% endif %}
-                        </span>
-                    </td>
-                    <td>
-                        {% set sap_status = order.get('sap_status', 'Desconocido') %}
-                        <span class="qb-badge {% if sap_status == 'Abierto' %}sap-abierto{% elif sap_status == 'Cerrado' %}sap-cerrado{% elif sap_status == 'Cancelado' %}sap-cancelado{% else %}badge-pendiente{% endif %}">
-                            {{ sap_status }}
-                        </span>
-                    </td>
-                    <td>
-                        <span class="qb-date">{{ order.last_updated[:16].replace('T', ' ') if order.last_updated else order.imported_at[:16].replace('T', ' ') if order.imported_at else '-' }}</span>
-                    </td>
-                    <td style="text-align: right;">
-                        <a href="{{ url_for('orders.detail', order_id=order.order_id) }}" class="qb-action">
-                            Ver
-                            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                            </svg>
-                        </a>
-                    </td>
-                </tr>
-                {% else %}
-                <tr id="emptyRow">
-                    <td colspan="8">
-                        <div class="qb-empty">
-                            <svg class="qb-empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                            </svg>
-                            <div class="qb-empty-text">No se encontraron pedidos</div>
-                        </div>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
+<!-- Global Toast container is in base.html -->
 
 <!-- Pagination -->
-<div class="qb-pagination" id="paginationBar" style="display: none;">
-    <div class="qb-pagination-info" id="paginationInfo"></div>
-    <div class="qb-pagination-controls" id="paginationControls"></div>
-</div>
-
-<!-- Results count -->
-<div class="qb-results" id="resultsCount">
-    Mostrando <span>{{ orders|length }}</span> pedidos
+    <div class="qb-pagination" x-show="totalPages > 1" x-cloak>
+        <div class="qb-pagination-info">
+            Mostrando <b x-text="pageStartIdx + 1"></b>–<b x-text="Math.min(pageEndIdx, filteredOrders.length)"></b> de <b x-text="filteredOrders.length"></b> pedidos
+        </div>
+        <div class="qb-pagination-controls">
+            <button class="qb-page-btn" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <template x-for="p in pageNumbers" :key="'p'+p">
+                <button class="qb-page-btn" :class="{ 'qb-page-active': p === currentPage, 'qb-page-dots': p === '...' }" :disabled="p === '...'" @click="p !== '...' && goToPage(p)" x-text="p === '...' ? '…' : p"></button>
+            </template>
+            <button class="qb-page-btn" :disabled="currentPage >= totalPages" @click="goToPage(currentPage + 1)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+        </div>
+    </div>
 </div>
 
 <script>
-    // ─── State ───────────────────────────────────────────────────────
-    let currentSortBy = "order_id";
-    let currentSortDesc = true;
-    let refreshInterval = 10; // seconds
-    let refreshTimer = refreshInterval;
-    let refreshLoading = false;
-    const PAGE_SIZE = 50;
-    let currentPage = 1;
-    let allRows = []; // cached reference to all order rows
+function indexData() {
+    return {
+        orders: {{ orders | tojson }},
+        timer: 10,
+        loading: false,
+        searchQuery: '',
+        dateFrom: new Date().toISOString().split('T')[0],
+        dateTo: new Date().toISOString().split('T')[0],
+        maxOrders: '50',
+        activeTopFilter: 'all',
+        activeStats: {},
+        totalPages: 1,
+        currentPage: 1,
+        pageSize: 50,
+        sortBy: 'order_id',
+        sortDesc: true,
+        savedViews: [],
 
-    function sortTable(column) {
-        if (currentSortBy === column) {
-            currentSortDesc = !currentSortDesc;
-        } else {
-            currentSortBy = column;
-            currentSortDesc = true;
-        }
-
-        const tbody = document.getElementById("ordersBody");
-        const rows = Array.from(tbody.querySelectorAll("tr.order-row"));
-
-        rows.sort((a, b) => {
-            let aVal = a.dataset[dataKey(column)] || "";
-            let bVal = b.dataset[dataKey(column)] || "";
-
-            // Numeric sort for order_id
-            if (column === "order_id") {
-                aVal = parseInt(aVal) || 0;
-                bVal = parseInt(bVal) || 0;
-            } else {
-                aVal = aVal.toLowerCase();
-                bVal = bVal.toLowerCase();
-            }
-
-            if (aVal < bVal) return currentSortDesc ? 1 : -1;
-            if (aVal > bVal) return currentSortDesc ? -1 : 1;
-            return 0;
-        });
-
-        // Re-append sorted rows
-        rows.forEach((r) => tbody.appendChild(r));
-
-        // Update sort icons
-        document.querySelectorAll(".qb-sort-icon").forEach((icon) => {
-            icon.classList.remove("active");
-            icon.innerHTML =
-                '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />';
-        });
-        const activeIcon = document.getElementById("sort-" + column);
-        if (activeIcon) {
-            activeIcon.classList.add("active");
-            activeIcon.innerHTML = currentSortDesc
-                ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />'
-                : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />';
-        }
-
-        // Re-cache sorted order and paginate
-        allRows = Array.from(tbody.querySelectorAll('tr.order-row'));
-        currentPage = 1;
-        applyPagination();
-    }
-
-    // Map column name to data-attribute key (camelCase)
-    function dataKey(col) {
-        const map = {
-            order_id: "orderId",
-            customer_name: "customerName",
-            order_date: "orderDate",
-            status: "status",
-            sap_status: "sapStatus",
-            updated_at: "updatedAt",
-        };
-        return map[col] || col;
-    }
-
-    // ─── Client-side search + pagination ───────────────────────────
-    function getFilteredRows() {
-        const q = (document.getElementById('searchInput')?.value || '').toLowerCase();
-        return allRows.filter(row => {
-            if (!q) return true;
-            const text = (
-                row.dataset.orderId + ' ' +
-                row.dataset.customerName + ' ' +
-                row.dataset.customerCode + ' ' +
-                row.dataset.status + ' ' +
-                row.dataset.sapStatus
-            ).toLowerCase();
-            return text.includes(q);
-        });
-    }
-
-    function applyPagination() {
-        const filtered = getFilteredRows();
-        const totalFiltered = filtered.length;
-        const totalPages = Math.max(1, Math.ceil(totalFiltered / PAGE_SIZE));
-
-        // Clamp current page
-        if (currentPage > totalPages) currentPage = totalPages;
-        if (currentPage < 1) currentPage = 1;
-
-        const startIdx = (currentPage - 1) * PAGE_SIZE;
-        const endIdx = startIdx + PAGE_SIZE;
-
-        // Hide all rows first
-        allRows.forEach(r => r.style.display = 'none');
-        // Show only current page rows
-        filtered.forEach((row, i) => {
-            row.style.display = (i >= startIdx && i < endIdx) ? '' : 'none';
-        });
-
-        // Update results count
-        const counter = document.getElementById('resultsCount');
-        if (counter) {
-            if (totalFiltered === 0) {
-                counter.innerHTML = 'Sin resultados';
-            } else {
-                const showStart = startIdx + 1;
-                const showEnd = Math.min(endIdx, totalFiltered);
-                counter.innerHTML = `Mostrando <span>${showStart}–${showEnd}</span> de <span>${totalFiltered}</span> pedidos`;
-            }
-        }
-
-        // Render pagination bar
-        renderPagination(totalFiltered, totalPages);
-    }
-
-    function renderPagination(total, totalPages) {
-        const bar = document.getElementById('paginationBar');
-        const info = document.getElementById('paginationInfo');
-        const controls = document.getElementById('paginationControls');
-
-        if (totalPages <= 1) {
-            bar.style.display = 'none';
-            return;
-        }
-        bar.style.display = 'flex';
-
-        const startIdx = (currentPage - 1) * PAGE_SIZE + 1;
-        const endIdx = Math.min(currentPage * PAGE_SIZE, total);
-        info.innerHTML = `Mostrando <b>${startIdx}–${endIdx}</b> de <b>${total}</b> pedidos`;
-
-        // Build page numbers
-        const pages = getPageNumbers(totalPages, currentPage);
-        let html = '';
-
-        // Prev button
-        html += `<button class="qb-page-btn" ${currentPage <= 1 ? 'disabled' : ''} onclick="goToPage(${currentPage - 1})">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-        </button>`;
-
-        pages.forEach(p => {
-            if (p === '...') {
-                html += `<button class="qb-page-btn qb-page-dots" disabled>…</button>`;
-            } else {
-                html += `<button class="qb-page-btn ${p === currentPage ? 'qb-page-active' : ''}" onclick="goToPage(${p})">${p}</button>`;
-            }
-        });
-
-        // Next button
-        html += `<button class="qb-page-btn" ${currentPage >= totalPages ? 'disabled' : ''} onclick="goToPage(${currentPage + 1})">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-        </button>`;
-
-        controls.innerHTML = html;
-    }
-
-    function getPageNumbers(total, current) {
-        if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-        const pages = [1];
-        if (current > 3) pages.push('...');
-        for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) {
-            pages.push(i);
-        }
-        if (current < total - 2) pages.push('...');
-        pages.push(total);
-        return pages;
-    }
-
-    function goToPage(page) {
-        const totalPages = Math.max(1, Math.ceil(getFilteredRows().length / PAGE_SIZE));
-        if (page < 1 || page > totalPages) return;
-        currentPage = page;
-        applyPagination();
-        // Smooth scroll to top of table
-        document.querySelector('.qb-table-wrap')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-
-    document.addEventListener("DOMContentLoaded", () => {
-        // Cache all rows
-        allRows = Array.from(document.querySelectorAll('#ordersBody tr.order-row'));
-
-        const searchInput = document.getElementById("searchInput");
-        if (searchInput) {
-            searchInput.addEventListener("input", () => {
-                currentPage = 1;
-                applyPagination();
-            });
-        }
-
-        // Initial pagination
-        applyPagination();
-
-        // Start auto-refresh timer
-        startRefreshTimer();
-    });
-
-    // ─── Auto-refresh ────────────────────────────────────────────────
-    function startRefreshTimer() {
-        setInterval(() => {
-            refreshTimer--;
-            const el = document.getElementById("refreshTimer");
-            if (el) el.textContent = `Actualizando en ${refreshTimer}s`;
-            if (refreshTimer <= 0) {
-                refreshTimer = refreshInterval;
-                refreshData();
-            }
-        }, 1000);
-    }
-
-    async function refreshData() {
-        if (refreshLoading) return;
-        refreshLoading = true;
-
-        const el = document.getElementById("refreshTimer");
-        if (el) el.textContent = "Sincronizando...";
-
-        try {
-            const statusFilter = '{{ status_filter or "" }}';
-            const params = new URLSearchParams();
-            if (statusFilter) params.set("status", statusFilter);
-
-            // Use /api/refresh which auto-syncs with SAP (throttled to every 2 min)
-            params.set("_", Date.now()); // Prevent browser caching the GET request
-            const res = await fetch(`/orders/api/refresh?${params}`, {
-                cache: "no-store",
-            });
-            if (!res.ok) throw new Error("HTTP " + res.status);
-            const data = await res.json();
-
-            // Rebuild table body with fresh data
-            rebuildTable(data.orders);
-
-            // Update status counts in filter tabs
-            updateStatusCounts(data.status_counts);
-
-            // Brief indicator if SAP data changed
-            if (
-                data.sap_synced &&
-                (data.sap_updated > 0 ||
-                    data.sap_new > 0 ||
-                    data.reconciled > 0)
-            ) {
-                const indicator = document.getElementById("refreshTimer");
-                if (indicator) {
-                    indicator.textContent = `✅ SAP: +${data.sap_new} nuevo(s), ${data.sap_updated} act.`;
-                    setTimeout(() => {
-                        indicator.textContent = `Actualizando en ${refreshTimer}s`;
-                    }, 3000);
+        get baseFilteredOrders() {
+            const q = (this.searchQuery || '').toLowerCase().trim();
+            const from = this.dateFrom || '', to = this.dateTo || '';
+            
+            return this.orders.filter(o => {
+                // Date range filter
+                if (from || to) {
+                    const rawDate = o.order_date || o.doc_date || '';
+                    if (!rawDate) return false;
+                    const oDate = rawDate.split('T')[0].split(' ')[0];
+                    if (from && oDate < from) return false;
+                    if (to && oDate > to) return false;
                 }
+                // Text search
+                if (!q) return true;
+                return String(o.order_id).includes(q) ||
+                    (o.customer_name || '').toLowerCase().includes(q) ||
+                    (o.customer_code || '').toLowerCase().includes(q) ||
+                    (o.factura_number && String(o.factura_number).includes(q)) ||
+                    (o.delivery_number && String(o.delivery_number).includes(q)) ||
+                    (o.created_by || '').toLowerCase().includes(q);
+            });
+        },
+
+        get activeStats() {
+            const c = { total_active: 0, pending: 0, in_progress: 0, picking: 0, invoicing: 0, ready: 0, shipped: 0, waiting: 0, cancelled: 0 };
+            for (const o of this.baseFilteredOrders) {
+                if (o.status !== 'Cancelado') c.total_active++; // Active means not cancelled? Wait, original counted everything.
+                // Reverting to counting everything for total_active
             }
-        } catch (e) {
-            console.error("Auto-refresh failed:", e);
-        } finally {
-            refreshLoading = false;
-        }
-    }
-
-    function getStatusBadgeClass(status) {
-        const map = {
-            'Pendiente': 'badge-pendiente',
-            'En Proceso': 'badge-proceso',
-            'Terminado': 'badge-terminado',
-            'Preparando': 'badge-terminado',
-            'Facturacion': 'badge-facturado',
-            'Relacion de envio': 'badge-relacion',
-            'Recibido por almacen': 'badge-relacion',
-            'Enviado al cliente': 'badge-enviado',
-            'Cancelado': 'badge-cancelado',
-            'En Espera': 'badge-espera',
-        };
-        return map[status] || 'badge-pendiente';
-    }
-
-    function getSapBadgeClass(status) {
-        if (status === "Abierto") return "sap-abierto";
-        if (status === "Cerrado") return "sap-cerrado";
-        if (status === "Cancelado") return "sap-cancelado";
-        return "badge-pendiente";
-    }
-
-    function fmtDateTime(s) {
-        if (!s) return "-";
-        return s.substring(0, 16).replace("T", " ");
-    }
-
-    function rebuildTable(orders) {
-        const tbody = document.getElementById("ordersBody");
-        if (!tbody) return;
-
-        if (!orders || orders.length === 0) {
-            tbody.innerHTML = `<tr id="emptyRow"><td colspan="8"><div class="qb-empty"><svg class="qb-empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg><div class="qb-empty-text">No se encontraron pedidos</div></div></td></tr>`;
-            return;
-        }
-
-        // Sort according to current sort state
-        orders.sort((a, b) => {
-            let aVal = a[currentSortBy] || "";
-            let bVal = b[currentSortBy] || "";
-            if (currentSortBy === "order_id") {
-                aVal = parseInt(aVal) || 0;
-                bVal = parseInt(bVal) || 0;
-            } else {
-                aVal = String(aVal).toLowerCase();
-                bVal = String(bVal).toLowerCase();
+            const counts = { total_active: 0, pending: 0, in_progress: 0, picking: 0, invoicing: 0, ready: 0, shipped: 0, waiting: 0, cancelled: 0 };
+            for (const o of this.baseFilteredOrders) {
+                counts.total_active++;
+                if (o.status === 'Pendiente') counts.pending++;
+                if (o.status === 'En Proceso') counts.in_progress++;
+                if (o.status === 'Entregado' || o.status === 'Preparando') counts.picking++;
+                if (o.status === 'Facturacion') counts.invoicing++;
+                if (o.status === 'Relacion de envio' || o.status === 'Recibido por almacen') counts.ready++;
+                if (o.status === 'Enviado al cliente') counts.shipped++;
+                if (o.status === 'En Espera') counts.waiting++;
+                if (o.status === 'Cancelado') counts.cancelled++;
             }
-            if (aVal < bVal) return currentSortDesc ? 1 : -1;
-            if (aVal > bVal) return currentSortDesc ? -1 : 1;
-            return 0;
-        });
+            return counts;
+        },
 
-        const html = orders
-            .map((o, idx) => {
-                const orderId = o.order_id || "";
-                const customerName = o.customer_name || "";
-                const customerCode = o.customer_code || "";
-                const orderDate = (o.order_date || o.doc_date || "-").substring(0, 10);
-                const itemsCount = o.items ? o.items.length : 0;
-                const status = o.status || "Pendiente";
-                const sapStatus = o.sap_status || "Desconocido";
-                const updatedAt = o.last_updated || o.imported_at || "";
-                const updatedAtDisplay = fmtDateTime(updatedAt);
+        orderMatchesTopFilter(o) {
+            if (this.activeTopFilter === 'all') return true;
+            if (this.activeTopFilter === 'pending') return o.status === 'Pendiente';
+            if (this.activeTopFilter === 'process') return o.status === 'En Proceso';
+            if (this.activeTopFilter === 'picking') return o.status === 'Entregado' || o.status === 'Preparando';
+            if (this.activeTopFilter === 'invoice') return o.status === 'Facturacion';
+            if (this.activeTopFilter === 'relation') return o.status === 'Relacion de envio' || o.status === 'Recibido por almacen';
+            if (this.activeTopFilter === 'shipped') return o.status === 'Enviado al cliente';
+            if (this.activeTopFilter === 'waiting') return o.status === 'En Espera';
+            if (this.activeTopFilter === 'cancelled') return o.status === 'Cancelado';
+            return true;
+        },
 
-                let displayStatus = status;
-                if (status === "Facturacion") {
-                    displayStatus = o.factura_number
-                        ? `Facturado #${o.factura_number}`
-                        : "Facturado";
+        toggleTopFilter(f) { this.activeTopFilter = this.activeTopFilter === f ? 'all' : f; this.currentPage = 1; },
+        getTopFilterLabel() {
+            const m = {
+                'pending': 'Pendientes',
+                'process': 'En Proceso',
+                'picking': 'Entregados',
+                'invoice': 'Facturados',
+                'relation': 'Relación',
+                'shipped': 'Enviados',
+                'waiting': 'En Espera',
+                'cancelled': 'Cancelado'
+            };
+            return m[this.activeTopFilter] || 'Filtro';
+        },
+        
+        // --- Saved Views Logic ---
+        saveCurrentView() {
+            const name = prompt("Nombre para esta vista guardada:");
+            if (!name) return;
+            const view = {
+                name: name,
+                filters: {
+                    searchQuery: this.searchQuery,
+                    dateFrom: this.dateFrom,
+                    dateTo: this.dateTo,
+                    activeTopFilter: this.activeTopFilter,
+                    maxOrders: this.maxOrders,
+                    sortBy: this.sortBy,
+                    sortDesc: this.sortDesc
                 }
-
-                return `<tr class="order-row" style="animation-delay:${idx * 0.02}s"
-                        data-order-id="${orderId}"
-                        data-customer-name="${customerName.toLowerCase()}"
-                        data-customer-code="${customerCode.toLowerCase()}"
-                        data-order-date="${o.order_date || o.doc_date || ""}"
-                        data-status="${status}"
-                        data-sap-status="${sapStatus}"
-                        data-updated-at="${updatedAt}">
-                <td>
-                    <a href="/orders/${orderId}" class="qb-order-link"><span class="qb-order-hash">#</span>${orderId}</a>
-                </td>
-                <td>
-                    <div class="qb-customer-name">${customerName}</div>
-                    <div class="qb-customer-code">${customerCode}</div>
-                </td>
-                <td><span class="qb-date">${orderDate}</span></td>
-                <td><span class="qb-items-badge">${itemsCount}</span></td>
-                <td>
-                    <span class="qb-badge ${getStatusBadgeClass(status)}">
-                        <span class="qb-badge-dot"></span>
-                        ${displayStatus}
-                    </span>
-                </td>
-                <td>
-                    <span class="qb-badge ${getSapBadgeClass(sapStatus)}">${sapStatus}</span>
-                </td>
-                <td><span class="qb-date">${updatedAtDisplay}</span></td>
-                <td style="text-align:right;">
-                    <a href="/orders/${orderId}" class="qb-action">
-                        Ver <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                    </a>
-                </td>
-            </tr>`;
-            })
-            .join("");
-
-        tbody.innerHTML = html;
-
-        // Re-cache rows and apply pagination
-        allRows = Array.from(tbody.querySelectorAll('tr.order-row'));
-        currentPage = 1;
-        applyPagination();
-    }
-
-    function updateStatusCounts(counts) {
-        if (!counts) return;
-        // Update filter tab badges
-        const tabs = document.querySelectorAll(".qb-filter-pills .qb-pill");
-        tabs.forEach((tab) => {
-            const countEl = tab.querySelector('.qb-pill-count');
-            const textContent = tab.textContent.trim();
-            // Extract label (text before the count element)
-            const label = tab.childNodes[0]?.textContent?.trim();
-            if (label === "Todos" && countEl) {
-                const total = Object.values(counts).reduce((s, c) => s + c, 0);
-                countEl.textContent = total;
-            } else if (counts[label] !== undefined && countEl) {
-                countEl.textContent = counts[label];
+            };
+            this.savedViews.push(view);
+            localStorage.setItem('qb_saved_views', JSON.stringify(this.savedViews));
+        },
+        
+        applyView(view) {
+            this.searchQuery = view.filters.searchQuery || '';
+            this.dateFrom = view.filters.dateFrom || '';
+            this.dateTo = view.filters.dateTo || '';
+            this.activeTopFilter = view.filters.activeTopFilter || 'all';
+            this.maxOrders = view.filters.maxOrders || '50';
+            this.sortBy = view.filters.sortBy || 'order_id';
+            this.sortDesc = view.filters.sortDesc !== undefined ? view.filters.sortDesc : true;
+            this.currentPage = 1;
+        },
+        
+        deleteView(index) {
+            this.savedViews.splice(index, 1);
+            localStorage.setItem('qb_saved_views', JSON.stringify(this.savedViews));
+        },
+        
+        // --- Excel Export ---
+        exportToExcel() {
+            if (!window.XLSX) {
+                alert("La librería de exportación aún está cargando. Por favor, intenta en unos segundos.");
+                return;
             }
-        });
+            
+            // Map current filtered orders to a clean format for Excel
+            const exportData = this.filteredOrders.map(o => ({
+                'ID Pedido': o.order_id,
+                'Cliente': o.customer_name || 'N/A',
+                'Código Cliente': o.customer_code || 'N/A',
+                'Fecha': this.formatDate(o.created_at),
+                'Total': o.total,
+                'Status': o.status,
+                'Términos': o.payment_group || 'N/A',
+                'Factura': o.factura_number || 'N/A',
+                'Envío': o.shipping_type || 'N/A',
+                'Vendedor': o.seller_name || 'N/A',
+                'Comentarios': o.comments || ''
+            }));
+            
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            
+            // Auto-size columns slightly
+            const wscols = [
+                {wch: 10}, // ID
+                {wch: 40}, // Cliente
+                {wch: 15}, // Codigo
+                {wch: 12}, // Fecha
+                {wch: 12}, // Total
+                {wch: 20}, // Status
+                {wch: 15}, // Terminos
+                {wch: 12}, // Factura
+                {wch: 20}, // Envio
+                {wch: 30}, // Vendedor
+                {wch: 40}  // Comentarios
+            ];
+            ws['!cols'] = wscols;
+            
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Pedidos");
+            
+            const dateStr = new Date().toISOString().split('T')[0];
+            XLSX.writeFile(wb, `Pedidos_QBSAO_${dateStr}.xlsx`);
+        },
+
+        toggleSort(col) {
+            if (this.sortBy === col) { this.sortDesc = !this.sortDesc; }
+            else { this.sortBy = col; this.sortDesc = true; }
+            this.currentPage = 1;
+        },
+
+        get sortedOrders() {
+            let r = this.baseFilteredOrders.filter(o => this.orderMatchesTopFilter(o));
+            r.sort((a, b) => {
+                let aVal = a[this.sortBy] || "", bVal = b[this.sortBy] || "";
+                if (this.sortBy === 'items_count') {
+                    aVal = (a.items || []).length; bVal = (b.items || []).length;
+                } else if (this.sortBy === 'order_id') {
+                    aVal = parseInt(aVal) || 0; bVal = parseInt(bVal) || 0;
+                } else if (this.sortBy === 'order_date') {
+                    aVal = a.order_date || a.doc_date || ""; bVal = b.order_date || b.doc_date || "";
+                } else if (this.sortBy === 'updated_at') {
+                    aVal = a.last_updated || a.imported_at || ""; bVal = b.last_updated || b.imported_at || "";
+                } else {
+                    aVal = String(aVal).toLowerCase(); bVal = String(bVal).toLowerCase();
+                }
+                
+                if (aVal < bVal) return this.sortDesc ? 1 : -1;
+                if (aVal > bVal) return this.sortDesc ? -1 : 1;
+                return 0;
+            });
+            return r;
+        },
+
+        get filteredOrders() {
+            const max = parseInt(this.maxOrders) || 0;
+            let r = this.sortedOrders;
+            if (max > 0 && r.length > max) r = r.slice(0, max);
+            return r;
+        },
+
+        get totalPages() { return Math.max(1, Math.ceil(this.filteredOrders.length / this.pageSize)); },
+        get pageStartIdx() { return (this.currentPage - 1) * this.pageSize; },
+        get pageEndIdx() { return this.pageStartIdx + this.pageSize; },
+        get paginatedOrders() {
+            if (this.currentPage > this.totalPages) this.currentPage = this.totalPages;
+            if (this.currentPage < 1) this.currentPage = 1;
+            return this.filteredOrders.slice(this.pageStartIdx, this.pageEndIdx);
+        },
+        get pageNumbers() {
+            const t = this.totalPages, c = this.currentPage;
+            if (t <= 7) return Array.from({ length: t }, (_, i) => i + 1);
+            const p = [1];
+            if (c > 3) p.push('...');
+            for (let i = Math.max(2, c - 1); i <= Math.min(t - 1, c + 1); i++) p.push(i);
+            if (c < t - 2) p.push('...');
+            p.push(t);
+            return p;
+        },
+        goToPage(page) {
+            if (page < 1 || page > this.totalPages) return;
+            this.currentPage = page;
+            document.querySelector('.qb-table-wrap')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        },
+
+        init() {
+            const params = new URLSearchParams(window.location.search);
+            const st = params.get('status');
+            if (st) {
+                const map = { 'Pendiente': 'pending', 'En Proceso': 'process', 'Terminado': 'process', 'Preparando': 'process', 'Facturacion': 'invoice', 'Relacion de envio': 'relation', 'Recibido por almacen': 'relation', 'Enviado al cliente': 'shipped', 'En Espera': 'waiting', 'Cancelado': 'cancelled' };
+                if (map[st]) this.activeTopFilter = map[st];
+            }
+            // Load saved views
+            try {
+                const saved = localStorage.getItem('qb_saved_views');
+                if (saved) this.savedViews = JSON.parse(saved);
+            } catch(e) { console.warn(e); }
+        },
+
+        async refreshData() {
+            if (this.loading) return;
+            this.loading = true;
+            try {
+                // Fetch all orders without status filter so Alpine has the full picture
+                const res = await fetch(`/orders/api/refresh?_=${Date.now()}`, { cache: "no-store" });
+                if (res.ok) {
+                    const data = await res.json();
+                    this.orders = data.orders;
+                }
+            } catch (e) { console.error("Refresh failed:", e); }
+            finally { this.loading = false; }
+        },
+
+
+
+        formatDate(s) {
+            if (!s) return '-';
+            const clean = String(s).split('T')[0].split(' ')[0];
+            if (clean.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                const [y, m, d] = clean.split('-');
+                return `${d}/${m}/${y}`;
+            }
+            return clean;
+        },
+        formatDateTime(s) {
+            if (!s) return '-';
+            const raw = String(s).substring(0, 16).replace('T', ' ');
+            const parts = raw.split(' ');
+            if (parts.length === 2 && parts[0].match(/^\d{4}-\d{2}-\d{2}$/)) {
+                const [y, m, d] = parts[0].split('-');
+                return `${d}/${m}/${y} ${parts[1]}`;
+            }
+            return raw;
+        },
+
+        getStatusBadgeClass(status) {
+            return { 'Pendiente': 'badge-pendiente', 'En Proceso': 'badge-proceso', 'Entregado': 'badge-terminado', 'Preparando': 'badge-terminado', 'Facturacion': 'badge-facturado', 'Relacion de envio': 'badge-relacion', 'Recibido por almacen': 'badge-relacion', 'Enviado al cliente': 'badge-enviado', 'Cancelado': 'badge-cancelado', 'En Espera': 'badge-espera' }[status] || 'badge-pendiente';
+        },
+
+        getSapBadgeClass(status) {
+            if (status === "Abierto") return "sap-abierto";
+            if (status === "Cerrado") return "sap-cerrado";
+            if (status === "Cancelado") return "sap-cancelado";
+            return "badge-pendiente";
+        }
     }
+}
 </script>
 {% endblock %}

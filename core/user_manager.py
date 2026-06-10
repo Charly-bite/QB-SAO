@@ -105,7 +105,7 @@ class UserManager:
                         "warehouse": user_data.get("warehouse", ""),
                         "sap_seller_name": user_data.get("sap_seller_name", ""),
                     }
-            logger.info(f"✅ Loaded {len(self.users)} users from {self.TABLE_NAME}")
+            logger.info(f"[OK] Loaded {len(self.users)} users from {self.TABLE_NAME}")
         except Exception as e:
             logger.warning(f"Could not load users from SQL: {e}")
 
@@ -190,7 +190,7 @@ class UserManager:
 
         self.users["admin"] = admin_data
         self._save_user_to_sql(admin_data)
-        print("✅ Default admin created (user: admin, pass: admin123)")
+        print("[OK] Default admin created (user: admin, pass: admin123)")
 
     def authenticate(self, username: str, password: str) -> bool:
         """Authenticate a user."""

@@ -3,7 +3,7 @@ endblock %} {% block page_title %}Visor de Estado de Pedidos{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="qb-breadcrumbs" aria-label="Breadcrumb">
-    <a href="{{ url_for('orders.index') }}">QB-OMS</a>
+    <a href="{{ url_for('orders.index') }}">QB-SAO</a>
     <span class="bc-sep">›</span>
     <span class="bc-current">Visor</span>
 </nav>
@@ -20,493 +20,337 @@ endblock %} {% block page_title %}Visor de Estado de Pedidos{% endblock %}
         animation: stripe-slide 0.8s linear infinite;
     }
 
-    /* ── QB Moodboard — Visor Stats Cards ── */
-    .qb-stat-card {
-        background: #ffffff;
-        border-radius: 16px;
-        border: 1px solid #e2e8f0;
-        padding: 20px;
-        position: relative;
-        overflow: hidden;
-        transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-    }
-    .qb-stat-card:hover { transform: translateY(-2px); }
-    .qb-stat-card::before {
-        content: '';
-        position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        width: 4px;
-        border-radius: 4px 0 0 4px;
-    }
-    .qb-stat-card.blue::before { background: linear-gradient(180deg, #4a7dff, #2563eb); }
-    .qb-stat-card.slate::before { background: linear-gradient(180deg, #94a3b8, #64748b); }
-    .qb-stat-card.amber::before { background: linear-gradient(180deg, #fbbf24, #f59e0b); }
-    .qb-stat-card.green::before { background: linear-gradient(180deg, #34d399, #10b981); }
-    .qb-stat-card.violet::before { background: linear-gradient(180deg, #a78bfa, #6366f1); }
-
-    .qb-stat-label {
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: #94a3b8;
-    }
-    .qb-stat-value {
-        font-size: 2rem;
-        font-weight: 800;
-        color: #0f1b2d;
-        letter-spacing: -0.03em;
-        line-height: 1.1;
-        margin-top: 4px;
-        font-family: 'JetBrains Mono', 'Inter', monospace;
-    }
-    .qb-stat-icon {
-        width: 40px;
-        height: 40px;
-        border-radius: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    .qb-stat-icon.blue { background: rgba(74, 125, 255, 0.1); color: #4a7dff; }
-    .qb-stat-icon.slate { background: #f1f5f9; color: #64748b; }
-    .qb-stat-icon.amber { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
-    .qb-stat-icon.green { background: rgba(16, 185, 129, 0.1); color: #10b981; }
-    .qb-stat-icon.violet { background: rgba(99, 102, 241, 0.1); color: #6366f1; }
-
-    /* ── Table Section ── */
-    .qb-visor-panel {
-        background: #ffffff;
-        border-radius: 16px;
-        border: 1px solid #e2e8f0;
-        overflow: hidden;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-    }
-    .qb-visor-header {
-        padding: 16px 24px;
-        border-bottom: 1px solid #f1f5f9;
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: space-between;
-        align-items: center;
-        gap: 16px;
-    }
-    .qb-visor-title {
-        font-size: 14px;
-        font-weight: 800;
-        color: #0f1b2d;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    .qb-visor-filters {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        flex: 1;
-        min-width: 0;
-        justify-content: flex-end;
-    }
-
-    .qb-visor-select {
-        padding: 8px 32px 8px 12px;
-        border-radius: 10px;
-        border: 1px solid #e2e8f0;
-        background: #f8fafc;
-        font-size: 13px;
-        font-family: 'Inter', sans-serif;
-        color: #475569;
-        appearance: none;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%2394a3b8' viewBox='0 0 24 24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
-        background-repeat: no-repeat;
-        background-position: right 10px center;
-        background-size: 14px;
-        transition: all 0.2s;
-        outline: none;
-        min-width: 180px;
-    }
-    .qb-visor-select:focus {
-        border-color: #4a7dff;
-        box-shadow: 0 0 0 3px rgba(74, 125, 255, 0.12);
-        background-color: #fff;
-    }
-
-    .qb-visor-search {
-        position: relative;
-        min-width: 280px;
-        flex: 1;
-        max-width: 400px;
-    }
-    .qb-visor-search-icon {
-        position: absolute;
-        left: 12px;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 16px;
-        height: 16px;
-        color: #94a3b8;
-        pointer-events: none;
-    }
-    .qb-visor-search input {
-        width: 100%;
-        padding: 8px 14px 8px 36px;
-        border-radius: 10px;
-        border: 1px solid #e2e8f0;
-        background: #f8fafc;
-        font-size: 13px;
-        font-family: 'Inter', sans-serif;
-        color: #1e293b;
-        outline: none;
-        transition: all 0.2s;
-    }
-    .qb-visor-search input:focus {
-        border-color: #4a7dff;
-        box-shadow: 0 0 0 3px rgba(74, 125, 255, 0.12);
-        background-color: #fff;
-    }
-    .qb-visor-search input::placeholder { color: #94a3b8; }
-
-    .qb-live-dot {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 11px;
-        font-weight: 500;
-        color: #64748b;
-        font-family: 'JetBrains Mono', monospace;
-        white-space: nowrap;
-    }
-    .qb-live-dot-inner {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: #22c55e;
-        position: relative;
-    }
-    .qb-live-dot-inner::after {
-        content: '';
-        position: absolute;
-        inset: -3px;
-        border-radius: 50%;
-        background: rgba(34, 197, 94, 0.3);
-        animation: dotPing 2s cubic-bezier(0, 0, 0.2, 1) infinite;
-    }
-    @keyframes dotPing { 0% { opacity: 1; transform: scale(1); } 75%, 100% { opacity: 0; transform: scale(2); } }
-
-    /* Table */
-    .qb-visor-table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-    .qb-visor-table thead {
-        background: linear-gradient(135deg, #0f1b2d, #1a2744);
-    }
-    .qb-visor-table thead th {
-        padding: 14px 24px;
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: rgba(148, 163, 184, 0.9);
-        text-align: left;
-        white-space: nowrap;
-    }
-    .qb-visor-table tbody tr {
-        border-bottom: 1px solid #f1f5f9;
-        transition: background 0.15s ease;
-    }
-    .qb-visor-table tbody tr:hover {
-        background: #f8fafc;
-    }
-    .qb-visor-table td {
-        padding: 14px 24px;
-        font-size: 13px;
-        color: #475569;
-    }
-
-    /* Order ID */
-    .qb-visor-oid {
-        font-weight: 800;
-        font-family: 'JetBrains Mono', monospace;
-        color: #4a7dff;
-        font-size: 13px;
-    }
-    .qb-visor-oid-hash { color: #94a3b8; font-weight: 400; }
-
-    /* Customer */
-    .qb-visor-cust { font-weight: 600; color: #1e293b; font-size: 13px; }
-    .qb-visor-code {
-        font-size: 11px;
-        font-family: 'JetBrains Mono', monospace;
-        color: #94a3b8;
-        margin-top: 2px;
-    }
-
-    /* SAP badge */
-    .qb-sap-badge {
-        display: inline-flex;
-        align-items: center;
-        padding: 4px 10px;
-        border-radius: 8px;
-        font-size: 11px;
-        font-weight: 700;
-        white-space: nowrap;
-    }
-
-    /* Progress */
-    .qb-progress-wrap { width: 100%; max-width: 220px; }
-    .qb-progress-label {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 4px;
-    }
-    .qb-progress-status {
-        font-size: 11px;
-        font-weight: 700;
-    }
-    .qb-progress-pct {
-        font-size: 11px;
-        font-weight: 600;
-        color: #94a3b8;
-        font-family: 'JetBrains Mono', monospace;
-    }
-    .qb-progress-track {
-        width: 100%;
-        height: 6px;
-        border-radius: 6px;
-        background: #f1f5f9;
-        overflow: hidden;
-    }
-    .qb-progress-bar {
-        height: 6px;
-        border-radius: 6px;
-        transition: width 0.7s cubic-bezier(0.32, 0.72, 0, 1);
-    }
-
-    /* Date */
-    .qb-visor-date {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 12px;
-        color: #64748b;
-    }
-    .qb-visor-time {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 12px;
-        color: #94a3b8;
-    }
-
-    /* Empty */
-    .qb-visor-empty {
-        text-align: center;
-        padding: 48px 20px;
-        color: #94a3b8;
-        font-size: 14px;
-        font-weight: 500;
-    }
-
-    /* ── Pagination ── */
-    .qb-pagination {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 16px 24px;
-        border-top: 1px solid #f1f5f9;
-        gap: 16px;
-        flex-wrap: wrap;
-    }
-    .qb-pagination-info {
-        font-size: 13px;
-        font-weight: 500;
-        color: #94a3b8;
-        font-family: 'JetBrains Mono', monospace;
-    }
-    .qb-pagination-info b {
-        font-weight: 700;
-        color: #475569;
-    }
-    .qb-pagination-controls {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-    }
-    .qb-page-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 36px;
-        height: 36px;
-        padding: 0 8px;
-        border: 1px solid #e2e8f0;
-        border-radius: 10px;
-        background: #ffffff;
-        color: #64748b;
-        font-size: 13px;
-        font-weight: 600;
-        font-family: 'JetBrains Mono', monospace;
-        cursor: pointer;
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        appearance: none;
-    }
-    .qb-page-btn:hover:not(:disabled):not(.qb-page-active) {
-        background: #f0f2f5;
-        border-color: #94a3b8;
-        color: #1e293b;
-    }
-    .qb-page-btn:disabled {
-        opacity: 0.3;
-        cursor: not-allowed;
-    }
-    .qb-page-active {
-        background: linear-gradient(135deg, #0f1b2d, #243556);
-        border-color: #0f1b2d;
-        color: #ffffff;
-        box-shadow: 0 2px 8px rgba(15, 27, 45, 0.25);
-        cursor: default;
-    }
-    .qb-page-dots {
-        border: none;
-        background: transparent;
-        cursor: default;
-        color: #94a3b8;
-        min-width: 28px;
+    /* ═══════ KPI BAR (Monitor-style) ═══════ */
+    .kpi-bar { max-width: 1800px; margin: 0 auto 0; padding: 0 0 16px; }
+    .kpi-inner {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 12px;
         padding: 0;
     }
+    .kpi-card {
+        background: var(--surface, #fff);
+        border: 1px solid var(--border, #e2e8f0);
+        border-radius: 14px;
+        padding: 16px 18px;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        display: flex; flex-direction: column; gap: 2px;
+        position: relative;
+        appearance: none;
+        font-family: inherit;
+        text-align: left;
+        width: 100%;
+    }
+    .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+    .kpi-card.is-active {
+        border-color: #4a7dff;
+        box-shadow: 0 0 0 2px rgba(74,125,255,0.2), 0 4px 16px rgba(0,0,0,0.08);
+    }
+    .kpi-value {
+        font-size: 28px; font-weight: 800; letter-spacing: -0.03em; line-height: 1;
+        font-family: 'JetBrains Mono', monospace;
+    }
+    .kpi-label {
+        font-size: 11px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 0.06em; color: #64748b; margin-top: 4px;
+    }
+    .kpi-card:nth-child(1) .kpi-value { color: #0f1b2d; }
+    .kpi-card.kpi-pending .kpi-value { color: #22c55e; }
+    .kpi-card.kpi-process .kpi-value { color: #f59e0b; }
+    .kpi-card.kpi-invoice .kpi-value { color: #0891b2; }
+    .kpi-card.kpi-shipped .kpi-value { color: #6366f1; }
+
+    /* ═══════ FILTER BAR (Monitor-style) ═══════ */
+    .search-bar { max-width: 1800px; margin: 0 auto; padding: 0 0 16px; }
+    .search-inner { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+    .search-field { flex: 1; min-width: 260px; position: relative; }
+    .search-icon {
+        position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+        width: 18px; height: 18px; color: #94a3b8;
+    }
+    .search-input {
+        width: 100%; padding: 10px 16px 10px 42px; border-radius: 10px;
+        border: 1px solid #e2e8f0; background: #ffffff;
+        font-size: 13px; font-family: 'Inter', sans-serif; color: #1e293b;
+        transition: all 0.2s; outline: none;
+    }
+    .search-input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+    .search-input::placeholder { color: #94a3b8; }
+    .search-clear {
+        position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+        width: 20px; height: 20px; border-radius: 50%; background: #e2e8f0;
+        border: none; cursor: pointer; display: flex; align-items: center;
+        justify-content: center; color: #64748b; font-size: 11px; font-weight: 700;
+        font-family: monospace; line-height: 1; transition: all 0.2s; padding: 0;
+    }
+    .search-clear:hover { background: #cbd5e1; color: #1e293b; }
+
+    .filters-row {
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        width: 100%; padding-top: 4px;
+    }
+    .filter-group { display: flex; align-items: center; gap: 6px; }
+    .filter-label {
+        display: flex; align-items: center; gap: 4px;
+        font-size: 11px; font-weight: 600; color: #64748b;
+        letter-spacing: 0.02em; text-transform: uppercase;
+        white-space: nowrap; user-select: none;
+    }
+    .filter-label-icon { width: 13px; height: 13px; flex-shrink: 0; }
+    .filter-date-input {
+        padding: 7px 10px; border-radius: 8px; border: 1px solid #e2e8f0;
+        background: #ffffff; font-size: 12px; font-family: 'Inter', sans-serif;
+        color: #1e293b; transition: all 0.2s; min-width: 130px;
+    }
+    .filter-date-input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+    .filter-select-sm {
+        appearance: none; padding: 7px 28px 7px 10px; border-radius: 8px;
+        border: 1px solid #e2e8f0; background: #ffffff;
+        font-size: 12px; font-family: 'Inter', sans-serif; font-weight: 500;
+        color: #1e293b; cursor: pointer;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+        background-repeat: no-repeat; background-position: right 8px center;
+        transition: all 0.2s; min-width: 75px;
+    }
+    .filter-select-sm:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+    .filter-clear-btn {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 6px 12px; border-radius: 8px; border: 1px solid #e2e8f0;
+        background: #ffffff; font-size: 11px; font-weight: 600;
+        font-family: 'Inter', sans-serif; color: #64748b; cursor: pointer;
+        transition: all 0.2s; white-space: nowrap;
+    }
+    .filter-clear-btn:hover { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
+
+    .order-count { font-size: 13px; font-weight: 600; color: #64748b; white-space: nowrap; }
+    .filter-chip {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+        background: rgba(74,125,255,0.08); color: #4a7dff; cursor: pointer;
+        margin-left: 6px; transition: all 0.15s;
+    }
+    .filter-chip:hover { background: rgba(74,125,255,0.15); }
+    .filter-chip-x { font-weight: 700; opacity: 0.6; }
+
+    .filter-vendor-select {
+        appearance: none; padding: 7px 28px 7px 10px; border-radius: 8px;
+        border: 1px solid #e2e8f0; background: #ffffff;
+        font-size: 12px; font-family: 'Inter', sans-serif; font-weight: 500;
+        color: #1e293b; cursor: pointer;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+        background-repeat: no-repeat; background-position: right 8px center;
+        transition: all 0.2s; min-width: 160px;
+    }
+    .filter-vendor-select:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+
+    .refresh-badge {
+        display: flex; align-items: center; gap: 6px;
+        padding: 6px 12px; border-radius: 20px;
+        background: #f0f2f5; border: 1px solid #e2e8f0;
+    }
+    .refresh-dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; flex-shrink: 0; }
+    .refresh-text { font-size: 11px; font-weight: 500; color: #64748b; font-family: 'JetBrains Mono', monospace; }
+
+    /* ── Table ── */
+    .qb-visor-panel { background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+    .qb-visor-table { width: 100%; border-collapse: collapse; }
+    .qb-visor-table thead { background: linear-gradient(135deg, #0f1b2d, #1a2744); }
+    .qb-visor-table thead th { padding: 14px 24px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(148, 163, 184, 0.9); text-align: left; white-space: nowrap; }
+    .qb-visor-table tbody tr { border-bottom: 1px solid #f1f5f9; transition: background 0.15s ease; }
+    .qb-visor-table tbody tr:hover { background: #f8fafc; }
+    .qb-visor-table td { padding: 14px 24px; font-size: 13px; color: #475569; }
+
+    .qb-visor-oid { font-weight: 800; font-family: 'JetBrains Mono', monospace; color: #4a7dff; font-size: 13px; }
+    .qb-visor-oid-hash { color: #94a3b8; font-weight: 400; }
+    .qb-visor-cust { font-weight: 600; color: #1e293b; font-size: 13px; }
+    .qb-visor-code { font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #94a3b8; margin-top: 2px; }
+    .qb-sap-badge { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .qb-progress-wrap { width: 100%; max-width: 220px; }
+    .qb-progress-label { display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .qb-progress-status { font-size: 11px; font-weight: 700; }
+    .qb-progress-pct { font-size: 11px; font-weight: 600; color: #94a3b8; font-family: 'JetBrains Mono', monospace; }
+    .qb-progress-track { width: 100%; height: 6px; border-radius: 6px; background: #f1f5f9; overflow: hidden; }
+    .qb-progress-bar { height: 6px; border-radius: 6px; transition: width 0.7s cubic-bezier(0.32, 0.72, 0, 1); }
+    .qb-visor-date { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #64748b; }
+    .qb-visor-time { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #94a3b8; }
+    .qb-visor-empty { text-align: center; padding: 48px 20px; color: #94a3b8; font-size: 14px; font-weight: 500; }
+
+    /* Pagination */
+    .qb-pagination { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-top: 1px solid #f1f5f9; gap: 16px; flex-wrap: wrap; }
+    .qb-pagination-info { font-size: 13px; font-weight: 500; color: #94a3b8; font-family: 'JetBrains Mono', monospace; }
+    .qb-pagination-info b { font-weight: 700; color: #475569; }
+    .qb-pagination-controls { display: flex; align-items: center; gap: 4px; }
+    .qb-page-btn { display: flex; align-items: center; justify-content: center; min-width: 36px; height: 36px; padding: 0 8px; border: 1px solid #e2e8f0; border-radius: 10px; background: #ffffff; color: #64748b; font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono', monospace; cursor: pointer; transition: all 0.2s; appearance: none; }
+    .qb-page-btn:hover:not(:disabled):not(.qb-page-active) { background: #f0f2f5; border-color: #94a3b8; color: #1e293b; }
+    .qb-page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .qb-page-active { background: linear-gradient(135deg, #0f1b2d, #243556); border-color: #0f1b2d; color: #ffffff; box-shadow: 0 2px 8px rgba(15, 27, 45, 0.25); cursor: default; }
+    .qb-page-dots { border: none; background: transparent; cursor: default; color: #94a3b8; min-width: 28px; padding: 0; }
 
     @media (max-width: 768px) {
-        .qb-visor-filters { flex-direction: column; }
-        .qb-visor-search { min-width: 100%; max-width: 100%; }
-        .qb-visor-select { min-width: 100%; }
+        .kpi-inner { grid-template-columns: repeat(3, 1fr); }
+        .filters-row { gap: 8px; }
+        .filter-date-input { min-width: 110px; }
+        .search-field { min-width: 100%; }
+        .filter-vendor-select { min-width: 100%; }
+    }
+    @media (max-width: 480px) {
+        .kpi-inner { grid-template-columns: repeat(2, 1fr); }
+        .kpi-value { font-size: 22px; }
     }
 </style>
 {% endblock %} {% block content %}
-<div class="space-y-6" x-data="visorData()">
-    <!-- Stats Cards -->
-    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <!-- Total Active -->
-        <div class="qb-stat-card blue">
-            <div class="flex justify-between items-start">
-                <div>
-                    <p class="qb-stat-label">Activos</p>
-                    <h3 class="qb-stat-value">{{ stats.total_active }}</h3>
-                </div>
-                <div class="qb-stat-icon blue">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                </div>
-            </div>
-        </div>
+<div x-data="visorData()">
 
-        <!-- Pending -->
-        <div class="qb-stat-card slate">
-            <div class="flex justify-between items-start">
-                <div>
-                    <p class="qb-stat-label">Pendiente</p>
-                    <h3 class="qb-stat-value">{{ stats.pending }}</h3>
-                </div>
-                <div class="qb-stat-icon slate">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                </div>
-            </div>
+    <!-- ═══════ KPI CARDS ═══════ -->
+    <section class="kpi-bar">
+        <div class="kpi-inner">
+            <button type="button" class="kpi-card"
+                :class="activeTopFilter === 'all' ? 'is-active' : ''"
+                @click="toggleTopFilter('all')" title="Mostrar todos">
+                <div class="kpi-value" x-text="activeStats.total_active || 0">0</div>
+                <div class="kpi-label">Total Activos</div>
+            </button>
+            <button type="button" class="kpi-card kpi-pending"
+                :class="activeTopFilter === 'pending' ? 'is-active' : ''"
+                @click="toggleTopFilter('pending')" title="Filtrar pendientes">
+                <div class="kpi-value" x-text="activeStats.pending || 0">0</div>
+                <div class="kpi-label">Pendientes</div>
+            </button>
+            <button type="button" class="kpi-card kpi-process"
+                :class="activeTopFilter === 'process' ? 'is-active' : ''"
+                @click="toggleTopFilter('process')" title="En Proceso">
+                <div class="kpi-value" x-text="activeStats.in_progress || 0">0</div>
+                <div class="kpi-label">En Proceso</div>
+            </button>
+            <button type="button" class="kpi-card kpi-picking"
+                :class="activeTopFilter === 'picking' ? 'is-active' : ''"
+                @click="toggleTopFilter('picking')" title="Entregados">
+                <div class="kpi-value" x-text="activeStats.picking || 0">0</div>
+                <div class="kpi-label">Entregados</div>
+            </button>
+            <button type="button" class="kpi-card kpi-invoice"
+                :class="activeTopFilter === 'invoice' ? 'is-active' : ''"
+                @click="toggleTopFilter('invoice')" title="Facturados">
+                <div class="kpi-value" x-text="activeStats.invoicing || 0">0</div>
+                <div class="kpi-label">Facturado</div>
+            </button>
+            <button type="button" class="kpi-card kpi-relation"
+                :class="activeTopFilter === 'relation' ? 'is-active' : ''"
+                @click="toggleTopFilter('relation')" title="Relación de envío">
+                <div class="kpi-value" x-text="activeStats.ready || 0">0</div>
+                <div class="kpi-label">Relación</div>
+            </button>
+            <button type="button" class="kpi-card kpi-shipped"
+                :class="activeTopFilter === 'shipped' ? 'is-active' : ''"
+                @click="toggleTopFilter('shipped')" title="Filtrar enviados">
+                <div class="kpi-value" x-text="activeStats.shipped || 0">0</div>
+                <div class="kpi-label">Enviados</div>
+            </button>
+            <button type="button" class="kpi-card kpi-waiting"
+                :class="activeTopFilter === 'waiting' ? 'is-active' : ''"
+                @click="toggleTopFilter('waiting')" title="Filtrar en espera">
+                <div class="kpi-value" x-text="activeStats.waiting || 0">0</div>
+                <div class="kpi-label">En Espera</div>
+            </button>
+            <button type="button" class="kpi-card kpi-cancelled"
+                :class="activeTopFilter === 'cancelled' ? 'is-active' : ''"
+                @click="toggleTopFilter('cancelled')" title="Filtrar cancelados">
+                <div class="kpi-value" x-text="activeStats.cancelled || 0">0</div>
+                <div class="kpi-label">Cancelados</div>
+            </button>
         </div>
+    </section>
 
-        <!-- Picking -->
-        <div class="qb-stat-card amber">
-            <div class="flex justify-between items-start">
-                <div>
-                    <p class="qb-stat-label">Terminado</p>
-                    <h3 class="qb-stat-value">{{ stats.picking }}</h3>
-                </div>
-                <div class="qb-stat-icon amber">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                    </svg>
-                </div>
-            </div>
-        </div>
-
-        <!-- Ready -->
-        <div class="qb-stat-card green">
-            <div class="flex justify-between items-start">
-                <div>
-                    <p class="qb-stat-label">Relacion de envio</p>
-                    <h3 class="qb-stat-value">{{ stats.ready }}</h3>
-                </div>
-                <div class="qb-stat-icon green">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                    </svg>
-                </div>
-            </div>
-        </div>
-
-        <!-- Shipped -->
-        <div class="qb-stat-card violet">
-            <div class="flex justify-between items-start">
-                <div>
-                    <p class="qb-stat-label">Enviado al cliente</p>
-                    <h3 class="qb-stat-value">{{ stats.shipped }}</h3>
-                </div>
-                <div class="qb-stat-icon violet">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                    </svg>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Active Orders Table -->
-    <div class="qb-visor-panel">
-        <div class="qb-visor-header">
-            <h3 class="qb-visor-title">
-                <svg class="w-5 h-5" style="color:#4a7dff" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <!-- ═══════ SEARCH & FILTERS BAR ═══════ -->
+    <section class="search-bar">
+        <div class="search-inner">
+            <div class="search-field">
+                <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
-                Pedidos Activos
-            </h3>
+                <input type="text" x-model="searchQuery" @input="currentPage = 1"
+                    placeholder="Buscar por #pedido, factura, cliente o vendedor..."
+                    class="search-input">
+                <button class="search-clear" x-show="searchQuery.length > 0" x-cloak
+                    @click="searchQuery = ''; currentPage = 1" title="Limpiar">&times;</button>
+            </div>
 
-            <!-- Filters Container -->
-            <div class="qb-visor-filters">
-                <!-- User Filter -->
-                <select
-                    x-model="selectedUser"
-                    @change="currentPage = 1"
-                    class="qb-visor-select"
-                >
-                    <option value="">Todos los vendedores</option>
-                    <template x-for="user in uniqueUsers" :key="user">
-                        <option :value="user" x-text="user"></option>
-                    </template>
-                </select>
-
-                <!-- Smart Search -->
-                <div class="qb-visor-search">
-                    <svg class="qb-visor-search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                    <input
-                        type="text"
-                        x-model="searchQuery"
-                        @input="currentPage = 1"
-                        placeholder="Buscar por #pedido, factura, cliente o vendedor..."
-                    />
+            <div class="filters-row">
+                <div class="filter-group">
+                    <label class="filter-label">
+                        <svg class="filter-label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                        Vendedor
+                    </label>
+                    <select x-model="selectedUser" @change="currentPage = 1" class="filter-vendor-select">
+                        <option value="">Todos</option>
+                        <template x-for="user in uniqueUsers" :key="user">
+                            <option :value="user" x-text="user"></option>
+                        </template>
+                    </select>
                 </div>
-
-                <div class="qb-live-dot">
-                    <div class="qb-live-dot-inner"></div>
-                    <span>Auto: <span x-text="timer"></span>s</span>
+                <div class="filter-group">
+                    <label class="filter-label">
+                        <svg class="filter-label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        Desde
+                    </label>
+                    <input type="date" x-model="dateFrom" @change="currentPage = 1" class="filter-date-input">
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">
+                        <svg class="filter-label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        Hasta
+                    </label>
+                    <input type="date" x-model="dateTo" @change="currentPage = 1" class="filter-date-input">
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">
+                        <svg class="filter-label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
+                        Mostrar
+                    </label>
+                    <select x-model="maxOrders" @change="currentPage = 1" class="filter-select-sm">
+                        <option value="0">Todos</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                    </select>
+                </div>
+                <button class="filter-clear-btn"
+                    x-show="dateFrom !== new Date().toISOString().split('T')[0] || dateTo !== new Date().toISOString().split('T')[0] || maxOrders !== '0' || selectedUser" x-cloak
+                    @click="dateFrom = new Date().toISOString().split('T')[0]; dateTo = new Date().toISOString().split('T')[0]; maxOrders = '0'; selectedUser = ''; currentPage = 1"
+                    title="Limpiar filtros">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    Limpiar
+                </button>
+                <div class="refresh-badge">
+                    <span class="refresh-dot"></span>
+                    <span class="refresh-text" x-text="'⟳ ' + timer + 's'"></span>
                 </div>
             </div>
-        </div>
 
+            <div class="order-count">
+                <span x-text="filteredOrders.length"></span> pedidos
+                <template x-if="activeTopFilter !== 'all'">
+                    <span class="filter-chip" @click="toggleTopFilter(activeTopFilter)">
+                        <span x-text="getTopFilterLabel()"></span>
+                        <span class="filter-chip-x">x</span>
+                    </span>
+                </template>
+                <template x-if="dateFrom || dateTo">
+                    <span class="filter-chip" @click="dateFrom = ''; dateTo = ''; currentPage = 1">
+                        <span x-text="(dateFrom || '...') + ' → ' + (dateTo || '...')"></span>
+                        <span class="filter-chip-x">x</span>
+                    </span>
+                </template>
+            </div>
+        </div>
+    </section>
+
+    <!-- Orders Table -->
+    <div class="qb-visor-panel">
         <div style="overflow-x: auto;">
             <table class="qb-visor-table">
                 <thead>
@@ -520,60 +364,29 @@ endblock %} {% block page_title %}Visor de Estado de Pedidos{% endblock %}
                     </tr>
                 </thead>
                 <tbody>
-                    <template
-                        x-for="order in paginatedOrders"
-                        :key="order.order_id"
-                    >
+                    <template x-for="order in paginatedOrders" :key="order.order_id">
                         <tr>
-                            <td>
-                                <span class="qb-visor-oid">
-                                    <span class="qb-visor-oid-hash">#</span><span x-text="order.order_id"></span>
-                                </span>
-                            </td>
+                            <td><span class="qb-visor-oid"><span class="qb-visor-oid-hash">#</span><span x-text="order.order_id"></span></span></td>
                             <td>
                                 <div class="qb-visor-cust" x-text="order.customer_name"></div>
                                 <div class="qb-visor-code" x-text="order.customer_code"></div>
                             </td>
-                            <td>
-                                <span
-                                    class="qb-sap-badge"
-                                    :class="getSapStatusClass(order.sap_status)"
-                                    x-text="order.sap_status"
-                                ></span>
-                            </td>
+                            <td><span class="qb-sap-badge" :class="getSapStatusClass(order.sap_status)" x-text="order.sap_status"></span></td>
                             <td>
                                 <div class="qb-progress-wrap">
                                     <div class="qb-progress-label">
-                                        <span
-                                            class="qb-progress-status"
-                                            :class="getTextColor(order.status)"
-                                            x-text="order.status === 'Facturacion' ? (order.factura_number ? 'Facturado #' + order.factura_number : 'Facturado') : order.status"
-                                        ></span>
+                                        <span class="qb-progress-status" :class="getTextColor(order.status)" x-text="order.status === 'Facturacion' ? (order.factura_number ? 'Facturado #' + order.factura_number : 'Facturado') : (order.status === 'Entregado' ? (order.delivery_number ? 'Entregado #' + order.delivery_number : 'Entregado') : order.status)"></span>
                                         <span class="qb-progress-pct" x-text="getStatusPercent(order.status)"></span>
                                     </div>
-                                    <div class="qb-progress-track">
-                                        <div
-                                            class="qb-progress-bar progress-striped"
-                                            :style="getProgressBarStyle(order.status)"
-                                        ></div>
-                                    </div>
+                                    <div class="qb-progress-track"><div class="qb-progress-bar progress-striped" :style="getProgressBarStyle(order.status)"></div></div>
                                 </div>
                             </td>
-                            <td>
-                                <span class="qb-visor-date" x-text="order.delivery_date || '-'"></span>
-                            </td>
-                            <td style="text-align: right;">
-                                <span
-                                    class="qb-visor-time"
-                                    x-text="order.last_updated ? order.last_updated.split('T')[1].substring(0,5) : '-'"
-                                ></span>
-                            </td>
+                            <td><span class="qb-visor-date" x-text="order.delivery_date || '-'"></span></td>
+                            <td style="text-align: right;"><span class="qb-visor-time" x-text="order.last_updated ? order.last_updated.split('T')[1].substring(0,5) : '-'"></span></td>
                         </tr>
                     </template>
                     <tr x-show="filteredOrders.length === 0">
-                        <td colspan="6">
-                            <div class="qb-visor-empty">No se encontraron pedidos que coincidan con la búsqueda.</div>
-                        </td>
+                        <td colspan="6"><div class="qb-visor-empty">No se encontraron pedidos que coincidan con la búsqueda.</div></td>
                     </tr>
                 </tbody>
             </table>
@@ -586,19 +399,13 @@ endblock %} {% block page_title %}Visor de Estado de Pedidos{% endblock %}
             </div>
             <div class="qb-pagination-controls">
                 <button class="qb-page-btn" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
                 </button>
                 <template x-for="p in pageNumbers" :key="'p'+p">
-                    <button
-                        class="qb-page-btn"
-                        :class="{ 'qb-page-active': p === currentPage, 'qb-page-dots': p === '...' }"
-                        :disabled="p === '...'"
-                        @click="p !== '...' && goToPage(p)"
-                        x-text="p === '...' ? '…' : p"
-                    ></button>
+                    <button class="qb-page-btn" :class="{ 'qb-page-active': p === currentPage, 'qb-page-dots': p === '...' }" :disabled="p === '...'" @click="p !== '...' && goToPage(p)" x-text="p === '...' ? '…' : p"></button>
                 </template>
                 <button class="qb-page-btn" :disabled="currentPage >= totalPages" @click="goToPage(currentPage + 1)">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
                 </button>
             </div>
         </div>
@@ -606,187 +413,137 @@ endblock %} {% block page_title %}Visor de Estado de Pedidos{% endblock %}
 </div>
 
 <script>
-    function visorData() {
-        return {
-            orders: {{ orders | tojson }},
-            stats: {{ stats | tojson }},
-            timer: 10,
-            loading: false,
-            searchQuery: '',
-            selectedUser: '',
-            currentPage: 1,
-            pageSize: 50,
+function visorData() {
+    return {
+        orders: {{ orders | tojson }},
+        stats: {{ stats | tojson }},
+        timer: 10,
+        loading: false,
+        searchQuery: '',
+        selectedUser: '',
+        dateFrom: new Date().toISOString().split('T')[0],
+        dateTo: new Date().toISOString().split('T')[0],
+        maxOrders: '0',
+        activeTopFilter: 'all',
+        currentPage: 1,
+        pageSize: 50,
 
-            get uniqueUsers() {
-                const users = new Set(this.orders.map(o => o.created_by).filter(Boolean));
-                return Array.from(users).sort();
-            },
+        get uniqueUsers() {
+            return Array.from(new Set(this.orders.map(o => o.created_by).filter(Boolean))).sort();
+        },
 
-            get filteredOrders() {
-                let result = this.orders;
-
-                if (this.selectedUser !== '') {
-                    result = result.filter(o => o.created_by === this.selectedUser);
+        get baseFilteredOrders() {
+            const q = (this.searchQuery || '').toLowerCase().trim();
+            const from = this.dateFrom || '', to = this.dateTo || '';
+            let result = this.orders;
+            if (this.selectedUser) result = result.filter(o => o.created_by === this.selectedUser);
+            
+            result = result.filter(o => {
+                if (from || to) {
+                    const rawDate = o.order_date || o.delivery_date || '';
+                    if (!rawDate) return false;
+                    const oDate = rawDate.split('T')[0].split(' ')[0];
+                    if (from && oDate < from) return false;
+                    if (to && oDate > to) return false;
                 }
+                if (!q) return true;
+                return String(o.order_id).includes(q) ||
+                    (o.customer_name || '').toLowerCase().includes(q) ||
+                    (o.customer_code || '').toLowerCase().includes(q) ||
+                    (o.factura_number && String(o.factura_number).includes(q)) ||
+                    (o.delivery_number && String(o.delivery_number).includes(q)) ||
+                    (o.created_by || '').toLowerCase().includes(q);
+            });
+            return result;
+        },
 
-                if (this.searchQuery !== '') {
-                    const query = this.searchQuery.toLowerCase();
-                    result = result.filter(o => {
-                        const orderIdMatch = String(o.order_id).includes(query);
-                        const customerNameMatch = o.customer_name && o.customer_name.toLowerCase().includes(query);
-                        const customerCodeMatch = o.customer_code && o.customer_code.toLowerCase().includes(query);
-                        const facturaMatch = o.factura_number && String(o.factura_number).includes(query);
-                        const creatorMatch = o.created_by && o.created_by.toLowerCase().includes(query);
-                        return orderIdMatch || customerNameMatch || customerCodeMatch || facturaMatch || creatorMatch;
-                    });
-                }
-
-                return result;
-            },
-
-            get totalPages() {
-                return Math.max(1, Math.ceil(this.filteredOrders.length / this.pageSize));
-            },
-
-            get pageStartIdx() {
-                return (this.currentPage - 1) * this.pageSize;
-            },
-
-            get pageEndIdx() {
-                return this.pageStartIdx + this.pageSize;
-            },
-
-            get paginatedOrders() {
-                // Clamp page
-                if (this.currentPage > this.totalPages) this.currentPage = this.totalPages;
-                if (this.currentPage < 1) this.currentPage = 1;
-                return this.filteredOrders.slice(this.pageStartIdx, this.pageEndIdx);
-            },
-
-            get pageNumbers() {
-                const total = this.totalPages;
-                const current = this.currentPage;
-                if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-                const pages = [1];
-                if (current > 3) pages.push('...');
-                for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) {
-                    pages.push(i);
-                }
-                if (current < total - 2) pages.push('...');
-                pages.push(total);
-                return pages;
-            },
-
-            goToPage(page) {
-                if (page < 1 || page > this.totalPages) return;
-                this.currentPage = page;
-                document.querySelector('.qb-visor-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            },
-
-            init() {
-                this.startTimer();
-            },
-
-            startTimer() {
-                setInterval(() => {
-                    this.timer--;
-                    if (this.timer <= 0) {
-                        this.timer = 10;
-                        this.refreshData();
-                    }
-                }, 1000);
-            },
-
-            async refreshData() {
-                if (this.loading) return;
-                this.loading = true;
-
-                try {
-                    // 1. Trigger SAP Sync (background)
-                    fetch("{{ url_for('orders.visor_sync') }}", {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' }
-                    }).catch(e => console.warn("Background sync failed:", e));
-
-                    // 2. Fetch fresh data
-                    const res = await fetch("{{ url_for('orders.api_active_orders') }}?_=" + Date.now(), { cache: 'no-store' });
-                    if (res.ok) {
-                        const data = await res.json();
-                        this.orders = data.orders;
-                        this.stats = data.stats;
-                    }
-                } catch (e) {
-                    console.error("Refresh failed:", e);
-                } finally {
-                    this.loading = false;
-                }
-            },
-
-            getProgressBarStyle(status) {
-                const colorPairs = {
-                    'Pendiente':            ['#94a3b8', '#64748b'],
-                    'En Proceso':           ['#60a5fa', '#3b82f6'],
-                    'Terminado':            ['#fbbf24', '#f59e0b'],
-                    'Preparando':           ['#fbbf24', '#f59e0b'],
-                    'Facturacion':          ['#34d399', '#059669'],
-                    'Relacion de envio':    ['#4ade80', '#16a34a'],
-                    'Recibido por almacen': ['#4ade80', '#16a34a'],
-                    'Enviado al cliente':   ['#c084fc', '#9333ea'],
-                    'En Espera':            ['#fb923c', '#ea580c'],
-                    'Cancelado':            ['#f87171', '#dc2626'],
-                };
-                const widths = {
-                    'Pendiente':            14,
-                    'En Proceso':           28,
-                    'Terminado':            43,
-                    'Preparando':           43,
-                    'Facturacion':          57,
-                    'Relacion de envio':    72,
-                    'Recibido por almacen': 72,
-                    'Enviado al cliente':   100,
-                    'En Espera':            20,
-                    'Cancelado':            100,
-                };
-                const [c1, c2] = colorPairs[status] || ['#94a3b8', '#64748b'];
-                const w = widths[status] ?? 0;
-                return [
-                    `width: ${w}%`,
-                    `background: repeating-linear-gradient(45deg, ${c1}, ${c1} 8px, ${c2} 8px, ${c2} 16px)`,
-                ].join('; ');
-            },
-
-            getStatusPercent(status) {
-                const widths = {
-                    'Pendiente': 14, 'En Proceso': 28, 'Terminado': 43, 'Preparando': 43,
-                    'Facturacion': 57, 'Relacion de envio': 72, 'Recibido por almacen': 72,
-                    'Enviado al cliente': 100,
-                    'En Espera': 20, 'Cancelado': 100,
-                };
-                return (widths[status] ?? 0) + '%';
-            },
-
-            getTextColor(status) {
-                const colors = {
-                    'Pendiente': 'text-slate-700',
-                    'En Proceso': 'text-blue-700',
-                    'Terminado': 'text-yellow-700',
-                    'Preparando': 'text-yellow-700',
-                    'Listo para Envío': 'text-green-700',
-                    'Relacion de envio': 'text-green-700',
-                    'Recibido por almacen': 'text-green-700',
-                    'Enviado al cliente': 'text-purple-700',
-                    'Enviado': 'text-purple-700',
-                    'Facturacion': 'text-emerald-700'
-                };
-                return colors[status] || 'text-slate-600';
-            },
-
-            getSapStatusClass(status) {
-                if (status === 'Cerrado') return 'bg-green-100 text-green-700';
-                if (status === 'Cancelado') return 'bg-red-100 text-red-700';
-                return 'bg-blue-100 text-blue-700';
+        get activeStats() {
+            const c = { total_active: 0, pending: 0, in_progress: 0, picking: 0, invoicing: 0, ready: 0, shipped: 0, waiting: 0, cancelled: 0 };
+            for (const o of this.baseFilteredOrders) {
+                c.total_active++;
+                if (o.status === 'Pendiente') c.pending++;
+                if (o.status === 'En Proceso') c.in_progress++;
+                if (o.status === 'Entregado' || o.status === 'Preparando') c.picking++;
+                if (o.status === 'Facturacion') c.invoicing++;
+                if (o.status === 'Relacion de envio' || o.status === 'Recibido por almacen') c.ready++;
+                if (o.status === 'Enviado al cliente') c.shipped++;
+                if (o.status === 'En Espera') c.waiting++;
+                if (o.status === 'Cancelado') c.cancelled++;
             }
-        }
+            return c;
+        },
+
+        orderMatchesTopFilter(o) {
+            if (this.activeTopFilter === 'all') return true;
+            if (this.activeTopFilter === 'pending') return o.status === 'Pendiente';
+            if (this.activeTopFilter === 'process') return o.status === 'En Proceso';
+            if (this.activeTopFilter === 'picking') return o.status === 'Entregado' || o.status === 'Preparando';
+            if (this.activeTopFilter === 'invoice') return o.status === 'Facturacion';
+            if (this.activeTopFilter === 'relation') return o.status === 'Relacion de envio' || o.status === 'Recibido por almacen';
+            if (this.activeTopFilter === 'shipped') return o.status === 'Enviado al cliente';
+            if (this.activeTopFilter === 'waiting') return o.status === 'En Espera';
+            if (this.activeTopFilter === 'cancelled') return o.status === 'Cancelado';
+            return true;
+        },
+
+        toggleTopFilter(f) { this.activeTopFilter = this.activeTopFilter === f ? 'all' : f; this.currentPage = 1; },
+        getTopFilterLabel() { return { pending: 'Pendientes', process: 'En Proceso', picking: 'Entregados', invoice: 'Facturados', relation: 'Relación', shipped: 'Enviados', waiting: 'En Espera', cancelled: 'Cancelados' }[this.activeTopFilter] || ''; },
+
+        get filteredOrders() {
+            const max = parseInt(this.maxOrders) || 0;
+            let r = this.baseFilteredOrders.filter(o => this.orderMatchesTopFilter(o));
+            if (max > 0 && r.length > max) r = r.slice(0, max);
+            return r;
+        },
+
+        get totalPages() { return Math.max(1, Math.ceil(this.filteredOrders.length / this.pageSize)); },
+        get pageStartIdx() { return (this.currentPage - 1) * this.pageSize; },
+        get pageEndIdx() { return this.pageStartIdx + this.pageSize; },
+        get paginatedOrders() {
+            if (this.currentPage > this.totalPages) this.currentPage = this.totalPages;
+            if (this.currentPage < 1) this.currentPage = 1;
+            return this.filteredOrders.slice(this.pageStartIdx, this.pageEndIdx);
+        },
+        get pageNumbers() {
+            const t = this.totalPages, c = this.currentPage;
+            if (t <= 7) return Array.from({ length: t }, (_, i) => i + 1);
+            const p = [1];
+            if (c > 3) p.push('...');
+            for (let i = Math.max(2, c - 1); i <= Math.min(t - 1, c + 1); i++) p.push(i);
+            if (c < t - 2) p.push('...');
+            p.push(t);
+            return p;
+        },
+        goToPage(page) {
+            if (page < 1 || page > this.totalPages) return;
+            this.currentPage = page;
+            document.querySelector('.qb-visor-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        },
+
+        init() { this.startTimer(); },
+        startTimer() { setInterval(() => { this.timer--; if (this.timer <= 0) { this.timer = 10; this.refreshData(); } }, 1000); },
+
+        async refreshData() {
+            if (this.loading) return;
+            this.loading = true;
+            try {
+                fetch("{{ url_for('orders.visor_sync') }}", { method: 'POST', headers: { 'Content-Type': 'application/json' } }).catch(() => {});
+                const res = await fetch("{{ url_for('orders.api_active_orders') }}?_=" + Date.now(), { cache: 'no-store' });
+                if (res.ok) { const data = await res.json(); this.orders = data.orders; this.stats = data.stats; }
+            } catch (e) { console.error("Refresh failed:", e); }
+            finally { this.loading = false; }
+        },
+
+        getProgressBarStyle(status) {
+            const cp = { 'Pendiente': ['#94a3b8','#64748b'], 'En Proceso': ['#60a5fa','#3b82f6'], 'Entregado': ['#fbbf24','#f59e0b'], 'Preparando': ['#fbbf24','#f59e0b'], 'Facturacion': ['#34d399','#059669'], 'Relacion de envio': ['#4ade80','#16a34a'], 'Recibido por almacen': ['#4ade80','#16a34a'], 'Enviado al cliente': ['#c084fc','#9333ea'], 'En Espera': ['#fb923c','#ea580c'], 'Cancelado': ['#f87171','#dc2626'] };
+            const wd = { 'Pendiente': 14, 'En Proceso': 28, 'Entregado': 43, 'Preparando': 43, 'Facturacion': 57, 'Relacion de envio': 72, 'Recibido por almacen': 72, 'Enviado al cliente': 100, 'En Espera': 20, 'Cancelado': 100 };
+            const [c1, c2] = cp[status] || ['#94a3b8','#64748b'];
+            return `width: ${wd[status]??0}%; background: repeating-linear-gradient(45deg, ${c1}, ${c1} 8px, ${c2} 8px, ${c2} 16px)`;
+        },
+        getStatusPercent(s) { const w = { 'Pendiente': 14, 'En Proceso': 28, 'Entregado': 43, 'Preparando': 43, 'Facturacion': 57, 'Relacion de envio': 72, 'Recibido por almacen': 72, 'Enviado al cliente': 100, 'En Espera': 20, 'Cancelado': 100 }; return (w[s]??0)+'%'; },
+        getTextColor(s) { return { 'Pendiente':'text-slate-700','En Proceso':'text-blue-700','Entregado':'text-yellow-700','Preparando':'text-yellow-700','Facturacion':'text-emerald-700','Relacion de envio':'text-green-700','Recibido por almacen':'text-green-700','Enviado al cliente':'text-purple-700' }[s] || 'text-slate-600'; },
+        getSapStatusClass(s) { if (s === 'Cerrado') return 'bg-green-100 text-green-700'; if (s === 'Cancelado') return 'bg-red-100 text-red-700'; return 'bg-blue-100 text-blue-700'; }
     }
+}
 </script>
 {% endblock %}

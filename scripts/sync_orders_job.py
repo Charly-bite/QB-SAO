@@ -51,6 +51,7 @@ def run_order_sync():
 
             flattened = {
                 'DocNum': header.get('order_number'),
+                'DocEntry': header.get('doc_entry'),
                 'CardCode': header.get('customer_code'),
                 'CardName': header.get('customer_name'),
                 'DocDate': header.get('order_date'),
@@ -59,6 +60,7 @@ def run_order_sync():
                 'DocCurrency': header.get('currency', 'MXN'),
                 'sap_status': header.get('sap_status', 'Abierto'),
                 'factura_number': header.get('factura_number'),
+                'delivery_number': header.get('delivery_number'),
                 'items': items,
                 'updated_by': sap_user,
             }
@@ -69,8 +71,16 @@ def run_order_sync():
                 new_sap = flattened['sap_status']
                 cur_fact = order_mgr.orders[oid].get('factura_number')
                 new_fact = flattened.get('factura_number')
+                cur_delivery = order_mgr.orders[oid].get('delivery_number')
+                new_delivery = flattened.get('delivery_number')
+                cur_doc_entry = order_mgr.orders[oid].get('doc_entry')
+                new_doc_entry = flattened.get('DocEntry')
 
                 needs_update = False
+
+                if cur_doc_entry != new_doc_entry:
+                    order_mgr.orders[oid]['doc_entry'] = new_doc_entry
+                    needs_update = True
 
                 if cur_sap != new_sap:
                     order_mgr.orders[oid]['sap_status'] = new_sap
@@ -89,6 +99,10 @@ def run_order_sync():
                     order_mgr.orders[oid]['factura_number'] = new_fact
                     needs_update = True
 
+                if new_delivery and cur_delivery != new_delivery:
+                    order_mgr.orders[oid]['delivery_number'] = new_delivery
+                    needs_update = True
+
                 if needs_update:
                     updated += 1
             else:
@@ -97,7 +111,7 @@ def run_order_sync():
 
         if updated > 0 or new_orders > 0:
             order_mgr._save_database()
-            print(f"✅ Sync: +{new_orders} new, {updated} updated")
+            print(f"[OK] Sync: +{new_orders} new, {updated} updated")
         else:
             print("No updates needed.")
 
