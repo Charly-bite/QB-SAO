@@ -100,6 +100,40 @@ body {
 @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 .refresh-text { font-size: 11px; color: #94a3b8; font-weight: 500; font-family: var(--mono); }
 
+/* Notification bell button */
+.notif-bell-btn {
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.06);
+    cursor: pointer; transition: var(--transition);
+    color: #94a3b8;
+}
+.notif-bell-btn:hover { background: rgba(255,255,255,0.12); color: #e2e8f0; }
+.notif-bell-on {
+    background: rgba(99,102,241,0.2) !important;
+    border-color: rgba(99,102,241,0.4) !important;
+    color: #a5b4fc !important;
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+    animation: bell-glow 2.5s ease-in-out infinite;
+}
+@keyframes bell-glow {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
+    50%       { box-shadow: 0 0 0 6px rgba(99,102,241,0.08); }
+}
+.notif-badge {
+    position: absolute; top: 6px; right: 6px;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #22c55e;
+    border: 1.5px solid #0f172a;
+    animation: badge-pulse 2s ease-in-out infinite;
+}
+@keyframes badge-pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50%       { transform: scale(1.3); opacity: 0.8; }
+}
+
 /* User badge */
 .user-badge { display: flex; align-items: center; }
 .user-avatar {

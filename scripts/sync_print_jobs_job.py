@@ -21,35 +21,22 @@ os.environ["WERKZEUG_RUN_MAIN"] = "true"
 from app import create_app
 from core.order_status_manager import OrderStatus
 from core.print_event_matcher import extract_print_items, find_matching_order_ids
+from core.database_client import DatabaseClient
 
 EVENT_TYPES = ("DIRECT_PRINT_JOB", "PRINT_JOB", "PRINT_JOB_HTML")
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 STATE_FILE = _PROJECT_ROOT / "logs" / "print_sync_state.json"
 UNRESOLVED_FILE = _PROJECT_ROOT / "logs" / "print_sync_unresolved.jsonl"
 
+_db_client = None
 
-def _sql_connection_string() -> str:
-    host = os.environ.get("SQL_SERVER", "192.168.2.237")
-    db = os.environ.get("SQL_DATABASE", "SGA_Database")
-    user = os.environ.get("SQL_USER", "")
-    password = os.environ.get("SQL_PASSWORD", "")
-
-    if not user or not password:
-        raise RuntimeError("Missing SQL_USER/SQL_PASSWORD environment variables")
-
-    # Prefer modern driver, fallback to legacy if needed.
-    drivers = pyodbc.drivers()
-    driver = "ODBC Driver 17 for SQL Server" if "ODBC Driver 17 for SQL Server" in drivers else "SQL Server"
-
-    return (
-        f"DRIVER={{{driver}}};"
-        f"SERVER={host};"
-        f"DATABASE={db};"
-        f"UID={user};"
-        f"PWD={password};"
-        "TrustServerCertificate=yes;"
-        "Connection Timeout=5"
-    )
+def _get_db_client() -> DatabaseClient:
+    global _db_client
+    if _db_client is None:
+        _db_client = DatabaseClient()
+        if not _db_client.connect():
+            raise RuntimeError("DatabaseClient failed to connect to SQL Server")
+    return _db_client
 
 
 def _load_state() -> Dict[str, Any]:
@@ -73,8 +60,7 @@ def _append_unresolved(entry: Dict[str, Any]) -> None:
 
 
 def _fetch_new_print_events(last_id: int) -> List[Dict[str, Any]]:
-    conn = pyodbc.connect(_sql_connection_string())
-    cur = conn.cursor()
+    db = _get_db_client()
     placeholders = ",".join(["?"] * len(EVENT_TYPES))
     sql = (
         "SELECT id, [timestamp], event_type, username, details "
@@ -83,9 +69,7 @@ def _fetch_new_print_events(last_id: int) -> List[Dict[str, Any]]:
         "ORDER BY id ASC"
     )
     params = [last_id, *EVENT_TYPES]
-    cur.execute(sql, params)
-    rows = cur.fetchall()
-    conn.close()
+    rows = db.execute_query(sql, params)
 
     events: List[Dict[str, Any]] = []
     for r in rows:
@@ -102,14 +86,13 @@ def _fetch_new_print_events(last_id: int) -> List[Dict[str, Any]]:
 
 
 def _get_latest_print_event_id() -> int:
-    conn = pyodbc.connect(_sql_connection_string())
-    cur = conn.cursor()
+    db = _get_db_client()
     placeholders = ",".join(["?"] * len(EVENT_TYPES))
     sql = f"SELECT ISNULL(MAX(id), 0) FROM dbo.history_logs WHERE event_type IN ({placeholders})"
-    cur.execute(sql, list(EVENT_TYPES))
-    max_id = int(cur.fetchone()[0] or 0)
-    conn.close()
+    row = db.execute_query(sql, list(EVENT_TYPES))
+    max_id = int(row[0][0] or 0)
     return max_id
+
 
 
 def run_print_sync() -> None:
