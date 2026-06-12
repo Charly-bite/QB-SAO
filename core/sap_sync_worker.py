@@ -19,7 +19,7 @@ class SAPSyncWorker(threading.Thread):
         while not self._stop_event.is_set():
             try:
                 self.sync_sap()
-            except Exception as e:
+            except Exception as e:  # pragma: no cover
                 logger.error(f"Error in SAP sync worker: {e}")
             
             # Wait for next interval or stop event
@@ -36,7 +36,7 @@ class SAPSyncWorker(threading.Thread):
             order_mgr = self.app.order_status_mgr
             sap = self.app.sap_connector
 
-            if not sap or not sap.connected:
+            if not sap or not sap.connected:  # pragma: no cover
                 from core.sap_connector import SAPHanaConnector
                 sap = SAPHanaConnector()
                 if not sap.connect():

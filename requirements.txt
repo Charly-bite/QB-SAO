@@ -7,5 +7,6 @@ hdbcli>=2.0
 pyodbc>=5.0
 sqlalchemy>=2.0
 pandas>=2.0
+openpyxl>=3.1
 pywin32>=305
 prometheus-flask-exporter>=0.23.0

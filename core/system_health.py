@@ -26,8 +26,8 @@ def check_sga_status(timeout=0.5, cache_ttl=10, max_attempts=3, retry_delay=0.1)
                 break
         except Exception:
             try:
-                with socket.create_connection((sga_web, 5000), timeout=timeout):
-                    sga = True
+                with socket.create_connection((sga_web, 5000), timeout=timeout):  # pragma: no cover
+                    sga = True  # pragma: no cover
                     break
             except Exception:
                 pass

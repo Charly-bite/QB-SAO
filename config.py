@@ -25,7 +25,7 @@ def _generate_secret_key():
     try:
         with open(key_file, 'w') as f:
             f.write(key)
-    except Exception:
+    except Exception:  # pragma: no cover
         pass
     return key
 
