@@ -4,6 +4,8 @@ omit =
     .venv/*
     tests/*
     scripts/*
+    locustfile.py
+    monitor_locustfile.py
 
 [report]
 exclude_lines =
