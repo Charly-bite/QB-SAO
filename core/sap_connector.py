@@ -76,7 +76,7 @@ class SAPHanaConnector:
                 user=user,
                 password=pwd,
                 timeout=10,  # type: ignore[call-arg]
-                connectTimeout=10000,  # type: ignore[call-arg]
+                connectTimeout=5000,  # type: ignore[call-arg]
             )
             self._local.connected = True
             logger.info("[OK] SAP HANA connection established successfully")
@@ -115,15 +115,26 @@ class SAPHanaConnector:
             return f'"{self.schema}"."{table}"'
         return f'"{table}"'
 
+    def _ping_connection(self) -> bool:
+        """Returns True if the current thread's connection is alive."""
+        conn = getattr(self._local, "connection", None)
+        if not conn:
+            return False
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 FROM DUMMY")
+            cursor.close()
+            return True
+        except Exception:
+            return False
+
     def _ensure_connected(self):
         connected = getattr(self._local, "connected", False)
         conn = getattr(self._local, "connection", None)
 
         if connected and conn:
-            try:
-                if hasattr(conn, "isconnected") and not conn.isconnected():
-                    connected = False
-            except Exception:
+            # Use a fast ping instead of trusting internal driver state blindly
+            if not self._ping_connection():
                 connected = False
 
         if not connected:
@@ -866,7 +877,6 @@ class SAPHanaConnector:
         else:
             base_filter = 'T0."DocDate" = CURRENT_DATE'
         base_filter += """
-              AND T0."CANCELED" = 'N'
               AND (T1."TrnspName" != 'VENTA MOSTRADOR' OR T1."TrnspName" IS NULL)
               AND T0."CardCode" != 'CL1662'
         """
@@ -898,6 +908,21 @@ class SAPHanaConnector:
         else:
             final_filter = base_filter
 
+        if date_str:
+            sub_base = f"T0.\"DocDate\" = '{date_str}'"
+        else:
+            sub_base = 'T0."DocDate" = CURRENT_DATE'
+        sub_base += ' AND T0."CardCode" != \'CL1662\''
+
+        subquery_filter = sub_base
+        if extra_invoice_numbers:
+            try:
+                nums = ",".join(str(int(n)) for n in extra_invoice_numbers if n)
+                if nums:
+                    subquery_filter = f"({sub_base}) OR T0.\"DocNum\" IN ({nums})"
+            except (ValueError, TypeError):
+                pass
+
         query = f"""
             SELECT
                 T0."DocNum"    AS invoice_number,
@@ -914,43 +939,57 @@ class SAPHanaConnector:
                 T0."PaidToDate" AS paid_to_date,
                 T1."TrnspName" AS shipping_type,
                 T2."PymntGroup" AS payment_terms,
-                (SELECT MAX(L1."WhsCode")
-                 FROM {self._get_table_name("invoice_lines")} L1
-                 WHERE L1."DocEntry" = T0."DocEntry") AS warehouse,
-                (SELECT MAX(order_num) FROM (
-                    SELECT R0."DocNum" AS order_num
-                    FROM {self._get_table_name("sales_orders")} R0
-                    INNER JOIN {self._get_table_name("invoice_lines")} L2
-                        ON L2."BaseType" = 17 AND L2."BaseEntry" = R0."DocEntry"
-                    WHERE L2."DocEntry" = T0."DocEntry"
-                    UNION
-                    SELECT R0."DocNum" AS order_num
-                    FROM {self._get_table_name("sales_orders")} R0
-                    INNER JOIN {self._get_table_name("delivery_lines")} D1
-                        ON D1."BaseType" = 17 AND D1."BaseEntry" = R0."DocEntry"
-                    INNER JOIN {self._get_table_name("invoice_lines")} L3
-                        ON L3."BaseType" = 15 AND L3."BaseEntry" = D1."DocEntry"
-                    WHERE L3."DocEntry" = T0."DocEntry"
-                )) AS order_number,
-                (SELECT MAX(order_date) FROM (
-                    SELECT R0."DocDate" AS order_date
-                    FROM {self._get_table_name("sales_orders")} R0
-                    INNER JOIN {self._get_table_name("invoice_lines")} L2
-                        ON L2."BaseType" = 17 AND L2."BaseEntry" = R0."DocEntry"
-                    WHERE L2."DocEntry" = T0."DocEntry"
-                    UNION
-                    SELECT R0."DocDate" AS order_date
-                    FROM {self._get_table_name("sales_orders")} R0
-                    INNER JOIN {self._get_table_name("delivery_lines")} D1
-                        ON D1."BaseType" = 17 AND D1."BaseEntry" = R0."DocEntry"
-                    INNER JOIN {self._get_table_name("invoice_lines")} L3
-                        ON L3."BaseType" = 15 AND L3."BaseEntry" = D1."DocEntry"
-                    WHERE L3."DocEntry" = T0."DocEntry"
-                )) AS order_date
+                WH.warehouse   AS warehouse,
+                SO.order_number AS order_number,
+                SO.order_date   AS order_date
             FROM {self._get_table_name("invoices")} T0
             LEFT JOIN {self.schema}."OSLP" T3 ON T0."SlpCode" = T3."SlpCode"
             LEFT JOIN {self.schema}."OSHP" T1 ON T0."TrnspCode" = T1."TrnspCode"
             LEFT JOIN {self.schema}."OCTG" T2 ON T0."GroupNum" = T2."GroupNum"
+            LEFT JOIN (
+                SELECT 
+                    L1."DocEntry" AS InvoiceDocEntry,
+                    MAX(L1."WhsCode") AS warehouse
+                FROM {self._get_table_name("invoice_lines")} L1
+                INNER JOIN {self._get_table_name("invoices")} T0
+                    ON T0."DocEntry" = L1."DocEntry"
+                WHERE {subquery_filter}
+                GROUP BY L1."DocEntry"
+            ) WH ON T0."DocEntry" = WH.InvoiceDocEntry
+            LEFT JOIN (
+                SELECT 
+                    InvoiceDocEntry,
+                    MAX(OrderNum) AS order_number,
+                    MAX(OrderDate) AS order_date
+                FROM (
+                    SELECT 
+                        L2."DocEntry" AS InvoiceDocEntry,
+                        R0."DocNum" AS OrderNum,
+                        R0."DocDate" AS OrderDate
+                    FROM {self._get_table_name("sales_orders")} R0
+                    INNER JOIN {self._get_table_name("invoice_lines")} L2
+                        ON L2."BaseType" = 17 AND L2."BaseEntry" = R0."DocEntry"
+                    INNER JOIN {self._get_table_name("invoices")} T0
+                        ON T0."DocEntry" = L2."DocEntry"
+                    WHERE {subquery_filter}
+                    
+                    UNION ALL
+                    
+                    SELECT 
+                        L3."DocEntry" AS InvoiceDocEntry,
+                        R0."DocNum" AS OrderNum,
+                        R0."DocDate" AS OrderDate
+                    FROM {self._get_table_name("sales_orders")} R0
+                    INNER JOIN {self._get_table_name("delivery_lines")} D1
+                        ON D1."BaseType" = 17 AND D1."BaseEntry" = R0."DocEntry"
+                    INNER JOIN {self._get_table_name("invoice_lines")} L3
+                        ON L3."BaseType" = 15 AND L3."BaseEntry" = D1."DocEntry"
+                    INNER JOIN {self._get_table_name("invoices")} T0
+                        ON T0."DocEntry" = L3."DocEntry"
+                    WHERE {subquery_filter}
+                )
+                GROUP BY InvoiceDocEntry
+            ) SO ON T0."DocEntry" = SO.InvoiceDocEntry
             WHERE {final_filter}
             ORDER BY T0."DocNum" DESC
         """
@@ -976,6 +1015,10 @@ class SAPHanaConnector:
             else:
                 status = "Abierta"
 
+            shipping_type = row[12] or "LOCAL"
+            if shipping_type.strip().upper() in ["ENVIO LOCAL", "ENVÍO LOCAL"]:
+                shipping_type = "LOCAL"
+
             invoices.append({
                 "invoice_number": int(row[0]),
                 "doc_entry": int(row[1]),
@@ -990,7 +1033,7 @@ class SAPHanaConnector:
                 "comments": row[9] or "",
                 "seller_name": row[10] or "SAP System",
                 "paid_to_date": float(row[11]) if row[11] else 0.0,
-                "shipping_type": row[12] or "LOCAL",
+                "shipping_type": shipping_type,
                 "payment_terms": row[13] or "CONTADO",
                 "warehouse": row[14] or "",
                 "order_number": int(row[15]) if row[15] else None,

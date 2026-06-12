@@ -14,7 +14,8 @@
   "16298": "PAQUETERIA",
   "16538": {
     "category": "PAQUETERIA",
-    "color": ""
+    "color": "",
+    "custom_customer_name": ""
   },
   "16545": "PAQUETERIA",
   "16550": "PAQUETERIA",
@@ -23,7 +24,11 @@
   "16565": "PAQUETERIA",
   "16571": "FORANEO",
   "16572": "PAQUETERIA",
-  "16688": "ENVIO LOCAL",
+  "16688": {
+    "category": "LOCAL",
+    "color": "",
+    "custom_customer_name": ""
+  },
   "16566": "PAQUETERIA",
   "16567": "PAQUETERIA",
   "16568": "PAQUETERIA",
@@ -36,10 +41,146 @@
   "16562": "FLETE INTERNO",
   "16726": {
     "category": "PAQUETERIA",
-    "color": ""
+    "color": "",
+    "custom_customer_name": ""
   },
   "16705": {
     "category": "PAQUETERIA",
     "color": ""
+  },
+  "16752": {
+    "category": "PAQUETERIA",
+    "color": "rosa",
+    "custom_customer_name": "VC JUAN ROBERTO RAMOS AVILA"
+  },
+  "16750": {
+    "category": "",
+    "color": "azul",
+    "custom_customer_name": ""
+  },
+  "16749": {
+    "category": "PAQUETERIA",
+    "color": "rosa",
+    "custom_customer_name": ""
+  },
+  "16728": {
+    "category": "LOCAL",
+    "color": "azul",
+    "custom_customer_name": ""
+  },
+  "16731": {
+    "category": "LOCAL",
+    "color": "azul",
+    "custom_customer_name": "VC JOSE LUIS TRUJILLO"
+  },
+  "16745": {
+    "category": "",
+    "color": "",
+    "custom_customer_name": ""
+  },
+  "16730": {
+    "category": "",
+    "color": "azul",
+    "custom_customer_name": ""
+  },
+  "16727": {
+    "category": "",
+    "color": "azul",
+    "custom_customer_name": ""
+  },
+  "16725": {
+    "category": "",
+    "color": "azul",
+    "custom_customer_name": ""
+  },
+  "16724": {
+    "category": "",
+    "color": "azul",
+    "custom_customer_name": ""
+  },
+  "16723": {
+    "category": "",
+    "color": "azul",
+    "custom_customer_name": ""
+  },
+  "16720": {
+    "category": "",
+    "color": "azul",
+    "custom_customer_name": ""
+  },
+  "16741": {
+    "category": "",
+    "color": "azul",
+    "custom_customer_name": ""
+  },
+  "16744": {
+    "category": "LOCAL",
+    "color": "azul",
+    "custom_customer_name": ""
+  },
+  "16714": {
+    "category": "PAQUETERIA",
+    "color": "rosa",
+    "custom_customer_name": ""
+  },
+  "16707": {
+    "category": "PAQUETERIA",
+    "color": "rosa",
+    "custom_customer_name": ""
+  },
+  "16706": {
+    "category": "PAQUETERIA",
+    "color": "rosa",
+    "custom_customer_name": ""
+  },
+  "16712": {
+    "category": "PAQUETERIA",
+    "color": "rosa",
+    "custom_customer_name": ""
+  },
+  "16738": {
+    "category": "PAQUETERIA",
+    "color": "rosa",
+    "custom_customer_name": ""
+  },
+  "16742": {
+    "category": "PAQUETERIA",
+    "color": "rosa",
+    "custom_customer_name": ""
+  },
+  "16743": {
+    "category": "PAQUETERIA",
+    "color": "rosa",
+    "custom_customer_name": ""
+  },
+  "16746": {
+    "category": "PAQUETERIA",
+    "color": "rosa",
+    "custom_customer_name": ""
+  },
+  "16751": {
+    "category": "PAQUETERIA",
+    "color": "rosa",
+    "custom_customer_name": ""
+  },
+  "16697": {
+    "category": "ANEXO MY",
+    "color": "",
+    "custom_customer_name": ""
+  },
+  "16695": {
+    "category": "ANEXO GDL",
+    "color": "",
+    "custom_customer_name": ""
+  },
+  "16709": {
+    "category": "ANEXO GDL",
+    "color": "",
+    "custom_customer_name": ""
+  },
+  "16711": {
+    "category": "ANEXO GDL",
+    "color": "",
+    "custom_customer_name": ""
   }
 }

@@ -141,29 +141,34 @@ class TestSaveDatabase:
         os.unlink(path)
 
     def test_save_json_io_error(self):
+        """_save_database() returns False when the directory is not writable."""
+        import tempfile as _tempfile
         osm, path = _make_osm()
-        osm.db_path = "/nonexistent/dir/file.json"
+        # Point db_path at a file used as a directory — mkstemp will always fail
+        osm.db_path = path + "/not-a-dir/file.json"  # path is a file, not a dir
         result = osm._save_database()
         assert result is False
         os.unlink(path)
 
     def test_save_sql_success(self):
+        """_save_database() must use MERGE via exec_driver_sql, not TRUNCATE+executemany."""
         mock_engine = MagicMock()
         mock_conn = MagicMock()
-        mock_raw = MagicMock()
-        mock_cursor = MagicMock()
-        mock_raw.cursor.return_value = mock_cursor
-        mock_conn.connection = mock_raw
-        mock_engine.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
-        mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
+        mock_engine.begin.return_value.__enter__ = MagicMock(return_value=mock_conn)
+        mock_engine.begin.return_value.__exit__ = MagicMock(return_value=False)
 
         osm, path = _make_osm(orders={"500": _sample_order("500")})
         osm.sql_engine = mock_engine
-        osm._save_database()
+        osm._save_database(force=True)
 
-        mock_cursor.execute.assert_called()
-        mock_cursor.executemany.assert_called()
-        mock_raw.commit.assert_called()
+        # MERGE path: exec_driver_sql is called once per record
+        mock_conn.exec_driver_sql.assert_called()
+        # TRUNCATE must NOT have been called
+        truncate_calls = [
+            c for c in mock_conn.exec_driver_sql.call_args_list
+            if "TRUNCATE" in str(c).upper()
+        ]
+        assert truncate_calls == [], "TRUNCATE must not be called — use MERGE instead"
         os.unlink(path)
 
     def test_save_sql_exception(self):

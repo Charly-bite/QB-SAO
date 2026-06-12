@@ -93,15 +93,22 @@ class TestSgaLabelPrintedValidation:
             assert resp.status_code == 400
             assert "station" in resp.get_json()["error"]
 
-    def test_returns_404_for_nonexistent_order(self, client):
-        """Order not found returns 404."""
+    def test_returns_404_for_nonexistent_order(self, client, app):
+        """Order not found returns 404 (SAP auto-import disabled in test)."""
         with patch.dict(os.environ, {"SGA_API_KEY": TEST_API_KEY}, clear=False):
-            resp = client.post(
-                SGA_ENDPOINT,
-                json={"order_id": "99999", "station": "Almacen1"},
-                headers={"X-API-Key": TEST_API_KEY},
-            )
-            assert resp.status_code == 404
+            # Disable SAP auto-import and make get_order return None
+            original_sap = app.sap_available
+            app.sap_available = False
+            try:
+                with patch.object(app.order_status_mgr, "get_order", return_value=None):
+                    resp = client.post(
+                        SGA_ENDPOINT,
+                        json={"order_id": "99999", "station": "Almacen1"},
+                        headers={"X-API-Key": TEST_API_KEY},
+                    )
+            finally:
+                app.sap_available = original_sap
+            assert resp.status_code == 202
 
 
 class TestSgaLabelPrintedSuccess:

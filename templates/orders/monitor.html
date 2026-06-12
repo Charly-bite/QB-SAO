@@ -53,10 +53,23 @@
                     </div>
                 </template>
 
+                <!-- Notification bell -->
+                <button type="button" id="btn-notifications"
+                    class="notif-bell-btn"
+                    :class="notificationsEnabled ? 'notif-bell-on' : 'notif-bell-off'"
+                    @click="toggleNotifications()"
+                    :title="notificationsEnabled ? 'Notificaciones activas — clic para desactivar' : 'Activar notificaciones'">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    </svg>
+                    <span class="notif-badge" x-show="notificationsEnabled" x-cloak></span>
+                </button>
+
                 <!-- Refresh indicator -->
                 <div class="refresh-badge">
                     <span class="refresh-dot" :class="loading ? 'pulse' : ''"></span>
-                    <span class="refresh-text" x-text="loading ? 'Sincronizando...' : '⟳ ' + timer + 's'"></span>
+                    <span class="refresh-text" x-text="loading ? 'Sincronizando...' : 'Tiempo Real'"></span>
                 </div>
 
                 <!-- User -->
@@ -476,6 +489,9 @@
         </div>
     </div>
 
+    <!-- Nokia notification sound (trimmed 1.5s clip) -->
+    <audio id="nokia-audio" preload="auto" src="{{ url_for('static', filename='nokia.wav') }}" style="display:none"></audio>
+
     <!-- ═══════ ALPINE APP ═══════ -->
     <script>
         document.addEventListener('alpine:init', () => {
@@ -495,9 +511,10 @@
                 pageSize: 50,
                 loading: false,
                 firstLoad: true,
-                timer: 30,
                 _interval: null,
                 expandedOrder: null,
+                notificationsEnabled: false,
+                _sseReconnectTimer: null,
 
                 toast: { visible: false, title: '', message: '', type: 'info', _timer: null },
 
@@ -753,6 +770,56 @@
                     this.expandedOrder = this.expandedOrder === id ? null : id;
                 },
 
+                // ── Notification helpers ──
+                playNotificationSound() {
+                    try {
+                        const audio = document.getElementById('nokia-audio');
+                        if (!audio) return;
+                        audio.currentTime = 0;
+                        audio.play().catch(() => {});
+                    } catch (e) {}
+                },
+
+                async toggleNotifications() {
+                    if (this.notificationsEnabled) {
+                        this.notificationsEnabled = false;
+                        localStorage.setItem('sao_notif', '0');
+                        return;
+                    }
+                    // Request browser notification permission
+                    if ('Notification' in window && Notification.permission === 'default') {
+                        await Notification.requestPermission();
+                    }
+                    this.notificationsEnabled = true;
+                    localStorage.setItem('sao_notif', '1');
+                    // Play a test sound so user knows it works
+                    this.playNotificationSound();
+                    this.showToast('🔔 Notificaciones', 'Notificaciones de cambio de estado activadas', 'info');
+                },
+
+                sendNotification(order_id, fromStatus, toStatus, customerName) {
+                    if (!this.notificationsEnabled) return;
+                    // Sound
+                    this.playNotificationSound();
+                    // Toast
+                    this.showToast(
+                        `📦 Pedido #${order_id}`,
+                        `${customerName || ''} · ${fromStatus} → ${toStatus}`,
+                        'info'
+                    );
+                    // Browser notification (if permitted)
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                        try {
+                            new Notification(`QB-SAO · Pedido #${order_id}`, {
+                                body: `${customerName ? customerName + '\n' : ''}${fromStatus} → ${toStatus}`,
+                                icon: '/static/images/logo_new.png',
+                                tag: `order-${order_id}`,  // collapse duplicates
+                                renotify: true,
+                            });
+                        } catch(e) {}
+                    }
+                },
+
                 // ── Data fetching ──
                 async fetchOrders() {
                     this.loading = true;
@@ -797,47 +864,62 @@
                 },
 
                 init() {
+                    // Restore notification preference
+                    this.notificationsEnabled = localStorage.getItem('sao_notif') === '1';
+
                     this.fetchOrders();
-                    // Open SSE connection to receive real-time order updates
+
+                    // Polling fallback every 30s
+                    this._interval = setInterval(() => this.fetchOrders(), 30000);
+
+                    // SSE real-time stream
+                    this._connectSSE();
+                },
+
+                _connectSSE() {
+                    if (!window.EventSource) return;
+                    // Guard: don't open a second connection if already alive
+                    if (this._es && this._es.readyState === 1) return;
+
                     try {
-                        if (window.EventSource) {
-                            this._es = new EventSource('/orders/stream');
-                            this._es.onmessage = (evt) => {
-                                try {
-                                    const payload = JSON.parse(evt.data);
-                                    if (payload && payload.type === 'order_updated') {
-                                        const o = payload.order;
-                                        const id = String(payload.order_id);
-                                        const idx = this.orders.findIndex(x => String(x.order_id) === id);
-                                        if (idx >= 0) {
-                                            // update in-place
-                                            this.orders.splice(idx, 1, o);
-                                        } else {
-                                            // new order or not in current page — refresh full list
-                                            this.fetchOrders();
-                                        }
-                                        // Recompute stats from local orders
-                                        this._recomputeStats();
+                        if (this._es) { try { this._es.close(); } catch(e) {} }
+                        this._es = new EventSource('/orders/stream_web');
+
+                        this._es.onmessage = (evt) => {
+                            try {
+                                const payload = JSON.parse(evt.data);
+                                if (!payload) return;
+
+                                if (payload.type === 'order_updated') {
+                                    const o = payload.order;
+                                    const id = String(payload.order_id);
+                                    const idx = this.orders.findIndex(x => String(x.order_id) === id);
+                                    if (idx >= 0) {
+                                        this.orders.splice(idx, 1, o);
+                                    } else {
+                                        this.fetchOrders();
                                     }
-                                } catch (e) {
-                                    console.error('SSE parse error', e);
+                                    this._recomputeStats();
                                 }
-                            };
-                            this._es.onerror = (e) => {
-                                // Let the polling fallback keep data fresh
-                                console.warn('SSE connection error', e);
-                            };
-                        }
+
+                                if (payload.type === 'status_changed') {
+                                    const { order_id, customer, from: fromStatus, to: toStatus } = payload;
+                                    this.sendNotification(order_id, fromStatus, toStatus, customer);
+                                }
+                            } catch (e) {
+                                console.error('SSE parse error', e);
+                            }
+                        };
+
+                        this._es.onerror = () => {
+                            console.warn('SSE disconnected — reconnecting in 5s...');
+                            if (this._es) { try { this._es.close(); } catch(e) {} }
+                            if (this._sseReconnectTimer) clearTimeout(this._sseReconnectTimer);
+                            this._sseReconnectTimer = setTimeout(() => this._connectSSE(), 5000);
+                        };
                     } catch (e) {
                         console.warn('SSE not supported', e);
                     }
-                    this._interval = setInterval(() => {
-                        this.timer--;
-                        if (this.timer <= 0) {
-                            this.timer = 30;
-                            this.fetchOrders();
-                        }
-                    }, 1000);
                 },
 
                 _recomputeStats() {
@@ -857,6 +939,8 @@
 
                 destroy() {
                     if (this._interval) clearInterval(this._interval);
+                    if (this._sseReconnectTimer) clearTimeout(this._sseReconnectTimer);
+                    if (this._es) { try { this._es.close(); } catch(e) {} }
                 }
             }));
         });

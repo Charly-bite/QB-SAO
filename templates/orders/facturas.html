@@ -284,11 +284,21 @@ input[type=number] {
                 <template x-for="group in invoiceGroups" :key="group.name">
                     <tbody class="divide-y divide-slate-100" :data-category="group.category" x-init="initGroupSortable($el, group.category)" x-show="group.invoices.length > 0" :class="{'has-selected': group.invoices.some(i => i._selected)}">
                         <!-- Dark Gray Separator Row -->
-                        <tr class="border border-slate-400 ignore-elements" style="background-color: #475569; color: white;">
+                        <tr class="border border-slate-400 ignore-elements" :style="group.category.startsWith('ANEXO') ? 'background-color: #b91c1c; color: white;' : 'background-color: #475569; color: white;'">
                             <td colspan="14" class="px-4 py-1.5 border border-slate-400">
                                 <div class="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
-                                    <span x-text="group.name"></span>
-                                    <span class="ml-2 text-gray-300 text-[10px] lowercase italic" x-show="group.category === 'LOCAL' || group.category === 'ENVIO LOCAL' || group.category === 'PAQUETERIA'">(Arrastrable para ordenar)</span>
+                                    <template x-if="group.category.startsWith('ANEXO')">
+                                        <span class="flex items-center gap-1.5 text-red-100 font-extrabold">
+                                            <svg class="w-4 h-4 text-white animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                                            </svg>
+                                            <span x-text="group.name + ' (URGENTE / PRIORIDAD)'"></span>
+                                        </span>
+                                    </template>
+                                    <template x-if="!group.category.startsWith('ANEXO')">
+                                        <span x-text="group.name"></span>
+                                    </template>
+                                    <span class="ml-2 text-gray-300 text-[10px] lowercase italic" x-show="group.category.startsWith('ANEXO') || ['LOCAL', 'ENVIO LOCAL', 'PAQUETERIA', 'PASE A PAQUETERIA', 'PASE PROGRAMADO'].includes(group.category)">(Arrastrable para ordenar)</span>
                                 </div>
                             </td>
                             <td class="hidden print:table-cell border border-slate-400"></td>
@@ -347,7 +357,12 @@ input[type=number] {
                                 </td>
                                 <!-- No. de Pedido -->
                                 <td class="px-2 py-3 font-medium text-slate-800 border border-slate-400 text-center">
-                                    <div x-html="highlightText(inv.order_number || '')"></div>
+                                    <div class="flex flex-col items-center justify-center gap-1">
+                                        <span x-html="highlightText(inv.order_number || '')"></span>
+                                        <template x-if="inv.order_status === 'Cancelado' || inv.order_sap_status === 'Cancelado'">
+                                            <span class="px-1.5 py-0.5 text-[9px] font-bold bg-red-100 text-red-800 rounded uppercase tracking-wide">Cancelado</span>
+                                        </template>
+                                    </div>
                                 </td>
                                 <!-- Fecha de Facturación -->
                                 <td class="px-2 py-3 font-medium text-slate-800 border border-slate-400 text-center text-[11px]">
@@ -355,7 +370,12 @@ input[type=number] {
                                 </td>
                                 <!-- No. de Factura -->
                                 <td class="px-2 py-3 font-bold text-slate-800 border border-slate-400 text-center">
-                                    <div x-html="highlightText(inv.invoice_number)"></div>
+                                    <div class="flex flex-col items-center justify-center gap-1">
+                                        <span x-html="highlightText(inv.invoice_number)"></span>
+                                        <template x-if="inv.status === 'Cancelada' || inv.canceled === 'Y'">
+                                            <span class="px-1.5 py-0.5 text-[9px] font-bold bg-red-100 text-red-800 rounded uppercase tracking-wide">Cancelada</span>
+                                        </template>
+                                    </div>
                                 </td>
                                 <!-- Cliente -->
                                 <td class="px-4 py-3 border border-slate-400 text-sm relative group">
@@ -386,12 +406,14 @@ input[type=number] {
                                 <td class="px-2 py-2 border border-slate-400 font-medium text-slate-700 align-top">
                                     <div class="flex flex-col gap-1 w-full">
                                         <select :value="inv.shipping_type" @change="handleCategoryDropdownChange(inv.invoice_number, $event.target.value, inv.shipping_type)" class="w-full text-xs font-semibold px-1 py-1 border border-slate-300 rounded text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-sm">
+                                            <option value="ANEXO GDL">ANEXO GDL</option>
+                                            <option value="ANEXO MY">ANEXO MY</option>
+                                            <option value="ANEXO IRP">ANEXO IRP</option>
                                             <option value="LOCAL">LOCAL</option>
                                             <option value="PAQUETERIA">PAQUETERIA</option>
+                                            <option value="PASE A PAQUETERIA">PASE A PAQUETERIA</option>
+                                            <option value="PASE PROGRAMADO">PASE PROGRAMADO</option>
                                             <option value="FLETE INTERNO">FLETE INTERNO</option>
-                                            <option value="GUADALAJARA">GUADALAJARA</option>
-                                            <option value="MONTERREY">MONTERREY</option>
-                                            <option value="IRAPUATO">IRAPUATO</option>
                                         </select>
                                         
                                         <div class="mt-0.5" @dblclick="editObservacion(inv)" title="Doble clic para editar nota">
@@ -487,6 +509,7 @@ function facturasApp() {
         sortDir: 'desc',
         manualOrder: [],
         selectedDate: localStorage.getItem('qb_facturas_date') || new Date().toISOString().split('T')[0],
+        lastFetchedDate: localStorage.getItem('qb_facturas_date') || new Date().toISOString().split('T')[0],
         sapAvailable: {{ sap_available | tojson }},
         errorMsg: '',
         savedViews: [],
@@ -496,6 +519,7 @@ function facturasApp() {
         extraInvoices: [],
         customCustomerNames: {},
         undoStack: [],
+        eventSource: null,
 
         pushUndo(action) {
             this.undoStack.push(action);
@@ -569,21 +593,33 @@ function facturasApp() {
             }
         },
 
-        setColor(invoiceNum, color) {
+        async setColor(invoiceNum, color) {
+            const currentSelectedColor = this.rowColors[invoiceNum] || '';
+            const targetColor = (currentSelectedColor === color) ? '' : color;
+
             const inv = this.invoices.find(i => i.invoice_number === invoiceNum);
-            
-            // Si la factura sobre la que se hizo clic está seleccionada, aplicamos el color a TODAS las seleccionadas
+            const targets = [];
             if (inv && inv._selected) {
                 this.invoices.forEach(i => {
                     if (i._selected) {
-                        this.rowColors[i.invoice_number] = color;
+                        targets.push(i.invoice_number);
                     }
                 });
             } else {
-                // Si no, solo se lo aplicamos a esa
-                this.rowColors[invoiceNum] = color;
+                targets.push(invoiceNum);
             }
-            this.saveColors();
+
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            for (let id of targets) {
+                this.rowColors[id] = targetColor;
+                try {
+                    await fetch(`/orders/api/facturas/${id}/color`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                        body: JSON.stringify({ color: targetColor })
+                    });
+                } catch(e) { console.error('Error saving color:', e); }
+            }
         },
 
         getBaseColorClass(color) {
@@ -597,50 +633,16 @@ function facturasApp() {
             return isButton ? 'btn-color-' + color : 'row-color-' + color;
         },
 
-        saveColors() {
-            try {
-                let allColors = JSON.parse(localStorage.getItem('qb_facturas_colors') || '{}');
-                allColors[this.selectedDate] = this.rowColors;
-                localStorage.setItem('qb_facturas_colors', JSON.stringify(allColors));
-            } catch(e) {}
-        },
+        saveColors() {},
+        loadColors() {},
 
-        loadColors() {
-            try {
-                let allColors = JSON.parse(localStorage.getItem('qb_facturas_colors') || '{}');
-                let dayColors = allColors[this.selectedDate] || {};
-                
-                const colorMap = {
-                    'red': 'rojo', 'blue': 'azul', 'emerald': 'verde', 
-                    'amber': 'amarillo', 'purple': 'morado', 'pink': 'rosa', 'slate': 'gris'
-                };
-
-                // Migrate legacy tailwind classes to simple color names
-                for (let key in dayColors) {
-                    let val = dayColors[key];
-                    if (val && val.includes('bg-')) {
-                        let match = val.match(/bg-([a-z]+)-/);
-                        if (match) {
-                            dayColors[key] = colorMap[match[1]] || match[1];
-                        } else {
-                            dayColors[key] = '';
-                        }
-                    } else if (val && colorMap[val]) {
-                        // Migrate english simple names to spanish
-                        dayColors[key] = colorMap[val];
-                    }
-                }
-                this.rowColors = dayColors;
-            } catch(e) { this.rowColors = {}; }
-        },
-
-        addExtraInvoice() {
+        async addExtraInvoice() {
             const num = prompt("Introduce el número de factura a añadir:");
             if (num && !isNaN(num) && num.trim() !== "") {
                 const numInt = parseInt(num, 10);
                 if (!this.extraInvoices.includes(numInt)) {
                     this.extraInvoices.push(numInt);
-                    this.saveExtraInvoices();
+                    await this.saveExtraInvoices();
                     this.fetchInvoices();
                 } else {
                     alert("Esa factura ya está en la lista.");
@@ -648,20 +650,18 @@ function facturasApp() {
             }
         },
 
-        saveExtraInvoices() {
+        async saveExtraInvoices() {
             try {
-                let allExtras = JSON.parse(localStorage.getItem('qb_facturas_extra') || '{}');
-                allExtras[this.selectedDate] = this.extraInvoices;
-                localStorage.setItem('qb_facturas_extra', JSON.stringify(allExtras));
-            } catch(e) {}
+                const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                await fetch('/orders/api/facturas/extra', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                    body: JSON.stringify({ date: this.selectedDate, extra_invoices: this.extraInvoices })
+                });
+            } catch(e) { console.error('Error saving extra invoices:', e); }
         },
 
-        loadExtraInvoices() {
-            try {
-                let allExtras = JSON.parse(localStorage.getItem('qb_facturas_extra') || '{}');
-                this.extraInvoices = allExtras[this.selectedDate] || [];
-            } catch(e) { this.extraInvoices = []; }
-        },
+        loadExtraInvoices() {},
 
         getDisplayCustomerName(inv) {
             if (this.customCustomerNames && this.customCustomerNames[inv.invoice_number]) {
@@ -678,33 +678,28 @@ function facturasApp() {
             inv._editing_customer = true;
         },
 
-        saveCustomerName(inv) {
+        async saveCustomerName(inv) {
             if (inv._editing_customer) {
                 const newName = inv._temp_customer.trim();
+                const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
                 if (newName && !newName.includes('VENTAS MOSTRADOR')) {
                     this.customCustomerNames[inv.invoice_number] = newName;
                 } else {
                     delete this.customCustomerNames[inv.invoice_number];
                 }
-                this.saveCustomNames();
                 inv._editing_customer = false;
+                try {
+                    await fetch(`/orders/api/facturas/${inv.invoice_number}/customer-name`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                        body: JSON.stringify({ customer_name: newName })
+                    });
+                } catch(e) { console.error('Error saving customer name:', e); }
             }
         },
 
-        saveCustomNames() {
-            try {
-                let allNames = JSON.parse(localStorage.getItem('qb_facturas_custom_names') || '{}');
-                allNames[this.selectedDate] = this.customCustomerNames;
-                localStorage.setItem('qb_facturas_custom_names', JSON.stringify(allNames));
-            } catch(e) {}
-        },
-
-        loadCustomNames() {
-            try {
-                let allNames = JSON.parse(localStorage.getItem('qb_facturas_custom_names') || '{}');
-                this.customCustomerNames = allNames[this.selectedDate] || {};
-            } catch(e) { this.customCustomerNames = {}; }
-        },
+        saveCustomNames() {},
+        loadCustomNames() {},
 
         // Invoices filtered only by status (used for shipping counts)
         get filteredByStatusInvoices() {
@@ -844,6 +839,8 @@ function facturasApp() {
 
             let globalIndex = 1;
             return Object.values(groups).sort((a, b) => {
+                if (a.category === 'ANEXO' && b.category !== 'ANEXO') return -1;
+                if (a.category !== 'ANEXO' && b.category === 'ANEXO') return 1;
                 if (a.category === 'LOCAL' && b.category !== 'LOCAL') return -1;
                 if (a.category !== 'LOCAL' && b.category === 'LOCAL') return 1;
                 return a.category.localeCompare(b.category);
@@ -917,8 +914,74 @@ function facturasApp() {
             this.$watch('selectedDate', (value) => {
                 if (value) {
                     localStorage.setItem('qb_facturas_date', value);
+                    this.fetchInvoices();
                 }
             });
+
+            this.setupEventSource();
+        },
+
+        setupEventSource() {
+            if (this.eventSource) {
+                this.eventSource.close();
+            }
+            this.eventSource = new EventSource('/orders/stream_web');
+            this.eventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    this.handleSSEEvent(data);
+                } catch(e) {
+                    console.error('Error parsing SSE event:', e);
+                }
+            };
+            this.eventSource.onerror = (e) => {
+                console.warn('SSE disconnected, reconnecting in 5s...');
+                this.eventSource.close();
+                setTimeout(() => this.setupEventSource(), 5000);
+            };
+        },
+
+        handleSSEEvent(data) {
+            if (!data || !data.type) return;
+
+            if (data.type === 'factura_category_changed') {
+                const inv = this.invoices.find(i => i.invoice_number === data.invoice_number);
+                if (inv) {
+                    inv.shipping_type = data.category;
+                    this.invoices = [...this.invoices];
+                }
+            } else if (data.type === 'factura_color_changed') {
+                this.rowColors[data.invoice_number] = data.color;
+                this.rowColors = { ...this.rowColors };
+            } else if (data.type === 'factura_customer_name_changed') {
+                if (data.customer_name) {
+                    this.customCustomerNames[data.invoice_number] = data.customer_name;
+                } else {
+                    delete this.customCustomerNames[data.invoice_number];
+                }
+                this.customCustomerNames = { ...this.customCustomerNames };
+            } else if (data.type === 'factura_manual_order_changed') {
+                if (data.date === this.selectedDate) {
+                    this.manualOrder = data.manual_order;
+                    this.sortColumn = 'manual';
+                    this.invoices = [...this.invoices];
+                }
+            } else if (data.type === 'factura_extras_changed') {
+                if (data.date === this.selectedDate) {
+                    this.extraInvoices = data.extra_invoices;
+                    this.fetchInvoices();
+                }
+            } else if (data.type === 'order_updated' && data.order) {
+                const updatedOrder = data.order;
+                const inv = this.invoices.find(i => String(i.invoice_number) === String(updatedOrder.factura_number) || String(i.related_order_id) === String(data.order_id));
+                if (inv) {
+                    const statusVal = updatedOrder.status;
+                    inv.recibido = statusVal === 'Listo' || statusVal === 'Entregado';
+                    inv.entrega = statusVal === 'Entregado';
+                    inv.observaciones = updatedOrder.observaciones || '';
+                    this.invoices = [...this.invoices];
+                }
+            }
         },
 
         initGroupSortable(el, category) {
@@ -987,29 +1050,18 @@ function facturasApp() {
             });
         },
 
-        saveManualOrder() {
+        async saveManualOrder() {
             try {
-                let allOrders = JSON.parse(localStorage.getItem('qb_facturas_manual_order') || '{}');
-                // Save order by date so it doesn't leak into other days
-                allOrders[this.selectedDate] = this.manualOrder;
-                localStorage.setItem('qb_facturas_manual_order', JSON.stringify(allOrders));
-            } catch(e) { console.warn(e); }
+                const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                await fetch('/orders/api/facturas/manual-order', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                    body: JSON.stringify({ date: this.selectedDate, manual_order: this.manualOrder })
+                });
+            } catch(e) { console.error('Error saving manual order:', e); }
         },
 
-        loadManualOrder() {
-            try {
-                let allOrders = JSON.parse(localStorage.getItem('qb_facturas_manual_order') || '{}');
-                if (allOrders[this.selectedDate] && allOrders[this.selectedDate].length > 0) {
-                    this.manualOrder = allOrders[this.selectedDate];
-                    // We don't automatically set sortColumn to 'manual' unless they actually had one saved
-                    this.sortColumn = 'manual';
-                } else {
-                    this.manualOrder = [];
-                    // Default to invoice_number if no manual order exists
-                    this.sortColumn = 'invoice_number';
-                }
-            } catch(e) { console.warn(e); }
-        },
+        loadManualOrder() {},
 
 
 
@@ -1019,39 +1071,49 @@ function facturasApp() {
             if (this.loading) return;
             this.loading = true;
             this.errorMsg = '';
-            
-            // Load extra invoices for this date before fetching
-            this.loadExtraInvoices();
 
             try {
                 let params = this.selectedDate ? '?date=' + this.selectedDate : '';
-                if (this.extraInvoices.length > 0) {
-                    params += (params ? '&' : '?') + `extra_invoices=${this.extraInvoices.join(',')}`;
-                }
                 const res = await fetch("{{ url_for('orders.api_facturas') }}" + params + (params ? '&' : '?') + '_=' + Date.now(), { cache: 'no-store' });
                 const data = await res.json();
 
                 if (res.ok) {
+                    // Load daily configuration fields returned from backend
+                    this.manualOrder = data.manual_order || [];
+                    this.extraInvoices = data.extra_invoices || [];
+                    this.customCustomerNames = data.custom_customer_names || {};
+                    this.rowColors = data.row_colors || {};
+
+                    // Default to manual ordering if manual order is saved, else fallback to invoice number
+                    if (this.manualOrder.length > 0) {
+                        this.sortColumn = 'manual';
+                    } else {
+                        this.sortColumn = 'invoice_number';
+                    }
+
+                    const dateChanged = (this.lastFetchedDate !== this.selectedDate);
+                    this.lastFetchedDate = this.selectedDate;
+
+                    const selectedInvoiceNumbers = dateChanged ? new Set() : new Set(
+                        this.invoices.filter(i => i._selected).map(i => String(i.invoice_number))
+                    );
+
                     this.invoices = (data.invoices || []).map(i => ({ 
                         ...i, 
                         _editing: false, 
                         _temp_observaciones: '',
                         _editing_customer: false,
                         _temp_customer: '',
-                        _selected: false,
+                        _selected: selectedInvoiceNumbers.has(String(i.invoice_number)),
                         _editing_position: false
                     }));
                     this.stats = data.stats || {};
-                    // Load the manual order, custom names and colors for this newly loaded date
-                    this.loadManualOrder();
-                    this.loadCustomNames();
-                    this.loadColors();
                 } else {
                     this.errorMsg = data.error || 'Error desconocido';
                     console.error('API error:', data.error);
                 }
             } catch (e) {
-                this.errorMsg = 'Error de conexión';
+                this.errorMsg = 'Error de connection';
                 console.error('Fetch error:', e);
             } finally {
                 this.loading = false;
@@ -1116,17 +1178,7 @@ function facturasApp() {
                 return;
             }
 
-            // Sync JS state from actual DOM checkboxes to fix any Alpine/Sortable desync
-            document.querySelectorAll('tbody tr.invoice-row').forEach(tr => {
-                const id = tr.dataset.id;
-                const checkbox = tr.querySelector('input[type="checkbox"]');
-                if (id && checkbox) {
-                    const inv = this.invoices.find(i => String(i.invoice_number) === String(id));
-                    if (inv) {
-                        inv._selected = checkbox.checked;
-                    }
-                }
-            });
+            // No DOM sync needed as Alpine state is preserved automatically across fetches
 
             const hasSelected = this.invoices.some(i => i._selected);
             const payload = {

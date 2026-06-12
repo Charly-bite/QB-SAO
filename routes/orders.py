@@ -12,7 +12,7 @@ import urllib.request
 from functools import wraps
 
 import io
-from flask import Blueprint, current_app, jsonify, render_template, request, Response, send_file
+from flask import Blueprint, current_app, jsonify, render_template, request, Response, send_file, url_for
 import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 import queue
@@ -28,15 +28,184 @@ orders_bp = Blueprint("orders", __name__)
 # Simple in-memory pub/sub for Server-Sent Events (SSE)
 _SUBSCRIBERS = []
 
+# ── Webhook retry queue ──────────────────────────────────────────────────────
+# When SGA fires a label-printed webhook for an order that isn't loaded yet,
+# we enqueue it here and retry every 30 s (up to MAX_RETRIES attempts).
+_WEBHOOK_RETRY_QUEUE: list = []   # list of retry-entry dicts
+_RETRY_LOCK = threading.Lock()
+_WEBHOOK_MAX_RETRIES = 3
+_WEBHOOK_RETRY_INTERVAL = 30      # seconds between attempts
+
 
 def _publish_event(event: dict):
     # Push event to all subscriber queues (non-blocking)
     for q in list(_SUBSCRIBERS):
         try:
             q.put(event, block=False)
-        except Exception:
-            # ignore full/closed queues
+        except queue.Full:
             pass
+        except Exception as e:
+            current_app.logger.warning(f"Error publishing event: {e}")
+
+
+def _webhook_retry_worker(app):
+    """Background daemon that retries failed label-printed webhooks.
+
+    Runs every _WEBHOOK_RETRY_INTERVAL seconds inside the Flask app context.
+    On each cycle it drains _WEBHOOK_RETRY_QUEUE, attempts the SAP import +
+    status update, and either resolves or re-queues the entry (up to
+    _WEBHOOK_MAX_RETRIES times).
+    """
+    import time as _time
+    with app.app_context():
+        while True:
+            _time.sleep(_WEBHOOK_RETRY_INTERVAL)
+            with _RETRY_LOCK:
+                pending = list(_WEBHOOK_RETRY_QUEUE)
+                _WEBHOOK_RETRY_QUEUE.clear()
+
+            still_pending = []
+            for entry in pending:
+                order_id = entry["order_id"]
+                station  = entry["station"]
+                data     = entry["data"]
+                attempt  = entry["attempt"] + 1
+
+                order_mgr = app.order_status_mgr
+                order = order_mgr.get_order(order_id)
+
+                if not order and app.sap_available and app.sap_connector:
+                    try:
+                        sap = app.sap_connector
+                        if not sap.connected:
+                            sap.connect()
+                        order_data = sap.get_order_details(order_id)
+                        if order_data:
+                            h = order_data.get("header", {})
+                            flat = {
+                                "DocNum":          h.get("order_number"),
+                                "DocEntry":        h.get("doc_entry"),
+                                "CardCode":        h.get("customer_code"),
+                                "CardName":        h.get("customer_name"),
+                                "DocDate":         h.get("order_date"),
+                                "DocDueDate":      h.get("delivery_date"),
+                                "DocTotal":        h.get("total_value", 0),
+                                "DocCurrency":     h.get("currency", "MXN"),
+                                "Comments":        "",
+                                "items":           order_data.get("items", []),
+                                "sap_status":      h.get("sap_status", "Abierto"),
+                                "factura_number":  h.get("factura_number"),
+                                "delivery_number": h.get("delivery_number"),
+                                "updated_by":      h.get("updater_name", "SGA Webhook"),
+                                "created_by":      h.get("creator_name"),
+                                "creator_name":    h.get("creator_name"),
+                            }
+                            sap_user = h.get("updater_name", "SGA Webhook")
+                            order = order_mgr.import_from_sap(flat, imported_by=sap_user)
+                            logging.info(
+                                f"[Retry {attempt}/{_WEBHOOK_MAX_RETRIES}] "
+                                f"Order {order_id} auto-imported from SAP."
+                            )
+                    except Exception as e:
+                        logging.warning(
+                            f"[Retry {attempt}/{_WEBHOOK_MAX_RETRIES}] "
+                            f"SAP import for order {order_id} failed: {e}"
+                        )
+
+                if order:
+                    # Order is now available — apply the transition
+                    current_status = order.get("status", "")
+                    target_status  = OrderStatus.IN_PROGRESS.value
+                    if current_status not in _MAIN_STATUSES or \
+                            _MAIN_STATUSES.index(current_status) <= \
+                            _MAIN_STATUSES.index(target_status):
+                        items      = data.get("items", [])
+                        event_type = data.get("event_type", "DIRECT_PRINT_JOB")
+                        notes = f"Impresion SGA (station={station}, type={event_type}, retry={attempt}"
+                        if items:
+                            notes += f", items={sorted(items)}"
+                        notes += ")"
+                        success = order_mgr.update_status(
+                            order_id, target_status, station, notes=notes
+                        )
+                        if success:
+                            logging.info(
+                                f"[Retry {attempt}] SGA webhook resolved: "
+                                f"order={order_id} -> {target_status}"
+                            )
+                            try:
+                                updated_order = order_mgr.get_order(order_id)
+                                _publish_event({
+                                    "type": "order_updated",
+                                    "order_id": str(order_id),
+                                    "order": updated_order,
+                                })
+                                _publish_event({
+                                    "type": "status_changed",
+                                    "order_id": str(order_id),
+                                    "from": current_status,
+                                    "to": target_status,
+                                    "customer": updated_order.get("customer_name", "") if updated_order else "",
+                                })
+                            except Exception:  # pragma: no cover
+                                pass  # pragma: no cover
+                        else:
+                            logging.warning(
+                                f"[Retry {attempt}] status update failed for order {order_id}"
+                            )
+                    # Either resolved or already at higher status — don't re-queue
+                elif attempt < _WEBHOOK_MAX_RETRIES:
+                    entry["attempt"] = attempt
+                    still_pending.append(entry)
+                    logging.warning(
+                        f"[Retry {attempt}/{_WEBHOOK_MAX_RETRIES}] "
+                        f"Order {order_id} still not available — will retry."
+                    )
+                else:
+                    logging.error(
+                        f"[Retry FINAL] Giving up on webhook for order {order_id} "
+                        f"after {_WEBHOOK_MAX_RETRIES} attempts (station={station})."
+                    )
+                    # DLQ Implementation
+                    try:
+                        if app.order_status_mgr.sql_engine:
+                            with app.order_status_mgr.sql_engine.begin() as conn:
+                                # Ensure table exists
+                                conn.exec_driver_sql("""
+                                    IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='seguimiento_webhook_dlq' and xtype='U')
+                                    CREATE TABLE seguimiento_webhook_dlq (
+                                        id INT IDENTITY(1,1) PRIMARY KEY,
+                                        order_id VARCHAR(50),
+                                        station VARCHAR(100),
+                                        payload NVARCHAR(MAX),
+                                        failed_at DATETIME DEFAULT GETDATE()
+                                    )
+                                """)
+                                import json
+                                conn.exec_driver_sql(
+                                    "INSERT INTO seguimiento_webhook_dlq (order_id, station, payload) VALUES (?, ?, ?)",
+                                    (order_id, station, json.dumps(entry))
+                                )
+                                logging.info(f"💾 Webhook for order {order_id} saved to Dead-Letter Queue (seguimiento_webhook_dlq)")
+                    except Exception as dlq_err:
+                        logging.error(f"Failed to save webhook to DLQ: {dlq_err}")
+
+            if still_pending:
+                with _RETRY_LOCK:
+                    _WEBHOOK_RETRY_QUEUE.extend(still_pending)
+
+
+def init_webhook_retry(app):
+    """Start the webhook retry background daemon.  Call once after create_app()."""
+    t = threading.Thread(
+        target=_webhook_retry_worker,
+        args=(app,),
+        name="webhook-retry",
+        daemon=True,
+    )
+    t.start()
+    logging.info("Webhook retry worker started (interval=%ds, max_retries=%d)",
+                 _WEBHOOK_RETRY_INTERVAL, _WEBHOOK_MAX_RETRIES)
 
 
 def _require_monitor_token(f):
@@ -71,6 +240,12 @@ def _require_sga_api_key(f):
             "api_key", ""
         )
         if token != expected:
+            # Log enough detail to identify the misconfigured station
+            masked = (token[:4] + "****") if token else "<missing>"
+            logging.warning(
+                "SGA API key rejected — ip=%s, token_prefix='%s', endpoint=%s",
+                request.remote_addr, masked, request.path,
+            )
             return jsonify({"error": "Unauthorized"}), 401
         return f(*args, **kwargs)
 
@@ -156,8 +331,8 @@ def _check_delivery_and_invoice(sap, order_mgr, recent_orders):
                     "order_id": oid,
                     "order": order_mgr.get_order(oid),
                 })
-            except Exception:
-                pass
+            except Exception as e:
+                current_app.logger.warning(f"Ignored exception: {e}")
             updated += 1
 
     # ── 2. Invoices → Facturacion ─────────────────────────────────────
@@ -190,8 +365,8 @@ def _check_delivery_and_invoice(sap, order_mgr, recent_orders):
                     "order_id": oid,
                     "order": order_mgr.get_order(oid),
                 })
-            except Exception:
-                pass
+            except Exception as e:
+                current_app.logger.warning(f"Ignored exception: {e}")
             updated += 1
 
     return updated
@@ -255,15 +430,24 @@ def changelog():
 @orders_bp.route('/stream')
 @_require_monitor_token
 def stream():
-    """Server-Sent Events stream that broadcasts order updates to monitors."""
+    """Server-Sent Events stream that broadcasts order updates to monitors.
+
+    Sends a ':keepalive' comment every 25 s so the connection is never idle
+    long enough for a proxy or browser to drop it.
+    """
     q = queue.Queue()
     _SUBSCRIBERS.append(q)
 
     def event_stream(local_q):  # pragma: no cover
         try:  # pragma: no cover
             while True:  # pragma: no cover
-                data = local_q.get()  # pragma: no cover
-                yield f"data: {json_mod.dumps(data, ensure_ascii=False)}\n\n"  # pragma: no cover
+                try:  # pragma: no cover
+                    data = local_q.get(timeout=25)  # pragma: no cover
+                    yield f"data: {json_mod.dumps(data, ensure_ascii=False)}\n\n"  # pragma: no cover
+                except queue.Empty:  # pragma: no cover
+                    # No event in 25 s — send a keepalive comment so the
+                    # connection stays open through proxies and idle timeouts
+                    yield ": keepalive\n\n"  # pragma: no cover
         finally:
             # Clean up when client disconnects
             try:  # pragma: no cover
@@ -271,32 +455,47 @@ def stream():
             except ValueError:  # pragma: no cover
                 pass  # pragma: no cover
 
-    return Response(event_stream(q), mimetype='text/event-stream')
+    resp = Response(event_stream(q), mimetype='text/event-stream')
+    resp.headers['Cache-Control'] = 'no-cache'
+    resp.headers['X-Accel-Buffering'] = 'no'   # disable Nginx proxy buffering
+    resp.headers['Connection'] = 'keep-alive'
+    return resp
 
 
 @orders_bp.route('/stream_web')
 @login_required
 def stream_web():
-    """Server-Sent Events stream for authenticated web users."""
-    import queue
-    import json as json_mod
-    from flask import Response
-    
-    q = queue.Queue()
+    """Server-Sent Events stream for authenticated web users.
+
+    Sends a ':keepalive' comment every 25 s so the connection is never idle
+    long enough for a proxy or browser to drop it.
+    """
+    import queue as _queue
+    import json as _json
+
+    q = _queue.Queue()
     _SUBSCRIBERS.append(q)
 
     def event_stream(local_q):
         try:
             while True:
-                data = local_q.get()
-                yield f"data: {json_mod.dumps(data, ensure_ascii=False)}\n\n"
+                try:
+                    data = local_q.get(timeout=25)
+                    yield f"data: {_json.dumps(data, ensure_ascii=False)}\n\n"
+                except _queue.Empty:
+                    # Keepalive — prevents proxy / browser from closing idle connection
+                    yield ": keepalive\n\n"
         finally:
             try:
                 _SUBSCRIBERS.remove(local_q)
             except ValueError:
                 pass
 
-    return Response(event_stream(q), mimetype='text/event-stream')
+    resp = Response(event_stream(q), mimetype='text/event-stream')
+    resp.headers['Cache-Control'] = 'no-cache'
+    resp.headers['X-Accel-Buffering'] = 'no'
+    resp.headers['Connection'] = 'keep-alive'
+    return resp
 
 
 # Pipeline order for the status stepper — defined once here, passed to template
@@ -371,8 +570,8 @@ def dashboard_stats():
                     diff = (t2 - t1).total_seconds() / 3600.0 # in hours
                     if diff > 0 and diff < 100: # filter anomalies
                         warehouse_times.append(diff)
-                except Exception:
-                    pass
+                except Exception as e:
+                    current_app.logger.warning(f"Ignored exception: {e}")
 
     avg_warehouse_time = sum(warehouse_times) / len(warehouse_times) if warehouse_times else 0
 
@@ -452,8 +651,8 @@ def audit_stats():
                             "sao_date": sao_time_str,
                             "delay_min": round(diff_min, 1)
                         })
-                except Exception:
-                    pass
+                except Exception as e:
+                    current_app.logger.warning(f"Ignored exception: {e}")
 
     # Process invoices (SAP -> SAO Facturacion)
     for inv in invoices:
@@ -484,8 +683,8 @@ def audit_stats():
                             "sao_date": sao_time_str,
                             "delay_min": round(diff_min, 1)
                         })
-                except Exception:
-                    pass
+                except Exception as e:
+                    current_app.logger.warning(f"Ignored exception: {e}")
 
     # Sort audit records by SAO detection timestamp DESC
     audit_records.sort(key=lambda x: x["sao_date"], reverse=True)
@@ -794,7 +993,67 @@ def sga_label_printed():
     order = order_mgr.get_order(order_id)
 
     if not order:
-        return jsonify({"error": f"Order {order_id} not found"}), 404
+        # SGA printed a label, but order isn't loaded locally yet.
+        # Try to dynamically import it from SAP if SAP is available.
+        if current_app.sap_available:
+            try:
+                sap = current_app.sap_connector
+                if not sap or not sap.connected:
+                    from core.sap_connector import SAPHanaConnector
+                    sap = SAPHanaConnector()
+                    sap.connect()
+                    current_app.sap_connector = sap
+
+                order_data = sap.get_order_details(order_id)
+                if order_data:
+                    header = order_data.get("header", {})
+                    items = order_data.get("items", [])
+                    sap_user = header.get("updater_name", header.get("creator_name", "SGA Webhook"))
+
+                    flattened_order = {
+                        "DocNum": header.get("order_number"),
+                        "DocEntry": header.get("doc_entry"),
+                        "CardCode": header.get("customer_code"),
+                        "CardName": header.get("customer_name"),
+                        "DocDate": header.get("order_date"),
+                        "DocDueDate": header.get("delivery_date"),
+                        "DocTotal": header.get("total_value", 0),
+                        "DocCurrency": header.get("currency", "MXN"),
+                        "Comments": "",
+                        "items": items,
+                        "sap_status": header.get("sap_status", "Abierto"),
+                        "factura_number": header.get("factura_number"),
+                        "delivery_number": header.get("delivery_number"),
+                        "updated_by": sap_user,
+                        "created_by": header.get("creator_name"),
+                        "creator_name": header.get("creator_name"),
+                    }
+                    order = order_mgr.import_from_sap(flattened_order, imported_by=sap_user)
+                    logging.info(f"SGA Webhook: Order {order_id} auto-imported from SAP.")
+            except Exception as e:
+                logging.error(f"SGA Webhook: Failed to auto-import order {order_id} from SAP: {e}")
+
+    if not order:
+        # Still not found — enqueue for retry so we don't lose the event.
+        # Return 202 Accepted so SGA doesn't log a failure.
+        with _RETRY_LOCK:
+            _WEBHOOK_RETRY_QUEUE.append({
+                "order_id": order_id,
+                "station":  station,
+                "data":     data,
+                "attempt":  0,
+            })
+        logging.warning(
+            "SGA Webhook: Order %s not found — queued for retry "
+            "(station=%s, queue_depth=%d)",
+            order_id, station, len(_WEBHOOK_RETRY_QUEUE),
+        )
+        return jsonify({
+            "accepted": True,
+            "order_id": order_id,
+            "message": "Order not loaded yet — will retry automatically",
+        }), 202
+
 
     # Prevent status downgrade — don't move an order backwards
     current_status = order.get("status", "")
@@ -833,6 +1092,14 @@ def sga_label_printed():
             "type": "order_updated",
             "order_id": str(order_id),
             "order": updated_order,
+        })
+        # Also fire status_changed so the monitor's notification bell rings
+        _publish_event({
+            "type": "status_changed",
+            "order_id": str(order_id),
+            "from": previous_status,
+            "to": target_status,
+            "customer": updated_order.get("customer_name", "") if updated_order else "",
         })
     except Exception:  # pragma: no cover
         pass  # pragma: no cover
@@ -1907,7 +2174,6 @@ def api_facturas():
 
     date_filter = request.args.get("date", "").strip() or None
     extra_invoices_str = request.args.get("extra_invoices", "").strip()
-    extra_invoice_numbers = [int(x) for x in extra_invoices_str.split(",") if x.strip().isdigit()] if extra_invoices_str else None
 
     try:
         sap = current_app.sap_connector
@@ -1917,6 +2183,15 @@ def api_facturas():
             sap = SAPHanaConnector()  # pragma: no cover
             sap.connect()  # pragma: no cover
             current_app.sap_connector = sap  # pragma: no cover
+
+        overrides = getattr(current_app, "factura_metadata_mgr", None)
+        db_date = date_filter or datetime.date.today().isoformat()
+        db_extras = overrides.get_daily_extras(db_date) if overrides else []
+
+        # Merge query params and database extras
+        req_extras = [int(x) for x in extra_invoices_str.split(",") if x.strip().isdigit()] if extra_invoices_str else []
+        combined_extras = list(set(db_extras + req_extras))
+        extra_invoice_numbers = combined_extras if combined_extras else None
 
         invoices = sap.get_todays_invoices(date_str=date_filter, extra_invoice_numbers=extra_invoice_numbers)
 
@@ -1929,8 +2204,7 @@ def api_facturas():
         }
 
         # Fetch category overrides
-        overrides = getattr(current_app, "factura_metadata_mgr", None)
-        category_overrides = overrides.get_overrides() if overrides else {}
+        category_overrides, color_overrides, custom_names = overrides.get_overrides() if overrides else ({}, {}, {})
 
         for inv in invoices:
             inv_num_str = str(inv['invoice_number'])
@@ -1941,19 +2215,23 @@ def api_facturas():
                 inv['entrega'] = status == OrderStatus.SHIPPED.value
                 inv['related_order_id'] = order.get('order_id')
                 inv['observaciones'] = order.get('observaciones', '')
+                inv['order_status'] = status
+                inv['order_sap_status'] = order.get('sap_status')
             else:
                 inv['recibido'] = False
                 inv['entrega'] = False
                 inv['related_order_id'] = None
                 inv['observaciones'] = ''
+                inv['order_status'] = None
+                inv['order_sap_status'] = None
 
             # Override category if set
-            if int(inv['invoice_number']) in category_overrides:
-                inv['shipping_type'] = category_overrides[int(inv['invoice_number'])]
-
-            # Override category if set
-            if int(inv['invoice_number']) in category_overrides:
-                inv['shipping_type'] = category_overrides[int(inv['invoice_number'])]
+            inv_num_int = int(inv['invoice_number'])
+            if inv_num_int in category_overrides:
+                override_val = category_overrides[inv_num_int]
+                if override_val.strip().upper() in ["ENVIO LOCAL", "ENVÍO LOCAL"]:
+                    override_val = "LOCAL"
+                inv['shipping_type'] = override_val
 
         # Calculate stats
         total_mxn = sum(i["total"] for i in invoices if i["currency"] == "MXN")
@@ -1971,10 +2249,20 @@ def api_facturas():
             "total_usd": round(total_usd, 2),
         }
 
+        # Convert keys to strings for JSON compatibility
+        row_colors = {str(k): v for k, v in color_overrides.items()}
+        custom_customer_names = {str(k): v for k, v in custom_names.items()}
+        manual_order = overrides.get_daily_order(db_date) if overrides else []
+        manual_order = [str(x) for x in manual_order]
+
         return jsonify({
             "invoices": invoices,
             "stats": stats,
             "generated_at": datetime.datetime.now().isoformat(),
+            "manual_order": manual_order,
+            "extra_invoices": db_extras,
+            "custom_customer_names": custom_customer_names,
+            "row_colors": row_colors,
         })
 
     except Exception as e:
@@ -1985,7 +2273,7 @@ def api_facturas():
 @orders_bp.route("/api/facturas/<int:invoice_number>/category", methods=["POST"])
 @login_required
 def api_update_factura_category(invoice_number):
-    """Save user-selected category override for an invoice."""
+    """Save user-selected category override for an invoice and broadcast changes."""
     try:
         data = request.get_json()
         if not data or "category" not in data:
@@ -1997,11 +2285,128 @@ def api_update_factura_category(invoice_number):
             
         success = mgr.save_override(invoice_number, data["category"])
         if success:
+            _publish_event({
+                "type": "factura_category_changed",
+                "invoice_number": invoice_number,
+                "category": data["category"]
+            })
             return jsonify({"success": True})
         else:
             return jsonify({"success": False, "error": "Database error"}), 500
     except Exception as e:
         logging.error(f"Error updating category: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@orders_bp.route("/api/facturas/<int:invoice_number>/color", methods=["POST"])
+@login_required
+def api_update_factura_color(invoice_number):
+    """Save user-selected color for an invoice row and broadcast changes."""
+    try:
+        data = request.get_json()
+        if not data or "color" not in data:
+            return jsonify({"success": False, "error": "Missing color"}), 400
+        
+        mgr = getattr(current_app, "factura_metadata_mgr", None)
+        if not mgr:
+            return jsonify({"success": False, "error": "Metadata manager not available"}), 500
+            
+        success = mgr.save_color(invoice_number, data["color"])
+        if success:
+            _publish_event({
+                "type": "factura_color_changed",
+                "invoice_number": invoice_number,
+                "color": data["color"]
+            })
+            return jsonify({"success": True})
+        else:
+            return jsonify({"success": False, "error": "Database error"}), 500
+    except Exception as e:
+        logging.error(f"Error updating color: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@orders_bp.route("/api/facturas/<int:invoice_number>/customer-name", methods=["POST"])
+@login_required
+def api_update_factura_customer_name(invoice_number):
+    """Save custom customer name for an invoice (e.g. Ventas Mostrador) and broadcast changes."""
+    try:
+        data = request.get_json()
+        if not data or "customer_name" not in data:
+            return jsonify({"success": False, "error": "Missing customer_name"}), 400
+        
+        mgr = getattr(current_app, "factura_metadata_mgr", None)
+        if not mgr:
+            return jsonify({"success": False, "error": "Metadata manager not available"}), 500
+            
+        success = mgr.save_custom_customer_name(invoice_number, data["customer_name"])
+        if success:
+            _publish_event({
+                "type": "factura_customer_name_changed",
+                "invoice_number": invoice_number,
+                "customer_name": data["customer_name"]
+            })
+            return jsonify({"success": True})
+        else:
+            return jsonify({"success": False, "error": "Database error"}), 500
+    except Exception as e:
+        logging.error(f"Error updating customer name: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@orders_bp.route("/api/facturas/manual-order", methods=["POST"])
+@login_required
+def api_update_factura_manual_order():
+    """Save manual sorting order of invoices for a specific date and broadcast changes."""
+    try:
+        data = request.get_json()
+        if not data or "date" not in data or "manual_order" not in data:
+            return jsonify({"success": False, "error": "Missing date or manual_order"}), 400
+        
+        mgr = getattr(current_app, "factura_metadata_mgr", None)
+        if not mgr:
+            return jsonify({"success": False, "error": "Metadata manager not available"}), 500
+            
+        success = mgr.save_daily_order(data["date"], data["manual_order"])
+        if success:
+            _publish_event({
+                "type": "factura_manual_order_changed",
+                "date": data["date"],
+                "manual_order": data["manual_order"]
+            })
+            return jsonify({"success": True})
+        else:
+            return jsonify({"success": False, "error": "Database error"}), 500
+    except Exception as e:
+        logging.error(f"Error updating manual order: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@orders_bp.route("/api/facturas/extra", methods=["POST"])
+@login_required
+def api_update_factura_extras():
+    """Save manually added extra invoices for a specific date and broadcast changes."""
+    try:
+        data = request.get_json()
+        if not data or "date" not in data or "extra_invoices" not in data:
+            return jsonify({"success": False, "error": "Missing date or extra_invoices"}), 400
+        
+        mgr = getattr(current_app, "factura_metadata_mgr", None)
+        if not mgr:
+            return jsonify({"success": False, "error": "Metadata manager not available"}), 500
+            
+        success = mgr.save_daily_extras(data["date"], data["extra_invoices"])
+        if success:
+            _publish_event({
+                "type": "factura_extras_changed",
+                "date": data["date"],
+                "extra_invoices": data["extra_invoices"]
+            })
+            return jsonify({"success": True})
+        else:
+            return jsonify({"success": False, "error": "Database error"}), 500
+    except Exception as e:
+        logging.error(f"Error updating extra invoices: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -2056,7 +2461,10 @@ def api_facturas_export():
         for inv in invoices:
             # Override category if set
             if int(inv['invoice_number']) in category_overrides:
-                inv['shipping_type'] = category_overrides[int(inv['invoice_number'])]
+                override_val = category_overrides[int(inv['invoice_number'])]
+                if override_val.strip().upper() in ["ENVIO LOCAL", "ENVÍO LOCAL"]:
+                    override_val = "LOCAL"
+                inv['shipping_type'] = override_val
             inv_num_str = str(inv['invoice_number'])
             order = factura_to_order.get(inv_num_str)
             
@@ -2527,6 +2935,8 @@ def toggle_factura_status(invoice_number):
 
     if field not in ['recibido', 'entrega', 'observaciones']:
         return jsonify({"error": "Campo inválido"}), 400
+        
+    new_status = None
 
     order_mgr = current_app.order_status_mgr
     # Find related order
@@ -2548,7 +2958,7 @@ def toggle_factura_status(invoice_number):
             new_status = OrderStatus.READY.value
     elif field == 'observaciones':
         related_order['observaciones'] = str(value)
-        order_mgr._save_database()
+        order_mgr.save_database()
         return jsonify({"success": True})
 
     success = order_mgr.update_status(
@@ -2571,8 +2981,8 @@ def toggle_factura_status(invoice_number):
                     "from": current_status,
                     "to": new_status
                 })
-        except Exception:
-            pass
+        except Exception as e:
+            current_app.logger.warning(f"Ignored exception: {e}")
         return jsonify({"success": True, "new_status": new_status})
     
     return jsonify({"error": "Error al actualizar estado"}), 500

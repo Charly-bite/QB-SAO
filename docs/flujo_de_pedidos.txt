@@ -1,0 +1,39 @@
+FLUJO DE ESTADO DE PEDIDOS (QB-SAO / SAP / SGA)
+===============================================
+
+1. PENDIENTE
+   - Origen: Automático (SAP Business One)
+   - ¿Cómo se activa?: Es el estado inicial. Cuando se crea una Orden de Venta (Sales Order / ORDR) en SAP, el sistema QB-SAO la detecta y la importa como "Pendiente".
+
+2. EN PROCESO
+   - Origen: Automático (SGA Web)
+   - ¿Cómo se activa?: En el momento en que el almacén imprime una etiqueta para el pedido desde el sistema SGA (Impresión Directa o por Lote), el SGA envía un aviso (Webhook) a QB-SAO y el estado cambia instantáneamente a "En Proceso".
+
+3. TERMINADO (o Preparando)
+   - Origen: Automático (Sincronización SAP)
+   - ¿Cómo se activa?: QB-SAO tiene un proceso en segundo plano que revisa SAP constantemente. Si detecta que la orden ya cuenta con una "Nota de Entrega" (Delivery Note / ODLN) creada en SAP, actualiza el estado a "Terminado" y agrega una nota interna indicando el número de entrega.
+
+4. FACTURACION (Facturado)
+   - Origen: Automático (Sincronización SAP)
+   - ¿Cómo se activa?: El mismo proceso en segundo plano revisa si la orden ya tiene una "Factura" (Invoice / OINV) vinculada en SAP. Al detectarla, cambia el estado a "Facturacion" y muestra el número de factura en la pantalla.
+
+5. RELACION DE ENVIO (Recibido por almacén)
+   - Origen: Manual (Interfaz de QB-SAO)
+   - ¿Cómo se activa?: Actualmente, el personal de logística presiona este botón cuando agrupan los pedidos en una relación para la ruta. 
+   - Nota: El sistema bloquea este botón y no permite presionarlo si el pedido aún no cuenta con un número de factura (Facturado).
+
+6. ENVIADO AL CLIENTE
+   - Origen: Manual (Interfaz de QB-SAO)
+   - ¿Cómo se activa?: Es el paso final que se marca manualmente cuando el pedido sale físicamente de las instalaciones hacia el cliente.
+
+
+===============================================
+ANÁLISIS DE AUTOMATIZACIÓN PARA PASOS 5 Y 6
+===============================================
+
+Para automatizar los últimos dos pasos ("Relacion de envio" y "Enviado al cliente"), necesitamos identificar si en SAP existe algún documento o campo que marque estos eventos:
+
+- Para "Relacion de envio": ¿Se crea algún documento en SAP al armar la ruta? Por ejemplo, ¿llenan algún campo de "Guía" (TrackNo), "Vehículo", o un campo definido por el usuario (UDF como U_Ruta) en la Factura o Nota de Entrega?
+- Para "Enviado al cliente": ¿Existe una confirmación de entrega en SAP? ¿O quizás cambian el estado de la Nota de Entrega a "Cerrado" cuando el cliente firma de recibido?
+
+Si estos datos se registran en SAP, podemos agregar queries al sincronizador automático (routes/orders.py) para que mueva los estados de forma automática tal como lo hace con "Terminado" y "Facturacion".

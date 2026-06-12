@@ -10,11 +10,14 @@ Database strategy:
 
 import datetime
 import json
+import logging
 import os
 import tempfile
 import time
 from enum import Enum
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 STATUS_LABEL_MIGRATIONS = {
     "Preparando": "Entregado",
@@ -60,8 +63,10 @@ class OrderStatusManager:
 
     def __init__(self, db_path: Optional[str] = None):
         if db_path is None:
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-            db_path = os.path.join(base_dir, "order_status_db.json")
+            # Store runtime data in project-root /data/, not inside the source /core/ dir
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            db_path = os.path.join(base_dir, "data", "order_status_db.json")
+            os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
         self.db_path = db_path
         self.orders: Dict[str, Dict[str, Any]] = {}
@@ -75,12 +80,15 @@ class OrderStatusManager:
             if self.db_client.connect():
                 self.sql_engine = self.db_client.get_sql_engine()  # pragma: no cover
         except Exception as e:  # pragma: no cover
-            print(f"[WARN] OrderStatusManager DB error: {e}")  # pragma: no cover
+            logger.warning(f"[WARN] OrderStatusManager DB error: {e}")  # pragma: no cover
 
         # Debounce tracking for _save_database
         self._last_save_time = 0.0
         self._dirty = False
         self._SAVE_DEBOUNCE_SECONDS = 5
+
+        self._last_load_time = 0.0
+        self._LOAD_THROTTLE_SECONDS = 5.0
 
         self._ensure_db_table_exists()
         self._load_database()
@@ -101,7 +109,7 @@ class OrderStatusManager:
                     )
                 """)
         except Exception as e:
-            print(f"[WARN] Could not ensure {self.WRITE_TABLE} table exists: {e}")
+            logger.warning(f"[WARN] Could not ensure {self.WRITE_TABLE} table exists: {e}")
 
     def _load_database(self):
         """
@@ -121,17 +129,18 @@ class OrderStatusManager:
                     f"SELECT * FROM {self.WRITE_TABLE}", con=self.sql_engine
                 )
                 if len(df) > 0:
-                    self.orders = {}
+                    new_orders = {}
                     for _, row in df.iterrows():
                         o_id = str(row["order_id"])
                         try:
                             order_data = json.loads(str(row["data"]))
                             if order_data.get("customer_code") != "CL1662":
-                                self.orders[o_id] = order_data
+                                new_orders[o_id] = order_data
                         except Exception:
                             pass
+                    self.orders = new_orders
                     loaded_from_sql = True
-                    print(
+                    logger.warning(
                         f"[OK] Loaded {len(self.orders)} orders from {self.WRITE_TABLE}"
                     )
                 else:
@@ -141,26 +150,27 @@ class OrderStatusManager:
                             f"SELECT * FROM {self.READ_TABLE}", con=self.sql_engine
                         )
                         if len(df_sga) > 0:
-                            self.orders = {}
+                            new_orders = {}
                             for _, row in df_sga.iterrows():
                                 o_id = str(row["order_id"])
                                 try:
                                     order_data = json.loads(str(row["data"]))
                                     if order_data.get("customer_code") != "CL1662":
-                                        self.orders[o_id] = order_data
+                                        new_orders[o_id] = order_data
                                 except Exception:
                                     pass
+                            self.orders = new_orders
                             loaded_from_sql = True
-                            print(
+                            logger.warning(
                                 f"[OK] Seeded {len(self.orders)} orders from {self.READ_TABLE} → {self.WRITE_TABLE}"
                             )
                             # Save to our own table immediately
                             self._save_database()
                     except Exception as e:
-                        print(f"[WARN] Could not seed from {self.READ_TABLE}: {e}")
+                        logger.warning(f"[WARN] Could not seed from {self.READ_TABLE}: {e}")
 
             except Exception as e:
-                print(f"[WARN] Error loading from SQL: {e}")
+                logger.warning(f"[WARN] Error loading from SQL: {e}")
 
         if not loaded_from_sql:
             if os.path.exists(self.db_path):
@@ -173,7 +183,7 @@ class OrderStatusManager:
                             if v.get("customer_code") != "CL1662"
                         }
                 except (json.JSONDecodeError, IOError) as e:
-                    print(f"[WARN] Error loading order status database: {e}")
+                    logger.warning(f"[WARN] Error loading order status database: {e}")
                     self.orders = {}
             else:
                 self.orders = {}
@@ -182,71 +192,93 @@ class OrderStatusManager:
         if changed:
             self._save_database()
 
+        import time
+        self._last_load_time = time.time()
+
+    def _normalize_order_labels(self, order: Dict[str, Any]) -> bool:
+        """Normalize legacy status labels for a single order in place."""
+        changed = False
+        status = order.get("status")
+        if status in STATUS_LABEL_MIGRATIONS:
+            order["status"] = STATUS_LABEL_MIGRATIONS[status]
+            changed = True
+
+        history = order.get("status_history", [])
+        for entry in history:
+            entry_status = entry.get("status")
+            if entry_status in STATUS_LABEL_MIGRATIONS:
+                entry["status"] = STATUS_LABEL_MIGRATIONS[entry_status]
+                changed = True
+
+            prev_status = entry.get("previous_status")
+            if prev_status in STATUS_LABEL_MIGRATIONS:
+                entry["previous_status"] = STATUS_LABEL_MIGRATIONS[prev_status]
+                changed = True
+        return changed
+
     def _normalize_status_labels(self) -> bool:
         """Normalize legacy status labels to the current naming in memory."""
         changed = False
         for order in self.orders.values():
-            status = order.get("status")
-            if status in STATUS_LABEL_MIGRATIONS:
-                order["status"] = STATUS_LABEL_MIGRATIONS[status]
+            if self._normalize_order_labels(order):
                 changed = True
-
-            history = order.get("status_history", [])
-            for entry in history:
-                entry_status = entry.get("status")
-                if entry_status in STATUS_LABEL_MIGRATIONS:
-                    entry["status"] = STATUS_LABEL_MIGRATIONS[entry_status]
-                    changed = True
-
-                prev_status = entry.get("previous_status")
-                if prev_status in STATUS_LABEL_MIGRATIONS:
-                    entry["previous_status"] = STATUS_LABEL_MIGRATIONS[prev_status]
-                    changed = True
 
         return changed
 
-    def _save_database(self, force=False):
-        """Save the order status database to our own SQL table and disk.
-
-        Uses debouncing (max once per 5 seconds) unless *force* is True.
-        JSON writes are atomic (write to temp, then os.replace).
-        """
+    def reload_if_needed(self, force=False):
+        """Reload the database if throttled time elapsed or forced."""
+        import time
         now = time.time()
-        if not force and (now - self._last_save_time) < self._SAVE_DEBOUNCE_SECONDS:
-            self._dirty = True
-            return True  # deferred — will be saved on next non-debounced call
+        if force or (now - getattr(self, "_last_load_time", 0.0)) > getattr(self, "_LOAD_THROTTLE_SECONDS", 5.0):
+            self._load_database()
 
+    # SQL MERGE template — used by both _save_database() and _save_order().
+    # MERGE avoids TRUNCATE so concurrent writers never erase each other's data.
+    _MERGE_SQL_TMPL = """
+        MERGE {table} AS target
+        USING (VALUES (?, ?, ?, ?)) AS source
+            (order_id, status, last_updated, data)
+        ON target.order_id = source.order_id
+        WHEN MATCHED THEN UPDATE SET
+            status       = source.status,
+            last_updated = source.last_updated,
+            data         = source.data
+        WHEN NOT MATCHED THEN INSERT
+            (order_id, status, last_updated, data)
+            VALUES (source.order_id, source.status,
+                    source.last_updated, source.data);
+    """
+
+    def _save_database(self, force=False):
+        """Persist all in-memory orders to SQL (MERGE) and JSON.
+
+        JSON writes are atomic (write to temp file, then os.replace).
+        SQL uses MERGE so concurrent writers never truncate each other's rows.
+        """
         last_updated = datetime.datetime.now().isoformat()
 
-        # Save to SQL (our own table)
+
+        # Persist to SQL via MERGE (no TRUNCATE — safe for concurrent writers)
         if self.sql_engine:
             try:
-                records = []
-                for o_id, o_data in list(self.orders.items()):
-                    records.append(
-                        (
-                            str(o_id),
-                            o_data.get("status", ""),
-                            o_data.get("last_updated", last_updated),
-                            json.dumps(o_data, ensure_ascii=False),
-                        )
+                records = [
+                    (
+                        str(o_id),
+                        o_data.get("status", ""),
+                        o_data.get("last_updated", last_updated),
+                        json.dumps(o_data, ensure_ascii=False),
                     )
+                    for o_id, o_data in list(self.orders.items())
+                ]
                 if records:
-                    with self.sql_engine.connect() as conn:
-                        raw_conn = conn.connection
-                        cursor = raw_conn.cursor()
-                        cursor.execute(f"TRUNCATE TABLE {self.WRITE_TABLE}")
-                        cursor.executemany(
-                            f"INSERT INTO {self.WRITE_TABLE} (order_id, status, last_updated, data) VALUES (?, ?, ?, ?)",
-                            records,
-                        )
-                        raw_conn.commit()
-                        cursor.close()
+                    merge_sql = self._MERGE_SQL_TMPL.format(table=self.WRITE_TABLE)
+                    with self.sql_engine.begin() as conn:
+                        for record in records:
+                            conn.exec_driver_sql(merge_sql, record)
             except Exception as e:
                 import traceback
-
-                print(f"[WARN] Error saving to SQL: {e}")
-                traceback.print_exc()
+                logger.warning(f"[WARN] Error saving to SQL: {e}")
+                traceback.logger.warning_exc()
 
         # Fallback / sync to JSON (atomic write)
         try:
@@ -258,7 +290,7 @@ class OrderStatusManager:
                     json.dump(data, f, indent=2, ensure_ascii=False)
                 os.replace(tmp_path, self.db_path)
             except Exception:
-                # Clean up temp file on failure
+                # Always clean up the temp file so we never leave orphans on disk
                 try:
                     os.unlink(tmp_path)
                 except OSError:
@@ -267,14 +299,52 @@ class OrderStatusManager:
             self._last_save_time = time.time()
             self._dirty = False
             return True
-        except IOError as e:
-            print(f"[WARN] Error saving to JSON: {e}")
+        except Exception as e:
+            logger.warning(f"[WARN] Error saving to JSON: {e}")
             return False
 
+    def _save_order(self, order_id: str) -> bool:
+        """Persist a single order to SQL via MERGE without rewriting the whole table.
+
+        This is the preferred method for hot-path writes (status updates, webhook
+        callbacks) because it targets exactly one row and is safe against concurrent
+        writers.  Falls back to a double _save_database() if SQL is unavailable.
+        The JSON file is marked dirty and will be flushed on the next debounced save.
+        """
+        order_id = str(order_id)
+        if order_id not in self.orders:
+            return False
+
+        o_data = self.orders[order_id]
+
+        if not self.sql_engine:
+            # No SQL connection — fall through to a full JSON save
+            return self._save_database(force=True)
+
+        try:
+            record = (
+                order_id,
+                o_data.get("status", ""),
+                o_data.get("last_updated", ""),
+                json.dumps(o_data, ensure_ascii=False),
+            )
+            merge_sql = self._MERGE_SQL_TMPL.format(table=self.WRITE_TABLE)
+            with self.sql_engine.begin() as conn:
+                conn.exec_driver_sql(merge_sql, record)
+            # Mark JSON as dirty; it will be flushed on the next debounced save
+            self._dirty = True
+            return True
+        except Exception as e:
+            logger.warning(f"[WARN] _save_order({order_id}) failed: {e}")
+            # Fallback: full save so at least JSON stays consistent
+            return self._save_database(force=True)
+
     def import_from_sap(
-        self, sap_order: Dict[str, Any], imported_by: str = "system"
+        self, sap_order: Dict[str, Any], imported_by: str = "system", save: bool = True
     ) -> Dict[str, Any]:
         """Import an order from SAP data without modifying SAP."""
+        self.reload_if_needed(force=True)
+
         order_id = str(sap_order.get("DocNum", sap_order.get("order_id", "")))
 
         if not order_id:
@@ -352,12 +422,15 @@ class OrderStatusManager:
             )
 
         self.orders[order_id] = order_record
-        self._save_database()
+        if save:
+            self._save_database()
 
         return order_record
 
+
     def bulk_import_from_sap(self, sap_orders: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Import multiple orders from SAP at once."""
+        self.reload_if_needed(force=True)
         stats = {
             "total": len(sap_orders),
             "imported": 0,
@@ -392,7 +465,7 @@ class OrderStatusManager:
                     "created_by": creator,
                 }
 
-                self.import_from_sap(order_data, imported_by=creator)
+                self.import_from_sap(order_data, imported_by=creator, save=False)
 
                 if was_existing:
                     stats["updated"] += 1
@@ -410,6 +483,7 @@ class OrderStatusManager:
                     }
                 )
 
+        self._save_database(force=True)
         return stats
 
     def update_status(
@@ -419,43 +493,70 @@ class OrderStatusManager:
         order_id = str(order_id)
 
         if order_id not in self.orders:
-            print(f"[WARN] Order {order_id} not found")
-            return False
+            # Fallback to load/fetch if not in-memory
+            if not self.get_order(order_id):
+                logger.warning(f"[WARN] Order {order_id} not found")
+                return False
 
         old_status = self.orders[order_id]["status"]
+        now_iso = datetime.datetime.now().isoformat()
 
         self.orders[order_id]["status"] = new_status
-        self.orders[order_id]["last_updated"] = datetime.datetime.now().isoformat()
+        self.orders[order_id]["last_updated"] = now_iso
         self.orders[order_id]["updated_by"] = user
 
         self.orders[order_id]["status_history"].append(
             {
                 "status": new_status,
                 "previous_status": old_status,
-                "timestamp": datetime.datetime.now().isoformat(),
+                "timestamp": now_iso,
                 "user": user,
                 "notes": notes,
             }
         )
 
-        return self._save_database()
+        # Use targeted single-row MERGE instead of full table rewrite
+        return self._save_order(order_id)
 
     def get_order(self, order_id: str) -> Optional[Dict[str, Any]]:
         """Get a single order by ID."""
-        return self.orders.get(str(order_id))
+        self.reload_if_needed()
+        order_id = str(order_id)
+        if order_id in self.orders:
+            return self.orders[order_id]
+
+        if self.sql_engine:
+            try:
+                with self.sql_engine.connect() as conn:
+                    raw_conn = conn.connection
+                    cursor = raw_conn.cursor()
+                    cursor.execute(f"SELECT data FROM {self.WRITE_TABLE} WHERE order_id = ?", (order_id,))
+                    row = cursor.fetchone()
+                    cursor.close()
+                    if row:
+                        order_data = json.loads(row[0])
+                        self._normalize_order_labels(order_data)
+                        self.orders[order_id] = order_data
+                        return order_data
+            except Exception as e:
+                logger.warning(f"[WARN] Error loading order {order_id} from SQL fallback: {e}")
+        return None
 
     def get_all_orders(self) -> List[Dict[str, Any]]:
         """Get all orders sorted by last updated."""
+        self.reload_if_needed()
         orders_list = list(self.orders.values())
         orders_list.sort(key=lambda x: x.get("last_updated", ""), reverse=True)
         return orders_list
 
     def get_orders_by_status(self, status: str) -> List[Dict[str, Any]]:
         """Get orders filtered by status."""
+        self.reload_if_needed()
         return [o for o in self.orders.values() if o.get("status") == status]
 
     def get_active_orders(self) -> List[Dict[str, Any]]:
         """Get orders that are not shipped or cancelled."""
+        self.reload_if_needed()
         inactive_statuses = [
             OrderStatus.SHIPPED.value,
             OrderStatus.CANCELLED.value,
@@ -468,6 +569,7 @@ class OrderStatusManager:
 
     def get_order_count_by_status(self) -> Dict[str, int]:
         """Get count of orders grouped by status."""
+        self.reload_if_needed()
         counts = {}
         for status in OrderStatus:
             counts[status.value] = len(self.get_orders_by_status(status.value))
@@ -539,7 +641,22 @@ class OrderStatusManager:
         order_id = str(order_id)
         if order_id in self.orders:
             del self.orders[order_id]
-            return self._save_database()
+            # Issue a targeted DELETE instead of a full table rewrite
+            if self.sql_engine:
+                try:
+                    with self.sql_engine.connect() as conn:
+                        raw_conn = conn.connection
+                        cursor = raw_conn.cursor()
+                        cursor.execute(
+                            f"DELETE FROM {self.WRITE_TABLE} WHERE order_id = ?",
+                            (order_id,),
+                        )
+                        raw_conn.commit()
+                        cursor.close()
+                except Exception as e:
+                    logger.warning(f"[WARN] delete_order SQL failed for {order_id}: {e}")
+            # Flush JSON to stay consistent
+            return self._save_database(force=True)
         return False
 
     def get_status_options(self) -> List[str]:
