@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QB-SAO — Moodboard de Diseño</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --navy-900: #0f1b2d;
+            --navy-800: #1a2744;
+            --navy-700: #243556;
+            --navy-600: #2e4370;
+            --navy-500: #3b5998;
+            --accent-blue: #4a7dff;
+            --accent-cyan: #22d3ee;
+            --accent-violet: #6366f1;
+            --glass-bg: rgba(255, 255, 255, 0.06);
+            --glass-border: rgba(255, 255, 255, 0.12);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: #0a0f1a;
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+
+        /* ═══════ HERO HEADER ═══════ */
+        .hero {
+            background: linear-gradient(135deg, var(--navy-900) 0%, var(--navy-800) 40%, var(--navy-700) 100%);
+            padding: 4rem 2rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 600px 400px at 20% 60%, rgba(74, 125, 255, 0.12), transparent),
+                radial-gradient(ellipse 400px 300px at 80% 30%, rgba(34, 211, 238, 0.08), transparent),
+                radial-gradient(ellipse 350px 350px at 50% 80%, rgba(99, 102, 241, 0.08), transparent);
+        }
+        .hero-content { position: relative; z-index: 2; }
+        .hero-logo {
+            width: 100px; height: 100px;
+            border-radius: 24px;
+            margin: 0 auto 1.5rem;
+            box-shadow: 0 16px 48px rgba(0,0,0,0.4), 0 0 60px rgba(74, 125, 255, 0.12);
+        }
+        .hero h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+        .hero p {
+            font-size: 1.1rem;
+            color: rgba(148, 163, 184, 0.8);
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        /* ═══════ CONTAINER ═══════ */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 3rem 2rem;
+        }
+
+        /* ═══════ SECTIONS ═══════ */
+        .section {
+            margin-bottom: 4rem;
+        }
+        .section-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: var(--accent-cyan);
+            margin-bottom: 0.5rem;
+        }
+        .section-heading {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 2rem;
+            letter-spacing: -0.02em;
+        }
+
+        /* ═══════ COLOR PALETTE ═══════ */
+        .color-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 16px;
+        }
+        .color-card {
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.08);
+            transition: transform 0.25s ease;
+        }
+        .color-card:hover { transform: translateY(-4px); }
+        .color-swatch {
+            height: 120px;
+            display: flex;
+            align-items: flex-end;
+            padding: 12px;
+        }
+        .color-info {
+            padding: 14px;
+            background: rgba(255,255,255,0.04);
+        }
+        .color-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #e2e8f0;
+            margin-bottom: 2px;
+        }
+        .color-hex {
+            font-size: 0.75rem;
+            font-weight: 500;
+            font-family: 'JetBrains Mono', monospace;
+            color: #94a3b8;
+        }
+
+        /* ═══════ TYPOGRAPHY ═══════ */
+        .type-specimen {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .type-row {
+            display: flex;
+            align-items: baseline;
+            gap: 2rem;
+            padding: 16px 20px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .type-weight {
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--accent-blue);
+            min-width: 120px;
+            flex-shrink: 0;
+        }
+        .type-sample {
+            font-size: 1.4rem;
+            color: #e2e8f0;
+        }
+
+        /* ═══════ DESIGN PRINCIPLES ═══════ */
+        .principles-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+        }
+        .principle-card {
+            padding: 1.5rem;
+            border-radius: 16px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(12px);
+            transition: all 0.3s ease;
+        }
+        .principle-card:hover {
+            background: rgba(255,255,255,0.09);
+            transform: translateY(-2px);
+        }
+        .principle-icon {
+            width: 44px; height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            margin-bottom: 1rem;
+        }
+        .principle-icon.blue { background: rgba(74, 125, 255, 0.15); }
+        .principle-icon.cyan { background: rgba(34, 211, 238, 0.15); }
+        .principle-icon.violet { background: rgba(99, 102, 241, 0.15); }
+        .principle-icon.emerald { background: rgba(16, 185, 129, 0.15); }
+        .principle-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 0.4rem;
+        }
+        .principle-desc {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            line-height: 1.6;
+        }
+
+        /* ═══════ IMAGE GALLERY ═══════ */
+        .gallery {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .gallery-full {
+            grid-column: 1 / -1;
+        }
+        .gallery-img {
+            width: 100%;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            transition: transform 0.3s ease;
+        }
+        .gallery-img:hover { transform: scale(1.01); }
+        .gallery-caption {
+            margin-top: 8px;
+            font-size: 0.78rem;
+            color: #64748b;
+            font-weight: 500;
+            text-align: center;
+        }
+
+        /* ═══════ CSS TOKENS TABLE ═══════ */
+        .tokens-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+        .tokens-table th {
+            text-align: left;
+            padding: 10px 16px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #64748b;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        .tokens-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            color: #cbd5e1;
+        }
+        .tokens-table td:first-child {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--accent-cyan);
+        }
+        .token-preview {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            vertical-align: middle;
+            margin-right: 8px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        /* ═══════ GRADIENT SAMPLES ═══════ */
+        .gradient-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-top: 1rem;
+        }
+        .gradient-sample {
+            height: 100px;
+            border-radius: 14px;
+            display: flex;
+            align-items: flex-end;
+            padding: 12px 16px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: rgba(255,255,255,0.7);
+            letter-spacing: 0.04em;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+
+        /* ═══════ SPACING / RADIUS ═══════ */
+        .radius-row {
+            display: flex;
+            gap: 24px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+        .radius-item {
+            text-align: center;
+        }
+        .radius-box {
+            width: 80px; height: 80px;
+            background: rgba(74, 125, 255, 0.15);
+            border: 2px solid var(--accent-blue);
+            margin-bottom: 8px;
+        }
+        .radius-label {
+            font-size: 0.72rem;
+            color: #94a3b8;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* ═══════ FOOTER ═══════ */
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            font-size: 0.8rem;
+            color: #475569;
+            border-top: 1px solid rgba(255,255,255,0.04);
+        }
+
+        @media (max-width: 700px) {
+            .gallery { grid-template-columns: 1fr; }
+            .gradient-row { grid-template-columns: 1fr; }
+            .type-row { flex-direction: column; gap: 0.5rem; }
+            .hero h1 { font-size: 1.8rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ═══════ HERO ═══════ -->
+    <header class="hero">
+        <div class="hero-content">
+            <img src="logo.png" alt="QB-SAO Logo" class="hero-logo" />
+            <h1>QB-SAO Design System</h1>
+            <p>Moodboard y guía visual del sistema de gestión de pedidos</p>
+        </div>
+    </header>
+
+    <div class="container">
+
+        <!-- ═══════ 1. COLOR PALETTE ═══════ -->
+        <section class="section">
+            <div class="section-title">01 — Paleta de Colores</div>
+            <h2 class="section-heading">Identidad Cromática</h2>
+
+            <div class="color-grid">
+                <div class="color-card">
+                    <div class="color-swatch" style="background: #0f1b2d;"></div>
+                    <div class="color-info">
+                        <div class="color-name">Deep Navy</div>
+                        <div class="color-hex">#0f1b2d</div>
+                    </div>
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background: #1a2744;"></div>
+                    <div class="color-info">
+                        <div class="color-name">Dark Navy</div>
+                        <div class="color-hex">#1a2744</div>
+                    </div>
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background: #243556;"></div>
+                    <div class="color-info">
+                        <div class="color-name">Navy</div>
+                        <div class="color-hex">#243556</div>
+                    </div>
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background: #2e4370;"></div>
+                    <div class="color-info">
+                        <div class="color-name">Mid Navy</div>
+                        <div class="color-hex">#2e4370</div>
+                    </div>
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background: #3b5998;"></div>
+                    <div class="color-info">
+                        <div class="color-name">Steel Blue</div>
+                        <div class="color-hex">#3b5998</div>
+                    </div>
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background: #4a7dff;"></div>
+                    <div class="color-info">
+                        <div class="color-name">Electric Blue</div>
+                        <div class="color-hex">#4a7dff</div>
+                    </div>
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background: #22d3ee;"></div>
+                    <div class="color-info">
+                        <div class="color-name">Cyan Accent</div>
+                        <div class="color-hex">#22d3ee</div>
+                    </div>
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background: #6366f1;"></div>
+                    <div class="color-info">
+                        <div class="color-name">Indigo Accent</div>
+                        <div class="color-hex">#6366f1</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gradients -->
+            <div class="gradient-row">
+                <div class="gradient-sample" style="background: linear-gradient(135deg, #0f1b2d, #1a2744, #243556);">
+                    Hero Background
+                </div>
+                <div class="gradient-sample" style="background: linear-gradient(135deg, #1a2744, #243556, #4a7dff);">
+                    Button Gradient
+                </div>
+                <div class="gradient-sample" style="background: linear-gradient(90deg, #4a7dff, #22d3ee, #6366f1);">
+                    Accent Bar
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══════ 2. TYPOGRAPHY ═══════ -->
+        <section class="section">
+            <div class="section-title">02 — Tipografía</div>
+            <h2 class="section-heading">Inter — Familia Tipográfica</h2>
+
+            <div class="type-specimen">
+                <div class="type-row">
+                    <span class="type-weight">Light 300</span>
+                    <span class="type-sample" style="font-weight: 300;">Plataforma integral de gestión y seguimiento de pedidos</span>
+                </div>
+                <div class="type-row">
+                    <span class="type-weight">Regular 400</span>
+                    <span class="type-sample" style="font-weight: 400;">Ingresa tus credenciales para acceder al sistema</span>
+                </div>
+                <div class="type-row">
+                    <span class="type-weight">Medium 500</span>
+                    <span class="type-sample" style="font-weight: 500;">Monitor de pedidos en tiempo real</span>
+                </div>
+                <div class="type-row">
+                    <span class="type-weight">SemiBold 600</span>
+                    <span class="type-sample" style="font-weight: 600;">Artículos del Pedido · Facturación</span>
+                </div>
+                <div class="type-row">
+                    <span class="type-weight">Bold 700</span>
+                    <span class="type-sample" style="font-weight: 700;">Bienvenido de vuelta — QB-SAO</span>
+                </div>
+                <div class="type-row">
+                    <span class="type-weight">ExtraBold 800</span>
+                    <span class="type-sample" style="font-weight: 800;">#16331 — TOTAL ACTIVOS</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══════ 3. DESIGN PRINCIPLES ═══════ -->
+        <section class="section">
+            <div class="section-title">03 — Principios de Diseño</div>
+            <h2 class="section-heading">Fundamentos Visuales</h2>
+
+            <div class="principles-grid">
+                <div class="principle-card">
+                    <div class="principle-icon blue">🌊</div>
+                    <div class="principle-title">Glassmorphism</div>
+                    <div class="principle-desc">Elementos con fondos translúcidos, bordes sutiles y desenfoque de fondo para crear profundidad y jerarquía visual.</div>
+                </div>
+                <div class="principle-card">
+                    <div class="principle-icon cyan">✨</div>
+                    <div class="principle-title">Micro-animaciones</div>
+                    <div class="principle-desc">Transiciones suaves con curvas cubic-bezier personalizadas. Orbes flotantes, gradientes animados y efectos shimmer.</div>
+                </div>
+                <div class="principle-card">
+                    <div class="principle-icon violet">🎨</div>
+                    <div class="principle-title">Gradientes Navy</div>
+                    <div class="principle-desc">Gradientes direccionales de navy oscuro a azul eléctrico, manteniendo coherencia con la identidad QB.</div>
+                </div>
+                <div class="principle-card">
+                    <div class="principle-icon emerald">📐</div>
+                    <div class="principle-title">Bordes Redondeados</div>
+                    <div class="principle-desc">Radio de 14-16px para cards y inputs, 20px para badges. Sensación moderna y suave sin ser excesivamente redondeado.</div>
+                </div>
+                <div class="principle-card">
+                    <div class="principle-icon blue">🔲</div>
+                    <div class="principle-title">Split Layout</div>
+                    <div class="principle-desc">Diseño dividido: panel izquierdo oscuro con branding, panel derecho claro con contenido funcional. Contraste dramático.</div>
+                </div>
+                <div class="principle-card">
+                    <div class="principle-icon cyan">💡</div>
+                    <div class="principle-title">Jerarquía Clara</div>
+                    <div class="principle-desc">Uso estratégico de peso tipográfico, tamaño y color para guiar la atención. Labels uppercase con tracking amplio.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══════ 4. CSS DESIGN TOKENS ═══════ -->
+        <section class="section">
+            <div class="section-title">04 — Tokens de Diseño</div>
+            <h2 class="section-heading">Variables CSS</h2>
+
+            <table class="tokens-table">
+                <thead>
+                    <tr>
+                        <th>Token</th>
+                        <th>Valor</th>
+                        <th>Uso</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>--navy-900</td>
+                        <td><span class="token-preview" style="background: #0f1b2d;"></span>#0f1b2d</td>
+                        <td>Fondo principal del body</td>
+                    </tr>
+                    <tr>
+                        <td>--navy-800</td>
+                        <td><span class="token-preview" style="background: #1a2744;"></span>#1a2744</td>
+                        <td>Panel hero, header del monitor</td>
+                    </tr>
+                    <tr>
+                        <td>--navy-700</td>
+                        <td><span class="token-preview" style="background: #243556;"></span>#243556</td>
+                        <td>Gradiente medio, hover states</td>
+                    </tr>
+                    <tr>
+                        <td>--accent-blue</td>
+                        <td><span class="token-preview" style="background: #4a7dff;"></span>#4a7dff</td>
+                        <td>CTAs, focus rings, links activos</td>
+                    </tr>
+                    <tr>
+                        <td>--accent-cyan</td>
+                        <td><span class="token-preview" style="background: #22d3ee;"></span>#22d3ee</td>
+                        <td>Acentos secundarios, orbes decorativos</td>
+                    </tr>
+                    <tr>
+                        <td>--glass-bg</td>
+                        <td>rgba(255,255,255,0.06)</td>
+                        <td>Fondo de tarjetas glassmorphic</td>
+                    </tr>
+                    <tr>
+                        <td>--glass-border</td>
+                        <td>rgba(255,255,255,0.12)</td>
+                        <td>Bordes de elementos glassmorphic</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- ═══════ 5. BORDER RADIUS ═══════ -->
+        <section class="section">
+            <div class="section-title">05 — Espaciado y Radio</div>
+            <h2 class="section-heading">Border Radius</h2>
+
+            <div class="radius-row">
+                <div class="radius-item">
+                    <div class="radius-box" style="border-radius: 6px;"></div>
+                    <div class="radius-label">6px<br>Pills / Tags</div>
+                </div>
+                <div class="radius-item">
+                    <div class="radius-box" style="border-radius: 10px;"></div>
+                    <div class="radius-label">10px<br>KPI Cards</div>
+                </div>
+                <div class="radius-item">
+                    <div class="radius-box" style="border-radius: 14px;"></div>
+                    <div class="radius-label">14px<br>Inputs / Buttons</div>
+                </div>
+                <div class="radius-item">
+                    <div class="radius-box" style="border-radius: 16px;"></div>
+                    <div class="radius-label">16px<br>Order Cards</div>
+                </div>
+                <div class="radius-item">
+                    <div class="radius-box" style="border-radius: 24px;"></div>
+                    <div class="radius-label">24px<br>Logo</div>
+                </div>
+                <div class="radius-item">
+                    <div class="radius-box" style="border-radius: 50%;"></div>
+                    <div class="radius-label">50%<br>Avatars</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══════ 6. VISUAL REFERENCES ═══════ -->
+        <section class="section">
+            <div class="section-title">06 — Referencia Visual</div>
+            <h2 class="section-heading">Boards de Inspiración</h2>
+
+            <div class="gallery">
+                <div class="gallery-full">
+                    <img src="moodboard_main.png" alt="QB-SAO Main Moodboard" class="gallery-img" />
+                    <div class="gallery-caption">Moodboard General — Estética, paleta y ambiente visual</div>
+                </div>
+                <div>
+                    <img src="color_typography.png" alt="Colores y Tipografía" class="gallery-img" />
+                    <div class="gallery-caption">Paleta de Colores y Tipografía</div>
+                </div>
+                <div>
+                    <img src="ui_components.png" alt="Componentes UI" class="gallery-img" />
+                    <div class="gallery-caption">Componentes UI — Dark Mode</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══════ 7. ANIMATION SPECS ═══════ -->
+        <section class="section">
+            <div class="section-title">07 — Animaciones</div>
+            <h2 class="section-heading">Curvas y Duraciones</h2>
+
+            <table class="tokens-table">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Duración</th>
+                        <th>Curva</th>
+                        <th>Uso</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Hover</td>
+                        <td>200ms</td>
+                        <td>cubic-bezier(0.4, 0, 0.2, 1)</td>
+                        <td>Hover de tarjetas, inputs, botones</td>
+                    </tr>
+                    <tr>
+                        <td>Accordion</td>
+                        <td>350ms</td>
+                        <td>cubic-bezier(0.32, 0.72, 0, 1)</td>
+                        <td>Expansión de detalles del pedido</td>
+                    </tr>
+                    <tr>
+                        <td>Mesh Gradient</td>
+                        <td>12s</td>
+                        <td>ease-in-out (infinite)</td>
+                        <td>Fondo animado del hero panel</td>
+                    </tr>
+                    <tr>
+                        <td>Orb Float</td>
+                        <td>8-14s</td>
+                        <td>ease-in-out (infinite)</td>
+                        <td>Orbes decorativos flotantes</td>
+                    </tr>
+                    <tr>
+                        <td>Logo Float</td>
+                        <td>6s</td>
+                        <td>ease-in-out (infinite)</td>
+                        <td>Logo flotante en login</td>
+                    </tr>
+                    <tr>
+                        <td>Button Shimmer</td>
+                        <td>3s</td>
+                        <td>ease-in-out (infinite)</td>
+                        <td>Brillo sutil en botón de login</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+    </div>
+
+    <footer class="footer">
+        QB-SAO Design System Moodboard — Química Boss © 2026
+    </footer>
+
+</body>
+</html>

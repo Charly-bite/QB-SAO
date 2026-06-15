@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f172a">
+    <title>QB-SAO — Monitor</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logo_new.png') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/monitor.css') }}">
+    <script defer src="{{ url_for('static', filename='js/alpine.min.js') }}"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap"
+        rel="stylesheet">
+</head>
+
+<body x-data="monitorApp()">
+
+    <!-- ═══════ HEADER ═══════ -->
+    <header class="monitor-header">
+        <div class="header-inner">
+            <div class="header-brand">
+                <div class="brand-icon"><img src="{{ url_for('static', filename='images/logo_new.png') }}" alt="Logo" style="height: 48px; width: auto;" /></div>
+                <div>
+                    <h1 class="brand-title">QB-SAO</h1>
+                    <p class="brand-subtitle">Monitor de estado en tiempo real</p>
+                </div>
+            </div>
+
+            <!-- Breadcrumbs -->
+            <nav class="monitor-breadcrumbs" aria-label="Breadcrumb">
+                <a href="{{ url_for('orders.index') }}">QB-SAO</a>
+                <span class="bc-sep">›</span>
+                <span class="bc-current">Monitor</span>
+            </nav>
+
+            <div class="header-controls">
+                <!-- Seller filter (only for managers/admins) -->
+                <template x-if="canSeeAll">
+                    <div class="filter-wrapper">
+                        <svg class="filter-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                        </svg>
+                        <select x-model="selectedSeller" @change="fetchOrders()" class="filter-select">
+                            <option value="">Todos los vendedores</option>
+                            <template x-for="s in sellers" :key="s">
+                                <option :value="s" x-text="s"></option>
+                            </template>
+                        </select>
+                    </div>
+                </template>
+
+                <!-- Notification bell -->
+                <button type="button" id="btn-notifications"
+                    class="notif-bell-btn"
+                    :class="notificationsEnabled ? 'notif-bell-on' : 'notif-bell-off'"
+                    @click="toggleNotifications()"
+                    :title="notificationsEnabled ? 'Notificaciones activas — clic para desactivar' : 'Activar notificaciones'">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    </svg>
+                    <span class="notif-badge" x-show="notificationsEnabled" x-cloak></span>
+                </button>
+
+                <!-- Refresh indicator -->
+                <div class="refresh-badge">
+                    <span class="refresh-dot" :class="loading ? 'pulse' : ''"></span>
+                    <span class="refresh-text" x-text="loading ? 'Sincronizando...' : 'Tiempo Real'"></span>
+                </div>
+
+                <!-- User -->
+                <div class="user-badge">
+                    <div class="user-avatar">
+                        {{ current_user.username[:2]|upper }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ═══════ KPI CARDS ═══════ -->
+    <section class="kpi-bar">
+        <div class="kpi-inner">
+            <button type="button" class="kpi-card"
+                :class="activeTopFilter === 'all' ? 'is-active' : ''"
+                @click="toggleTopFilter('all')"
+                title="Mostrar todos">
+                <div class="kpi-value" x-text="activeStats.total_active || 0">0</div>
+                <div class="kpi-label">Total Activos</div>
+            </button>
+            <button type="button" class="kpi-card kpi-pending"
+                :class="activeTopFilter === 'pending' ? 'is-active' : ''"
+                @click="toggleTopFilter('pending')"
+                title="Filtrar pendientes">
+                <div class="kpi-value" x-text="activeStats.pending || 0">0</div>
+                <div class="kpi-label">Pendientes</div>
+            </button>
+            <button type="button" class="kpi-card kpi-process"
+                :class="activeTopFilter === 'process' ? 'is-active' : ''"
+                @click="toggleTopFilter('process')"
+                title="Filtrar en proceso">
+                <div class="kpi-value" x-text="activeStats.in_progress || 0">0</div>
+                <div class="kpi-label">En Proceso</div>
+            </button>
+            <button type="button" class="kpi-card kpi-picking"
+                :class="activeTopFilter === 'picking' ? 'is-active' : ''"
+                @click="toggleTopFilter('picking')"
+                title="Filtrar entregados">
+                <div class="kpi-value" x-text="activeStats.picking || 0">0</div>
+                <div class="kpi-label">Entregados</div>
+            </button>
+            <button type="button" class="kpi-card kpi-invoice"
+                :class="activeTopFilter === 'invoice' ? 'is-active' : ''"
+                @click="toggleTopFilter('invoice')"
+                title="Filtrar facturados">
+                <div class="kpi-value"
+                    x-text="activeStats.invoicing || 0">0</div>
+                <div class="kpi-label">Facturado</div>
+            </button>
+            <button type="button" class="kpi-card kpi-relation"
+                :class="activeTopFilter === 'relation' ? 'is-active' : ''"
+                @click="toggleTopFilter('relation')"
+                title="Filtrar relación">
+                <div class="kpi-value"
+                    x-text="activeStats.ready || 0">0</div>
+                <div class="kpi-label">Relación</div>
+            </button>
+            <button type="button" class="kpi-card kpi-shipped"
+                :class="activeTopFilter === 'shipped' ? 'is-active' : ''"
+                @click="toggleTopFilter('shipped')"
+                title="Filtrar enviados">
+                <div class="kpi-value" x-text="activeStats.shipped || 0">0</div>
+                <div class="kpi-label">Enviados</div>
+            </button>
+            <button type="button" class="kpi-card kpi-waiting"
+                :class="activeTopFilter === 'waiting' ? 'is-active' : ''"
+                @click="toggleTopFilter('waiting')"
+                title="Filtrar en espera">
+                <div class="kpi-value" x-text="activeStats.waiting || 0">0</div>
+                <div class="kpi-label">En Espera</div>
+            </button>
+            <button type="button" class="kpi-card kpi-cancelled"
+                :class="activeTopFilter === 'cancelled' ? 'is-active' : ''"
+                @click="toggleTopFilter('cancelled')"
+                title="Filtrar cancelados">
+                <div class="kpi-value" x-text="activeStats.cancelled || 0">0</div>
+                <div class="kpi-label">Cancelados</div>
+            </button>
+        </div>
+    </section>
+
+    <!-- ═══════ SEARCH & FILTERS BAR ═══════ -->
+    <section class="search-bar">
+        <div class="search-inner">
+            <div class="search-field">
+                <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input type="text" x-model="searchQuery" @input="currentPage = 1" placeholder="Buscar por #pedido, cliente o código..."
+                    class="search-input">
+                <button class="search-clear"
+                    x-show="searchQuery.length > 0"
+                    x-cloak
+                    @click="searchQuery = ''; currentPage = 1"
+                    title="Limpiar búsqueda">&times;</button>
+            </div>
+
+            <!-- Date & Number filters row -->
+            <div class="filters-row">
+                <!-- Date range -->
+                <div class="filter-group">
+                    <label class="filter-label">
+                        <svg class="filter-label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        Desde
+                    </label>
+                    <input type="date" x-model="dateFrom" @change="currentPage = 1" class="filter-date-input" id="filter-date-from">
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">
+                        <svg class="filter-label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        Hasta
+                    </label>
+                    <input type="date" x-model="dateTo" @change="currentPage = 1" class="filter-date-input" id="filter-date-to">
+                </div>
+
+                <!-- Number of orders -->
+                <div class="filter-group">
+                    <label class="filter-label">
+                        <svg class="filter-label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                        </svg>
+                        Mostrar
+                    </label>
+                    <select x-model="maxOrders" @change="currentPage = 1" class="filter-select-sm" id="filter-max-orders">
+                        <option value="0">Todos</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                    </select>
+                </div>
+
+                <!-- Clear all filters -->
+                <button class="filter-clear-btn"
+                    x-show="dateFrom !== new Date().toISOString().split('T')[0] || dateTo !== new Date().toISOString().split('T')[0] || maxOrders !== '0' || selectedSeller" x-cloak
+                    @click="dateFrom = new Date().toISOString().split('T')[0]; dateTo = new Date().toISOString().split('T')[0]; maxOrders = '0'; selectedSeller = ''; currentPage = 1"
+                    title="Limpiar filtros">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    Limpiar
+                </button>
+            </div>
+
+            <div class="order-count">
+                <span x-text="filteredOrders.length"></span> pedidos
+                <template x-if="activeTopFilter !== 'all'">
+                    <span class="filter-chip" @click="toggleTopFilter(activeTopFilter)">
+                        <span x-text="getTopFilterLabel()"></span>
+                        <span class="filter-chip-x">x</span>
+                    </span>
+                </template>
+                <template x-if="dateFrom || dateTo">
+                    <span class="filter-chip" @click="dateFrom = ''; dateTo = ''; currentPage = 1">
+                        <span x-text="(dateFrom ? formatDate(dateFrom) : '...') + ' → ' + (dateTo ? formatDate(dateTo) : '...')"></span>
+                        <span class="filter-chip-x">x</span>
+                    </span>
+                </template>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════ ORDER CARDS ═══════ -->
+    <main class="orders-container">
+
+        <!-- Loading skeleton -->
+        <template x-if="firstLoad">
+            <div class="orders-grid">
+                <template x-for="i in 6" :key="'skel-'+i">
+                    <div class="order-card skeleton-card">
+                        <div class="skel skel-title"></div>
+                        <div class="skel skel-subtitle"></div>
+                        <div class="skel skel-progress"></div>
+                        <div class="skel skel-meta"></div>
+                    </div>
+                </template>
+            </div>
+        </template>
+
+        <!-- Empty state -->
+        <div x-show="!firstLoad && filteredOrders.length === 0" class="empty-state">
+            <svg class="empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p class="empty-title">Sin pedidos activos</p>
+            <p class="empty-text">No se encontraron pedidos que coincidan con tu búsqueda.</p>
+        </div>
+
+        <!-- Order cards grid -->
+        <div x-show="!firstLoad && filteredOrders.length > 0" class="orders-grid">
+            <template x-for="(order, idx) in paginatedOrders" :key="order.order_id">
+                <div class="order-card" :class="getCardAccentClass(order.status)"
+                    :style="'animation-delay:' + (idx * 0.03) + 's'"
+                    @click="toggleExpand(order.order_id, $event)">
+
+                    <!-- Card header -->
+                    <div class="card-top">
+                        <div class="card-order-id">
+                            <span class="order-hash">#</span><span x-text="order.order_id"></span>
+                        </div>
+                        <div class="card-aging" :class="getAgingClass(order)">
+                            <svg class="aging-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span x-text="getAgingText(order)"></span>
+                        </div>
+                    </div>
+
+                    <!-- Customer info -->
+                    <div class="card-customer">
+                        <div class="customer-name" x-text="order.customer_name"></div>
+                        <div class="customer-id-row">
+                            <span class="customer-code" x-text="order.customer_code"></span>
+                            <template x-if="order.created_by">
+                                <span class="customer-seller" x-text="order.created_by"></span>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Status banner if on hold -->
+                    <template x-if="order.status === 'En Espera'">
+                        <div class="wait-banner">
+                            <svg class="wait-banner-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span>Pedido en Espera</span>
+                        </div>
+                    </template>
+
+                    <!-- Status banner if cancelled -->
+                    <template x-if="order.status === 'Cancelado'">
+                        <div class="cancel-banner">
+                            <svg class="cancel-banner-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span>Pedido Cancelado</span>
+                        </div>
+                    </template>
+
+                    <!-- Progress timeline -->
+                    <template x-if="order.status !== 'En Espera' && order.status !== 'Cancelado'">
+                        <div class="progress-timeline">
+                        <template x-for="(step, si) in statusSteps" :key="step.key">
+                            <div class="timeline-step" :class="getStepClass(order.status, step.key)">
+                                <div class="step-dot">
+                                    <template x-if="isStepCompleted(order.status, step.key)">
+                                        <svg class="step-check" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3"
+                                                d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    </template>
+                                </div>
+                                <div class="step-label" x-text="step.short"></div>
+                                <div class="step-connector"
+                                    x-show="si < statusSteps.length - 1"
+                                    :class="isStepCompleted(order.status, step.key) ? 'connector-done' : ''">
+                                </div>
+                            </div>
+                        </template>
+                        </div>
+                    </template>
+
+                    <!-- Card footer -->
+                    <div class="card-footer">
+                        <div class="footer-pills">
+                            <div class="pill pill-date" :class="isOverdue(order) ? 'pill-overdue' : ''">
+                                <svg class="pill-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <span x-text="formatDate(order.delivery_date)"></span>
+                            </div>
+                            <div class="pill pill-items">
+                                <svg class="pill-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                </svg>
+                                <span x-text="(order.items ? order.items.length : 0) + ' art.'"></span>
+                            </div>
+                            <template x-if="order.factura_number">
+                                <div class="pill pill-factura">
+                                    <span x-text="'Fact. #' + order.factura_number"></span>
+                                </div>
+                            </template>
+                            <template x-if="order.delivery_number">
+                                <div class="pill pill-delivery" style="background: rgba(245, 158, 11, 0.1); color: #d97706;">
+                                    <span x-text="'Ent. #' + order.delivery_number"></span>
+                                </div>
+                            </template>
+                        </div>
+                        <div class="sap-status" :class="getSapClass(order.sap_status)">
+                            <span x-text="order.sap_status || 'N/A'"></span>
+                        </div>
+                    </div>
+
+                    <!-- Expandable detail panel (CSS Grid accordion) -->
+                    <div class="card-detail"
+                        :class="expandedOrder === order.order_id ? 'is-open' : ''">
+                        <div class="card-detail-inner" style="position: relative;">
+                            <!-- Close button -->
+                            <button class="card-close-btn"
+                                x-show="expandedOrder === order.order_id"
+                                x-cloak
+                                @click.stop="expandedOrder = null"
+                                title="Cerrar">
+                                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                            <div class="detail-divider"></div>
+
+                            <!-- Line items -->
+                            <div class="detail-section">
+                                <div class="detail-heading">Artículos del Pedido</div>
+                                <template x-if="order.items && order.items.length > 0">
+                                    <div class="items-list">
+                                        <template x-for="item in order.items"
+                                            :key="item.item_code || item.ItemCode || Math.random()">
+                                            <div class="item-row">
+                                                <div class="item-info">
+                                                    <div class="item-name"
+                                                        x-text="item.description || item.item_name || item.ItemName || item.Dscription || '-'">
+                                                    </div>
+                                                    <div class="item-code"
+                                                        x-text="item.item_code || item.ItemCode || ''"></div>
+                                                </div>
+                                                <div class="item-qty" x-text="formatItemQty(item)"></div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+                                <template x-if="!order.items || order.items.length === 0">
+                                    <p class="no-items">Sin detalle de artículos</p>
+                                </template>
+                            </div>
+
+                            <!-- Dates and meta -->
+                            <div class="detail-meta-grid">
+                                <div>
+                                    <div class="meta-label">Fecha Pedido</div>
+                                    <div class="meta-value" x-text="formatDate(order.order_date)"></div>
+                                </div>
+                                <div>
+                                    <div class="meta-label">Fecha Entrega</div>
+                                    <div class="meta-value" x-text="formatDate(order.delivery_date)"></div>
+                                </div>
+                                <div>
+                                    <div class="meta-label">Vendedor</div>
+                                    <div class="meta-value" x-text="order.created_by || '-'"></div>
+                                </div>
+                                <div>
+                                    <div class="meta-label">Última Actualización</div>
+                                    <div class="meta-value" x-text="formatDateTime(order.last_updated)"></div>
+                                </div>
+                            </div>
+
+                            <!-- Action link -->
+                            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-light); text-align: right;">
+                                <a :href="'/orders/' + order.order_id"
+                                   style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #4a7dff; text-decoration: none; padding: 6px 14px; border-radius: 8px; transition: background 0.15s;"
+                                   onmouseover="this.style.background='rgba(74,125,255,0.08)'"
+                                   onmouseout="this.style.background='transparent'"
+                                   @click.stop>
+                                    Ver detalle
+                                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- ═══════ PAGINATION ═══════ -->
+        <div x-show="!firstLoad && totalPages > 1" class="pagination-bar">
+            <div class="pagination-info">
+                Mostrando <span x-text="((currentPage - 1) * pageSize) + 1"></span>–<span x-text="Math.min(currentPage * pageSize, filteredOrders.length)"></span>
+                de <span x-text="filteredOrders.length"></span> pedidos
+            </div>
+            <div class="pagination-controls">
+                <button class="page-btn" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+
+                <template x-for="p in pageNumbers" :key="'page-' + p">
+                    <button class="page-btn"
+                        :class="p === currentPage ? 'page-btn-active' : (p === '...' ? 'page-btn-dots' : '')"
+                        :disabled="p === '...'"
+                        @click="p !== '...' && goToPage(p)"
+                        x-text="p"></button>
+                </template>
+
+                <button class="page-btn" :disabled="currentPage >= totalPages" @click="goToPage(currentPage + 1)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- ═══════ TOAST ═══════ -->
+    <div x-show="toast.visible" x-cloak x-transition
+        class="toast" :class="toast.type === 'error' ? 'toast-error' : 'toast-info'">
+        <div class="toast-content">
+            <strong x-text="toast.title"></strong>
+            <span x-text="toast.message"></span>
+        </div>
+    </div>
+
+    <!-- Nokia notification sound (trimmed 1.5s clip) -->
+    <audio id="nokia-audio" preload="auto" src="{{ url_for('static', filename='nokia.wav') }}" style="display:none"></audio>
+
+    <!-- ═══════ ALPINE APP ═══════ -->
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('monitorApp', () => ({
+                orders: [],
+                stats: {},
+                sellers: [],
+                canSeeAll: false,
+                currentSeller: '',
+                selectedSeller: '',
+                searchQuery: '',
+                dateFrom: new Date().toISOString().split('T')[0],
+                dateTo: new Date().toISOString().split('T')[0],
+                maxOrders: '0',
+                activeTopFilter: 'all',
+                currentPage: 1,
+                pageSize: 50,
+                loading: false,
+                firstLoad: true,
+                _interval: null,
+                expandedOrder: null,
+                notificationsEnabled: false,
+                _sseReconnectTimer: null,
+
+                toast: { visible: false, title: '', message: '', type: 'info', _timer: null },
+
+                // ── Status pipeline (order matters) ──
+                statusSteps: [
+                    { key: 'Pendiente', short: 'Pend' },
+                    { key: 'En Proceso', short: 'Proc' },
+                    { key: 'Entregado', short: 'Entr' },
+                    { key: 'Facturacion', short: 'Fact' },
+                    { key: 'Relacion de envio', short: 'Rel' },
+                    { key: 'Enviado al cliente', short: 'Env' },
+                ],
+
+                get statusIndex() {
+                    const map = {};
+                    this.statusSteps.forEach((s, i) => map[s.key] = i);
+                    return map;
+                },
+
+                // Base filtered: date + search only (no KPI top filter, no max cap)
+                // Used to compute KPI stats that react to the date range
+                get baseFilteredOrders() {
+                    const q = (this.searchQuery || '').toLowerCase().trim();
+                    const from = this.dateFrom || '';
+                    const to = this.dateTo || '';
+
+                    return this.orders.filter(o => {
+                        // Date range filter (compare against order_date)
+                        if (from || to) {
+                            const rawDate = o.order_date || o.delivery_date || '';
+                            if (!rawDate) return false;
+                            const oDate = rawDate.split('T')[0].split(' ')[0]; // YYYY-MM-DD
+                            if (from && oDate < from) return false;
+                            if (to && oDate > to) return false;
+                        }
+
+                        // Text search
+                        if (!q) return true;
+                        return String(o.order_id).includes(q) ||
+                            (o.customer_name || '').toLowerCase().includes(q) ||
+                            (o.customer_code || '').toLowerCase().includes(q) ||
+                            (o.factura_number && String(o.factura_number).includes(q)) ||
+                            (o.delivery_number && String(o.delivery_number).includes(q));
+                    });
+                },
+
+                // Reactive stats computed from the date/search-filtered orders
+                get activeStats() {
+                    const counts = { total_active: 0, pending: 0, in_progress: 0, picking: 0, invoicing: 0, ready: 0, shipped: 0, waiting: 0, cancelled: 0 };
+                    for (const o of this.baseFilteredOrders) {
+                        counts.total_active += 1;
+                        const s = o.status;
+                        if (s === 'Pendiente') counts.pending += 1;
+                        if (s === 'En Proceso') counts.in_progress += 1;
+                        if (s === 'Entregado' || s === 'Preparando') counts.picking += 1;
+                        if (s === 'Facturacion') counts.invoicing += 1;
+                        if (s === 'Relacion de envio' || s === 'Recibido por almacen') counts.ready += 1;
+                        if (s === 'Enviado al cliente') counts.shipped += 1;
+                        if (s === 'En Espera') counts.waiting += 1;
+                        if (s === 'Cancelado') counts.cancelled += 1;
+                    }
+                    return counts;
+                },
+
+                get filteredOrders() {
+                    const max = parseInt(this.maxOrders) || 0;
+
+                    // Apply KPI top filter on top of the base
+                    let result = this.baseFilteredOrders.filter(o => this.orderMatchesTopFilter(o));
+
+                    // Cap to max orders
+                    if (max > 0 && result.length > max) {
+                        result = result.slice(0, max);
+                    }
+
+                    return result;
+                },
+
+                get paginatedOrders() {
+                    const start = (this.currentPage - 1) * this.pageSize;
+                    return this.filteredOrders.slice(start, start + this.pageSize);
+                },
+
+                get totalPages() {
+                    return Math.max(1, Math.ceil(this.filteredOrders.length / this.pageSize));
+                },
+
+                get pageNumbers() {
+                    const total = this.totalPages;
+                    const cur = this.currentPage;
+                    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+                    const pages = [];
+                    pages.push(1);
+                    if (cur > 3) pages.push('...');
+                    for (let i = Math.max(2, cur - 1); i <= Math.min(total - 1, cur + 1); i++) {
+                        pages.push(i);
+                    }
+                    if (cur < total - 2) pages.push('...');
+                    pages.push(total);
+                    return pages;
+                },
+
+                goToPage(page) {
+                    if (page < 1 || page > this.totalPages) return;
+                    this.currentPage = page;
+                    this.expandedOrder = null;
+                    // Scroll to top of orders
+                    document.querySelector('.orders-container')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                },
+
+                orderMatchesTopFilter(order) {
+                    const status = order?.status;
+                    if (this.activeTopFilter === 'all') return true;
+                    if (this.activeTopFilter === 'pending') return status === 'Pendiente';
+                    if (this.activeTopFilter === 'process') return status === 'En Proceso';
+                    if (this.activeTopFilter === 'picking') return status === 'Entregado' || status === 'Preparando';
+                    if (this.activeTopFilter === 'invoice') return status === 'Facturacion';
+                    if (this.activeTopFilter === 'relation') return status === 'Relacion de envio' || status === 'Recibido por almacen';
+                    if (this.activeTopFilter === 'shipped') return status === 'Enviado al cliente';
+                    if (this.activeTopFilter === 'waiting') return status === 'En Espera';
+                    if (this.activeTopFilter === 'cancelled') return status === 'Cancelado';
+                    return true;
+                },
+
+                toggleTopFilter(filterKey) {
+                    this.activeTopFilter = this.activeTopFilter === filterKey ? 'all' : filterKey;
+                    this.currentPage = 1;
+                    this.expandedOrder = null;
+                },
+
+                getTopFilterLabel() {
+                    const labels = {
+                        pending: 'Pendientes',
+                        process: 'En Proceso',
+                        picking: 'Entregados',
+                        invoice: 'Facturados',
+                        relation: 'Relación',
+                        shipped: 'Enviados',
+                        waiting: 'En Espera',
+                        cancelled: 'Cancelados'
+                    };
+                    return labels[this.activeTopFilter] || 'Todos';
+                },
+
+                // ── Progress timeline helpers ──
+                getStepIndex(status) {
+                    return this.statusIndex[status] ?? -1;
+                },
+
+                isStepCompleted(orderStatus, stepKey) {
+                    return this.getStepIndex(orderStatus) > this.getStepIndex(stepKey);
+                },
+
+                isStepCurrent(orderStatus, stepKey) {
+                    return orderStatus === stepKey;
+                },
+
+                getStepClass(orderStatus, stepKey) {
+                    if (this.isStepCurrent(orderStatus, stepKey)) return 'step-current';
+                    if (this.isStepCompleted(orderStatus, stepKey)) return 'step-done';
+                    return 'step-future';
+                },
+
+                // ── Card accent ──
+                getCardAccentClass(status) {
+                    const map = {
+                        'Pendiente': 'accent-amber',
+                        'En Proceso': 'accent-violet',
+                        'Entregado': 'accent-sky',
+                        'Facturacion': 'accent-pink',
+                        'Relacion de envio': 'accent-emerald',
+                        'Enviado al cliente': 'accent-teal',
+                        'En Espera': 'accent-orange',
+                        'Cancelado': 'accent-red',
+                    };
+                    return map[status] || 'accent-slate';
+                },
+
+                // ── Aging ──
+                getAgingHours(order) {
+                    const ref = order.order_date || order.created_at || order.delivery_date;
+                    if (!ref) return 0;
+                    const d = new Date(ref);
+                    if (isNaN(d)) return 0;
+                    return Math.max(0, Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60)));
+                },
+                getAgingText(order) {
+                    const h = this.getAgingHours(order);
+                    if (h < 1) return '< 1h';
+                    if (h < 24) return h + 'h';
+                    const d = Math.floor(h / 24);
+                    return d + 'd ' + (h % 24) + 'h';
+                },
+                getAgingClass(order) {
+                    const h = this.getAgingHours(order);
+                    if (h < 24) return 'aging-ok';
+                    if (h < 72) return 'aging-warn';
+                    return 'aging-danger';
+                },
+
+                // ── Overdue ──
+                isOverdue(order) {
+                    if (!order.delivery_date) return false;
+                    const d = new Date(order.delivery_date);
+                    if (isNaN(d)) return false;
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    return d < today;
+                },
+
+                // ── SAP status ──
+                getSapClass(status) {
+                    if (status === 'Abierto') return 'sap-open';
+                    if (status === 'Cerrado') return 'sap-closed';
+                    if (status === 'Cancelado') return 'sap-cancelled';
+                    return '';
+                },
+
+                // ── Format helpers ──
+                formatDate(str) {
+                    if (!str) return '-';
+                    const clean = str.split('T')[0].split(' ')[0];
+                    if (clean.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                        const [y, m, d] = clean.split('-');
+                        return `${d}/${m}/${y}`;
+                    }
+                    return clean;
+                },
+                formatDateTime(str) {
+                    if (!str) return '-';
+                    const raw = str.substring(0, 16).replace('T', ' ');
+                    const parts = raw.split(' ');
+                    if (parts.length === 2 && parts[0].match(/^\d{4}-\d{2}-\d{2}$/)) {
+                        const [y, m, d] = parts[0].split('-');
+                        return `${d}/${m}/${y} ${parts[1]}`;
+                    }
+                    return raw;
+                },
+                formatItemQty(item) {
+                    const qty = Number(item.quantity ?? item.Quantity ?? 0);
+                    const rawUnit = item.unit || item.Unit || item.uom || '';
+                    let unit = String(rawUnit).trim().toUpperCase();
+                    if (unit === 'KGM' || unit === 'KG') unit = 'KG';
+                    else if (unit === 'LTR' || unit === 'LT' || unit === 'L') unit = 'LT';
+                    else if (unit === 'PZA' || unit === 'PZ' || unit === 'PIEZA') unit = 'PZ';
+                    else unit = unit || 'PZ';
+                    return `${qty} ${unit}`;
+                },
+
+                toggleExpand(id, event) {
+                    // Don't toggle when clicking inside the detail panel
+                    if (event && event.target.closest('.card-detail')) return;
+                    this.expandedOrder = this.expandedOrder === id ? null : id;
+                },
+
+                // ── Notification helpers ──
+                playNotificationSound() {
+                    try {
+                        const audio = document.getElementById('nokia-audio');
+                        if (!audio) return;
+                        audio.currentTime = 0;
+                        audio.play().catch(() => {});
+                    } catch (e) {}
+                },
+
+                async toggleNotifications() {
+                    if (this.notificationsEnabled) {
+                        this.notificationsEnabled = false;
+                        localStorage.setItem('sao_notif', '0');
+                        return;
+                    }
+                    // Request browser notification permission
+                    if ('Notification' in window && Notification.permission === 'default') {
+                        await Notification.requestPermission();
+                    }
+                    this.notificationsEnabled = true;
+                    localStorage.setItem('sao_notif', '1');
+                    // Play a test sound so user knows it works
+                    this.playNotificationSound();
+                    this.showToast('🔔 Notificaciones', 'Notificaciones de cambio de estado activadas', 'info');
+                },
+
+                sendNotification(order_id, fromStatus, toStatus, customerName) {
+                    if (!this.notificationsEnabled) return;
+                    // Sound
+                    this.playNotificationSound();
+                    // Toast
+                    this.showToast(
+                        `📦 Pedido #${order_id}`,
+                        `${customerName || ''} · ${fromStatus} → ${toStatus}`,
+                        'info'
+                    );
+                    // Browser notification (if permitted)
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                        try {
+                            new Notification(`QB-SAO · Pedido #${order_id}`, {
+                                body: `${customerName ? customerName + '\n' : ''}${fromStatus} → ${toStatus}`,
+                                icon: '/static/images/logo_new.png',
+                                tag: `order-${order_id}`,  // collapse duplicates
+                                renotify: true,
+                            });
+                        } catch(e) {}
+                    }
+                },
+
+                // ── Data fetching ──
+                async fetchOrders() {
+                    this.loading = true;
+                    try {
+                        let url = '/orders/api/seller/orders?_=' + Date.now();
+                        if (this.selectedSeller) url += '&seller=' + encodeURIComponent(this.selectedSeller);
+
+                        const res = await fetch(url, { cache: 'no-store' });
+                        if (!res.ok) throw new Error('HTTP ' + res.status);
+                        const data = await res.json();
+
+                        // Sort by status pipeline priority
+                        const pri = {};
+                        this.statusSteps.forEach((s, i) => pri[s.key] = i);
+                        const sorted = (data.orders || []).sort((a, b) => {
+                            const pDiff = (pri[a.status] ?? 99) - (pri[b.status] ?? 99);
+                            if (pDiff !== 0) return pDiff;
+                            // Within same status, newest order first
+                            const idA = parseInt(a.order_id) || 0;
+                            const idB = parseInt(b.order_id) || 0;
+                            return idB - idA;
+                        });
+
+                        this.orders = sorted;
+                        this.stats = data.stats || {};
+                        this.sellers = data.sellers || [];
+                        this.canSeeAll = data.can_see_all || false;
+                        this.currentSeller = data.current_seller || '';
+                        this.firstLoad = false;
+                    } catch (e) {
+                        console.error('Fetch failed:', e);
+                        this.showToast('Error', 'No se pudieron cargar los pedidos', 'error');
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                showToast(title, message, type = 'info') {
+                    if (this.toast._timer) clearTimeout(this.toast._timer);
+                    this.toast = { visible: true, title, message, type, _timer: null };
+                    this.toast._timer = setTimeout(() => { this.toast.visible = false; }, 4000);
+                },
+
+                init() {
+                    // Restore notification preference
+                    this.notificationsEnabled = localStorage.getItem('sao_notif') === '1';
+
+                    this.fetchOrders();
+
+                    // Polling fallback every 30s
+                    this._interval = setInterval(() => this.fetchOrders(), 30000);
+
+                    // SSE real-time stream
+                    this._connectSSE();
+                },
+
+                _connectSSE() {
+                    if (!window.EventSource) return;
+                    // Guard: don't open a second connection if already alive
+                    if (this._es && this._es.readyState === 1) return;
+
+                    try {
+                        if (this._es) { try { this._es.close(); } catch(e) {} }
+                        this._es = new EventSource('/orders/stream_web');
+
+                        this._es.onmessage = (evt) => {
+                            try {
+                                const payload = JSON.parse(evt.data);
+                                if (!payload) return;
+
+                                if (payload.type === 'order_updated') {
+                                    const o = payload.order;
+                                    const id = String(payload.order_id);
+                                    const idx = this.orders.findIndex(x => String(x.order_id) === id);
+                                    if (idx >= 0) {
+                                        this.orders.splice(idx, 1, o);
+                                    } else {
+                                        this.fetchOrders();
+                                    }
+                                    this._recomputeStats();
+                                }
+
+                                if (payload.type === 'status_changed') {
+                                    const { order_id, customer, from: fromStatus, to: toStatus } = payload;
+                                    this.sendNotification(order_id, fromStatus, toStatus, customer);
+                                }
+                            } catch (e) {
+                                console.error('SSE parse error', e);
+                            }
+                        };
+
+                        this._es.onerror = () => {
+                            console.warn('SSE disconnected — reconnecting in 5s...');
+                            if (this._es) { try { this._es.close(); } catch(e) {} }
+                            if (this._sseReconnectTimer) clearTimeout(this._sseReconnectTimer);
+                            this._sseReconnectTimer = setTimeout(() => this._connectSSE(), 5000);
+                        };
+                    } catch (e) {
+                        console.warn('SSE not supported', e);
+                    }
+                },
+
+                _recomputeStats() {
+                    const counts = { total_active: 0, pending: 0, in_progress: 0, picking: 0, invoicing: 0, ready: 0, shipped: 0 };
+                    for (const o of (this.orders || [])) {
+                        counts.total_active += 1;
+                        const s = o.status;
+                        if (s === 'Pendiente') counts.pending += 1;
+                        if (s === 'En Proceso') counts.in_progress += 1;
+                        if (s === 'Entregado') counts.picking += 1;
+                        if (s === 'Facturacion') counts.invoicing += 1;
+                        if (s === 'Relacion de envio') counts.ready += 1;
+                        if (s === 'Enviado al cliente') counts.shipped += 1;
+                    }
+                    this.stats = counts;
+                },
+
+                destroy() {
+                    if (this._interval) clearInterval(this._interval);
+                    if (this._sseReconnectTimer) clearTimeout(this._sseReconnectTimer);
+                    if (this._es) { try { this._es.close(); } catch(e) {} }
+                }
+            }));
+        });
+    </script>
+</body>
+
+</html>

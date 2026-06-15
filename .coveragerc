@@ -1,0 +1,15 @@
+[run]
+source = .
+omit =
+    .venv/*
+    tests/*
+    scripts/*
+    locustfile.py
+    monitor_locustfile.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+    pass
+show_missing = true
