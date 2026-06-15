@@ -1,0 +1,12 @@
+flask>=3.0
+flask-login>=0.6
+flask-wtf>=1.2
+flask-limiter>=3.0
+python-dotenv>=1.0
+hdbcli>=2.0
+pyodbc>=5.0
+sqlalchemy>=2.0
+pandas>=2.0
+openpyxl>=3.1
+pywin32>=305
+prometheus-flask-exporter>=0.23.0
