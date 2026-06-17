@@ -25,11 +25,11 @@ class SAPHanaConnector:
     Uses hdbcli (native Python driver) for connectivity.
     """
 
-    DEFAULT_HOST = os.environ.get("SAP_HANA_HOST", "")
-    DEFAULT_PORT = int(os.environ.get("SAP_HANA_PORT", "30015"))
-    DEFAULT_SCHEMA = os.environ.get("SAP_HANA_SCHEMA", "SBO_QUIMICABOSS")
-    DEFAULT_USER = os.environ.get("SAP_HANA_USER", "")
-    DEFAULT_PASS = os.environ.get("SAP_HANA_PASSWORD", "")
+    DEFAULT_HOST = os.environ.get("SAP_HOST", os.environ.get("SAP_HANA_HOST", ""))
+    DEFAULT_PORT = int(os.environ.get("SAP_PORT", os.environ.get("SAP_HANA_PORT", "30015")))
+    DEFAULT_SCHEMA = os.environ.get("SAP_SCHEMA", os.environ.get("SAP_HANA_SCHEMA", "SBO_QUIMICABOSS"))
+    DEFAULT_USER = os.environ.get("SAP_USER", os.environ.get("SAP_HANA_USER", ""))
+    DEFAULT_PASS = os.environ.get("SAP_PASS", os.environ.get("SAP_HANA_PASSWORD", ""))
 
     TABLES = {
         "sales_orders": "ORDR",
@@ -779,26 +779,34 @@ class SAPHanaConnector:
 
         invoice_query = f"""
             SELECT * FROM (
-                SELECT DISTINCT
-                    I1."BaseEntry"  AS order_doc_entry,
-                    I0."DocNum"     AS invoice_num,
-                    I0."DocDate"    AS invoice_date,
-                    I0."DocTime"    AS invoice_time,
-                    I0."DocEntry"   AS doc_entry
-                FROM {self._get_table_name("invoices")} I0
-                INNER JOIN {self._get_table_name("invoice_lines")} I1 ON I0."DocEntry" = I1."DocEntry"
-                WHERE I1."BaseType" = 17
+                SELECT * FROM (
+                    SELECT DISTINCT
+                        I1."BaseEntry"  AS order_doc_entry,
+                        I0."DocNum"     AS invoice_num,
+                        I0."DocDate"    AS invoice_date,
+                        I0."DocTime"    AS invoice_time,
+                        I0."DocEntry"   AS doc_entry
+                    FROM {self._get_table_name("invoices")} I0
+                    INNER JOIN {self._get_table_name("invoice_lines")} I1 ON I0."DocEntry" = I1."DocEntry"
+                    WHERE I1."BaseType" = 17
+                    ORDER BY I0."DocEntry" DESC
+                    LIMIT ?
+                )
                 UNION
-                SELECT DISTINCT
-                    D1."BaseEntry"  AS order_doc_entry,
-                    I0."DocNum"     AS invoice_num,
-                    I0."DocDate"    AS invoice_date,
-                    I0."DocTime"    AS invoice_time,
-                    I0."DocEntry"   AS doc_entry
-                FROM {self._get_table_name("invoices")} I0
-                INNER JOIN {self._get_table_name("invoice_lines")} I1 ON I0."DocEntry" = I1."DocEntry"
-                INNER JOIN {self._get_table_name("delivery_lines")} D1 ON I1."BaseType" = 15 AND I1."BaseEntry" = D1."DocEntry"
-                WHERE D1."BaseType" = 17
+                SELECT * FROM (
+                    SELECT DISTINCT
+                        D1."BaseEntry"  AS order_doc_entry,
+                        I0."DocNum"     AS invoice_num,
+                        I0."DocDate"    AS invoice_date,
+                        I0."DocTime"    AS invoice_time,
+                        I0."DocEntry"   AS doc_entry
+                    FROM {self._get_table_name("invoices")} I0
+                    INNER JOIN {self._get_table_name("invoice_lines")} I1 ON I0."DocEntry" = I1."DocEntry"
+                    INNER JOIN {self._get_table_name("delivery_lines")} D1 ON I1."BaseType" = 15 AND I1."BaseEntry" = D1."DocEntry"
+                    WHERE D1."BaseType" = 17
+                    ORDER BY I0."DocEntry" DESC
+                    LIMIT ?
+                )
             ) T
             ORDER BY T.doc_entry DESC
             LIMIT ?
@@ -827,7 +835,7 @@ class SAPHanaConnector:
 
         # Fetch invoices
         try:
-            cursor.execute(invoice_query, [limit])
+            cursor.execute(invoice_query, [limit, limit, limit])
             for row in cursor.fetchall():
                 doc_date = row[2]
                 doc_time = row[3]
