@@ -53,7 +53,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "cor
 
 from dotenv import load_dotenv  # noqa: E402
 
-load_dotenv()
+load_dotenv(override=True)
 
 from flask import (  # noqa: E402
     Flask,
@@ -200,9 +200,21 @@ def create_app(config_name: Optional[str] = None) -> "OpenOMSApp":
     # Register blueprints
     from routes.auth import auth_bp
     from routes.orders import orders_bp
+    from routes.users import users_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(orders_bp, url_prefix="/orders")
+    app.register_blueprint(users_bp)
+
+    @app.before_request
+    def update_last_active():
+        from flask_login import current_user
+        from flask import current_app
+        import datetime
+        if current_user.is_authenticated:
+            user = current_app.user_manager.get_user(current_user.username)
+            if user:
+                user["last_active_at"] = datetime.datetime.now().isoformat()
 
     # CSRF-exempt machine-to-machine SGA webhook (no browser session)
     from routes.orders import sga_label_printed, init_webhook_retry
@@ -340,6 +352,10 @@ if __name__ == "__main__":
     logger.info("=" * 60)
 
     debug_mode = app.config.get("DEBUG", False)
-    app.run(host="0.0.0.0", port=5003, debug=debug_mode, threaded=True)
-
-
+    if debug_mode:
+        logger.info("🚀 Starting Flask Development Server...")
+        app.run(host="192.168.2.218", port=5009, debug=True, threaded=True)
+    else:
+        from waitress import serve
+        logger.info("🚀 Starting Waitress Production WSGI Server...")
+        serve(app, host="0.0.0.0", port=5009, threads=200)

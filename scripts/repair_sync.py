@@ -6,6 +6,7 @@ Uses simple UPDATE statements instead of MERGE to avoid any issues.
 
 import pyodbc
 import json
+import os
 import sys
 import datetime
 from collections import Counter
@@ -14,10 +15,10 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 CONN_STR = (
     "DRIVER={ODBC Driver 17 for SQL Server};"
-    "SERVER=192.168.2.237;"
-    "DATABASE=SGA_Database;"
-    "UID=sga_app_user;"
-    "PWD=QuimicaBoss_2026!;"
+    f"SERVER={os.environ.get('MSSQL_SERVER', '')};"
+    f"DATABASE={os.environ.get('MSSQL_DATABASE', 'SGA_Database')};"
+    f"UID={os.environ.get('MSSQL_USER', '')};"
+    f"PWD={os.environ.get('MSSQL_PASSWORD', '')};"
     "TrustServerCertificate=yes;"
 )
 

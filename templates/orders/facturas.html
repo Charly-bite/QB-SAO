@@ -205,7 +205,7 @@ input[type=number] {
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                         <span>Imprimir Relación</span>
                     </button>
-                    <button @click="addExtraInvoice()" :disabled="loading" class="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-white bg-slate-800 rounded-lg hover:bg-slate-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 active:scale-95" title="Añadir factura manualmente">
+                    <button x-show="canEditFacturas" @click="addExtraInvoice()" :disabled="loading" class="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-white bg-slate-800 rounded-lg hover:bg-slate-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 active:scale-95" title="Añadir factura manualmente">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                         Añadir Factura
                     </button>
@@ -259,7 +259,7 @@ input[type=number] {
                     <tr class="text-xs font-semibold tracking-wide text-slate-800 uppercase bg-[#D9D9D9] text-center">
                         <th class="px-1 py-3 w-8 drag-handle border border-slate-400 align-middle"></th>
                         <th class="px-2 py-3 border border-slate-400 align-middle w-10 text-center">
-                            <input type="checkbox" :checked="allSelected" @change="toggleAll()" class="w-4 h-4 text-amber-500 rounded focus:ring-amber-500 border-slate-400 cursor-pointer" title="Seleccionar todas">
+                            <input type="checkbox" :checked="allSelected" @change="toggleAll()" :disabled="!canEditFacturas" class="w-4 h-4 text-amber-500 rounded focus:ring-amber-500 border-slate-400 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" title="Seleccionar todas">
                         </th>
                         <th class="px-2 py-3 border border-slate-400 align-middle w-10 text-center">#</th>
                         <th class="px-2 py-3 border border-slate-400 align-middle w-24">Fecha de<br>Pedido</th>
@@ -307,10 +307,10 @@ input[type=number] {
                             <tr @click="handleRowClick($event, inv)" class="transition-colors fade-in invoice-row" :class="(isMatch(inv) ? 'bg-amber-50 ring-2 ring-amber-300 match-row ' : (rowColors[inv.invoice_number] ? 'row-color-' + rowColors[inv.invoice_number] + ' ' : (inv._global_index % 2 === 0 ? 'bg-slate-100 hover:bg-slate-200 ' : 'bg-white hover:bg-slate-50 '))) + (inv._selected ? 'is-selected' : '')" :data-id="inv.invoice_number">
                                 <td class="px-2 py-3 border border-slate-400 text-center align-middle">
                                     <div class="relative flex flex-col items-center gap-3" x-data="{ showColors: false }">
-                                        <div class="p-1 cursor-grab drag-handle touch-none select-none" title="Arrastrar para ordenar">
+                                        <div x-show="canEditFacturas" class="p-1 cursor-grab drag-handle touch-none select-none" title="Arrastrar para ordenar">
                                             <svg class="w-5 h-5 text-slate-400 hover:text-slate-600 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/></svg>
                                         </div>
-                                        <button @click="showColors = !showColors" @click.away="showColors = false"
+                                        <button x-show="canEditFacturas" @click="showColors = !showColors" @click.away="showColors = false"
                                                 class="w-4 h-4 rounded-full border shadow-sm transition-transform hover:scale-110"
                                                 :class="getColorClass(inv.invoice_number, true)"
                                                 title="Cambiar color de etiqueta"></button>
@@ -334,19 +334,19 @@ input[type=number] {
                                 </td>
                                 <!-- Checkbox -->
                                 <td class="px-2 py-3 border border-slate-400 text-center align-middle">
-                                    <input type="checkbox" x-model="inv._selected" @click="handleCheck($event, inv)" class="w-4 h-4 text-amber-500 rounded focus:ring-amber-500 border-slate-300 cursor-pointer">
+                                    <input type="checkbox" x-model="inv._selected" @click="handleCheck($event, inv)" :disabled="!canEditFacturas" class="w-4 h-4 text-amber-500 rounded focus:ring-amber-500 border-slate-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
                                 </td>
                                 <!-- Posición -->
                                 <td class="px-2 py-3 border border-slate-400 text-center align-middle font-bold text-slate-700 text-sm group">
                                     <div class="flex items-center justify-center gap-1">
-                                        <button @click.stop="moveRowByOffset(inv, -1)" class="text-slate-300 hover:text-slate-600 focus:outline-none opacity-0 group-hover:opacity-100 transition-opacity" title="Mover arriba">
+                                        <button x-show="canEditFacturas" @click.stop="moveRowByOffset(inv, -1)" class="text-slate-300 hover:text-slate-600 focus:outline-none opacity-0 group-hover:opacity-100 transition-opacity" title="Mover arriba">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>
                                         </button>
-                                        <div @dblclick.stop="inv._editing_position = true; $nextTick(() => { $refs['posInput_' + inv.invoice_number].focus(); $refs['posInput_' + inv.invoice_number].select(); })" class="cursor-pointer min-w-[20px]" title="Doble clic para cambiar posición">
+                                        <div :class="{'cursor-pointer': canEditFacturas}" @dblclick.stop="if(canEditFacturas) { inv._editing_position = true; $nextTick(() => { $refs['posInput_' + inv.invoice_number].focus(); $refs['posInput_' + inv.invoice_number].select(); }) }" title="Doble clic para cambiar posición">
                                             <span x-show="!inv._editing_position" x-text="inv._global_index + '°'"></span>
                                             <input :ref="'posInput_' + inv.invoice_number" x-show="inv._editing_position" type="number" :value="inv._global_index" @keydown.enter="changeRowPosition(inv, $event.target.value)" @keydown.up.prevent="moveRowByOffset(inv, -1)" @keydown.down.prevent="moveRowByOffset(inv, 1)" @keydown.escape="inv._editing_position = false" @blur="inv._editing_position = false" class="w-12 text-center border border-amber-400 rounded px-0.5 py-0.5 text-sm font-bold text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-sm" style="display: none;" min="1" :max="invoices.length" />
                                         </div>
-                                        <button @click.stop="moveRowByOffset(inv, 1)" class="text-slate-300 hover:text-slate-600 focus:outline-none opacity-0 group-hover:opacity-100 transition-opacity" title="Mover abajo">
+                                        <button x-show="canEditFacturas" @click.stop="moveRowByOffset(inv, 1)" class="text-slate-300 hover:text-slate-600 focus:outline-none opacity-0 group-hover:opacity-100 transition-opacity" title="Mover abajo">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                                         </button>
                                     </div>
@@ -380,7 +380,7 @@ input[type=number] {
                                 <!-- Cliente -->
                                 <td class="px-4 py-3 border border-slate-400 text-sm relative group">
                                     <template x-if="(inv.customer_name || '').includes('VENTAS MOSTRADOR')">
-                                        <div @dblclick="editCustomerName(inv)" title="Doble clic para cambiar nombre (Venta de mostrador)">
+                                        <div @dblclick="if(canEditFacturas) editCustomerName(inv)" title="Doble clic para cambiar nombre (Venta de mostrador)">
                                             <template x-if="!inv._editing_customer">
                                                 <div class="font-medium text-slate-800 cursor-pointer border-b border-dashed border-slate-300 inline-block" x-html="highlightText(getDisplayCustomerName(inv))"></div>
                                             </template>
@@ -405,7 +405,7 @@ input[type=number] {
                                 <!-- Observación (Combines Select + Notes) -->
                                 <td class="px-2 py-2 border border-slate-400 font-medium text-slate-700 align-top">
                                     <div class="flex flex-col gap-1 w-full">
-                                        <select :value="inv.shipping_type" @change="handleCategoryDropdownChange(inv.invoice_number, $event.target.value, inv.shipping_type)" class="w-full text-xs font-semibold px-1 py-1 border border-slate-300 rounded text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-sm">
+                                        <select :disabled="!canEditFacturas" :value="inv.shipping_type" @change="handleCategoryDropdownChange(inv.invoice_number, $event.target.value, inv.shipping_type)" class="w-full text-xs font-semibold px-1 py-1 border border-slate-300 rounded text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-sm disabled:bg-slate-50 disabled:opacity-75 disabled:cursor-not-allowed">
                                             <option value="ANEXO GDL">ANEXO GDL</option>
                                             <option value="ANEXO MY">ANEXO MY</option>
                                             <option value="ANEXO IRP">ANEXO IRP</option>
@@ -416,7 +416,7 @@ input[type=number] {
                                             <option value="FLETE INTERNO">FLETE INTERNO</option>
                                         </select>
                                         
-                                        <div class="mt-0.5" @dblclick="editObservacion(inv)" title="Doble clic para editar nota">
+                                        <div class="mt-0.5" @dblclick="if(canEditFacturas) editObservacion(inv)" title="Doble clic para editar nota">
                                             <template x-if="!inv._editing">
                                                 <div class="w-full min-h-[1.5rem] px-1 py-0.5 bg-yellow-50 border border-yellow-200 rounded text-[11px] cursor-pointer" :class="!inv.observaciones ? 'text-slate-400 italic bg-slate-50 border-transparent' : 'text-slate-800'">
                                                     <span x-text="inv.observaciones || 'Doble clic para añadir nota'"></span>
@@ -449,12 +449,12 @@ input[type=number] {
                                 </td>
                                 <!-- Recibido -->
                                 <td class="px-2 py-3 text-center border border-slate-400 relative" :title="!inv.related_order_id ? 'No hay pedido local vinculado' : ''">
-                                    <input type="checkbox" x-model="inv.recibido" @change="toggleFactura(inv.invoice_number, 'recibido', inv.recibido)" :disabled="!inv.related_order_id"
+                                    <input type="checkbox" x-model="inv.recibido" @change="toggleFactura(inv.invoice_number, 'recibido', inv.recibido)" :disabled="!canEditFacturas || !inv.related_order_id"
                                         class="w-4 h-4 rounded border-slate-400 text-amber-500 focus:ring-amber-500 print:w-4 print:h-4 print:border-black print:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-all">
                                 </td>
                                 <!-- Entrega -->
                                 <td class="px-2 py-3 text-center border border-slate-400 relative" :title="!inv.related_order_id ? 'No hay pedido local vinculado' : ''">
-                                    <input type="checkbox" x-model="inv.entrega" @change="toggleFactura(inv.invoice_number, 'entrega', inv.entrega)" :disabled="!inv.related_order_id"
+                                    <input type="checkbox" x-model="inv.entrega" @change="toggleFactura(inv.invoice_number, 'entrega', inv.entrega)" :disabled="!canEditFacturas || !inv.related_order_id"
                                         class="w-4 h-4 rounded border-slate-400 text-amber-500 focus:ring-amber-500 print:w-4 print:h-4 print:border-black print:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-all">
                                 </td>
                                 <!-- Firma -->
@@ -511,6 +511,7 @@ function facturasApp() {
         selectedDate: localStorage.getItem('qb_facturas_date') || new Date().toISOString().split('T')[0],
         lastFetchedDate: localStorage.getItem('qb_facturas_date') || new Date().toISOString().split('T')[0],
         sapAvailable: {{ sap_available | tojson }},
+        canEditFacturas: {{ 'true' if current_user.can_edit_facturas() else 'false' }},
         errorMsg: '',
         savedViews: [],
         shippingFilter: '',
@@ -918,27 +919,10 @@ function facturasApp() {
                 }
             });
 
-            this.setupEventSource();
-        },
-
-        setupEventSource() {
-            if (this.eventSource) {
-                this.eventSource.close();
-            }
-            this.eventSource = new EventSource('/orders/stream_web');
-            this.eventSource.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    this.handleSSEEvent(data);
-                } catch(e) {
-                    console.error('Error parsing SSE event:', e);
-                }
-            };
-            this.eventSource.onerror = (e) => {
-                console.warn('SSE disconnected, reconnecting in 5s...');
-                this.eventSource.close();
-                setTimeout(() => this.setupEventSource(), 5000);
-            };
+            // Listen to global SSE events broadcasted by base.html
+            window.addEventListener('sse-message', (e) => {
+                this.handleSSEEvent(e.detail);
+            });
         },
 
         handleSSEEvent(data) {
@@ -986,6 +970,7 @@ function facturasApp() {
 
         initGroupSortable(el, category) {
             if (typeof Sortable === 'undefined') return;
+            if (!this.canEditFacturas) return;
             
             let nextSibling = null;
             let previousCategory = null;
