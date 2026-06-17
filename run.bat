@@ -1,7 +1,8 @@
 @echo off
 echo ========================================
 echo   Open-OMS - Order Tracking
-echo   Port: 5003
+echo   Host: 192.168.2.218
+echo   Port: 5009
 echo ========================================
 cd /d "%~dp0"
 

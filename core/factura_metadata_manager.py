@@ -203,8 +203,8 @@ class FacturaMetadataManager:
         if self.db_client.engine:
             try:
                 with self.db_client.engine.connect() as conn:
-                    query = f"SELECT manual_order_json FROM factura_daily_order WHERE order_date = '{date_str.replace(chr(39), chr(39)+chr(39))}'"
-                    result = conn.exec_driver_sql(query).fetchone()
+                    query = "SELECT manual_order_json FROM factura_daily_order WHERE order_date = ?"
+                    result = conn.exec_driver_sql(query, [date_str]).fetchone()
                     if result and result[0]:
                         order = json.loads(result[0])
                         self.local_daily_orders[date_str] = order  # pragma: no cover
@@ -222,20 +222,20 @@ class FacturaMetadataManager:
         
         if self.db_client.engine:
             try:
-                order_json = json.dumps(manual_order).replace("'", "''")
+                order_json = json.dumps(manual_order)
                 with self.db_client.engine.begin() as conn:
-                    query = f"""
+                    query = """
                         UPDATE factura_daily_order 
-                        SET manual_order_json = '{order_json}'
-                        WHERE order_date = '{date_str.replace("'", "''")}';
+                        SET manual_order_json = ?
+                        WHERE order_date = ?;
 
                         IF @@ROWCOUNT = 0
                         BEGIN
                             INSERT INTO factura_daily_order (order_date, manual_order_json)
-                            VALUES ('{date_str.replace("'", "''")}', '{order_json}');
+                            VALUES (?, ?);
                         END
                     """
-                    conn.exec_driver_sql(query)
+                    conn.exec_driver_sql(query, [order_json, date_str, date_str, order_json])
             except Exception as e:  # pragma: no cover
                 logger.error(f"Error saving daily order to SQL: {e}")
         return True
@@ -245,8 +245,8 @@ class FacturaMetadataManager:
         if self.db_client.engine:
             try:
                 with self.db_client.engine.connect() as conn:
-                    query = f"SELECT extra_invoices_json FROM factura_daily_extra WHERE order_date = '{date_str.replace(chr(39), chr(39)+chr(39))}'"
-                    result = conn.exec_driver_sql(query).fetchone()
+                    query = "SELECT extra_invoices_json FROM factura_daily_extra WHERE order_date = ?"
+                    result = conn.exec_driver_sql(query, [date_str]).fetchone()
                     if result and result[0]:
                         extras = json.loads(result[0])
                         self.local_daily_extras[date_str] = extras  # pragma: no cover
@@ -264,20 +264,20 @@ class FacturaMetadataManager:
         
         if self.db_client.engine:
             try:
-                extras_json = json.dumps(extra_invoices).replace("'", "''")
+                extras_json = json.dumps(extra_invoices)
                 with self.db_client.engine.begin() as conn:
-                    query = f"""
+                    query = """
                         UPDATE factura_daily_extra 
-                        SET extra_invoices_json = '{extras_json}'
-                        WHERE order_date = '{date_str.replace("'", "''")}';
+                        SET extra_invoices_json = ?
+                        WHERE order_date = ?;
 
                         IF @@ROWCOUNT = 0
                         BEGIN
                             INSERT INTO factura_daily_extra (order_date, extra_invoices_json)
-                            VALUES ('{date_str.replace("'", "''")}', '{extras_json}');
+                            VALUES (?, ?);
                         END
                     """
-                    conn.exec_driver_sql(query)
+                    conn.exec_driver_sql(query, [extras_json, date_str, date_str, extras_json])
             except Exception as e:  # pragma: no cover
                 logger.error(f"Error saving daily extras to SQL: {e}")
         return True
@@ -294,16 +294,16 @@ class FacturaMetadataManager:
                 with self.db_client.engine.begin() as conn:
                     query = f"""
                         UPDATE {self.TABLE_NAME} 
-                        SET override_category = '{override_category.replace("'", "''")}'
-                        WHERE invoice_number = {int(invoice_number)};
+                        SET override_category = ?
+                        WHERE invoice_number = ?;
 
                         IF @@ROWCOUNT = 0
                         BEGIN
                             INSERT INTO {self.TABLE_NAME} (invoice_number, override_category)
-                            VALUES ({int(invoice_number)}, '{override_category.replace("'", "''")}');
+                            VALUES (?, ?);
                         END
                     """
-                    conn.exec_driver_sql(query)
+                    conn.exec_driver_sql(query, [override_category, int(invoice_number), int(invoice_number), override_category])
             except Exception as e:  # pragma: no cover
                 logger.error(f"Error saving override for invoice {invoice_number} to SQL: {e}")
         return True
@@ -320,16 +320,16 @@ class FacturaMetadataManager:
                 with self.db_client.engine.begin() as conn:
                     query = f"""
                         UPDATE {self.TABLE_NAME} 
-                        SET color = '{color.replace("'", "''")}'
-                        WHERE invoice_number = {int(invoice_number)};
+                        SET color = ?
+                        WHERE invoice_number = ?;
 
                         IF @@ROWCOUNT = 0
                         BEGIN
                             INSERT INTO {self.TABLE_NAME} (invoice_number, color)
-                            VALUES ({int(invoice_number)}, '{color.replace("'", "''")}');
+                            VALUES (?, ?);
                         END
                     """
-                    conn.exec_driver_sql(query)
+                    conn.exec_driver_sql(query, [color, int(invoice_number), int(invoice_number), color])
             except Exception as e:  # pragma: no cover
                 logger.error(f"Error saving color for invoice {invoice_number} to SQL: {e}")
         return True
@@ -341,22 +341,21 @@ class FacturaMetadataManager:
         self.local_metadata[inv_str]["custom_customer_name"] = custom_name
         self._save_fallback()
         
-        custom_val = f"'{custom_name.replace(chr(39), chr(39)+chr(39))}'" if custom_name else "NULL"  # pragma: no cover
         if self.db_client.engine:
             try:
                 with self.db_client.engine.begin() as conn:
                     query = f"""
                         UPDATE {self.TABLE_NAME} 
-                        SET custom_customer_name = {custom_val}
-                        WHERE invoice_number = {int(invoice_number)};
+                        SET custom_customer_name = ?
+                        WHERE invoice_number = ?;
 
                         IF @@ROWCOUNT = 0
                         BEGIN
                             INSERT INTO {self.TABLE_NAME} (invoice_number, custom_customer_name)
-                            VALUES ({int(invoice_number)}, {custom_val});
+                            VALUES (?, ?);
                         END
                     """
-                    conn.exec_driver_sql(query)
+                    conn.exec_driver_sql(query, [custom_name or None, int(invoice_number), int(invoice_number), custom_name or None])
             except Exception as e:  # pragma: no cover
                 logger.error(f"Error saving custom customer name for invoice {invoice_number} to SQL: {e}")
         return True

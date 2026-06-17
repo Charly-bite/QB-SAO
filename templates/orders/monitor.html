@@ -1,86 +1,57 @@
-<!DOCTYPE html>
-<html lang="es">
+{% extends "base.html" %}
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#0f172a">
-    <title>QB-SAO — Monitor</title>
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logo_new.png') }}" />
+{% block title %}QB-SAO — Monitor{% endblock %}
+{% block page_title %}Monitor de estado en tiempo real{% endblock %}
+
+{% block extra_head %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/monitor.css') }}">
-    <script defer src="{{ url_for('static', filename='js/alpine.min.js') }}"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap"
-        rel="stylesheet">
-</head>
+{% endblock %}
 
-<body x-data="monitorApp()">
+{% block breadcrumbs %}
+<nav class="qb-breadcrumbs" aria-label="Breadcrumb">
+    <a href="{{ url_for('orders.index') }}">QB-SAO</a>
+    <span class="bc-sep">›</span>
+    <span class="bc-current">Monitor</span>
+</nav>
+{% endblock %}
 
-    <!-- ═══════ HEADER ═══════ -->
-    <header class="monitor-header">
-        <div class="header-inner">
-            <div class="header-brand">
-                <div class="brand-icon"><img src="{{ url_for('static', filename='images/logo_new.png') }}" alt="Logo" style="height: 48px; width: auto;" /></div>
-                <div>
-                    <h1 class="brand-title">QB-SAO</h1>
-                    <p class="brand-subtitle">Monitor de estado en tiempo real</p>
-                </div>
+{% block content %}
+<div x-data="monitorApp()" class="monitor-wrapper">
+
+    <!-- ═══════ HEADER / CONTROLS ═══════ -->
+    <div class="monitor-controls-bar" style="display: flex; justify-content: flex-end; align-items: center; padding: 12px 24px; gap: 12px; background: #ffffff; border-bottom: 1px solid #e2e8f0; margin: -24px -24px 24px -24px;">
+        <!-- Seller filter (only for managers/admins) -->
+        <template x-if="canSeeAll">
+            <div class="filter-wrapper" style="position: relative;">
+                <select x-model="selectedSeller" @change="fetchOrders()" class="filter-select" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 13px;">
+                    <option value="">Todos los vendedores</option>
+                    <template x-for="s in sellers" :key="s">
+                        <option :value="s" x-text="s"></option>
+                    </template>
+                </select>
             </div>
+        </template>
 
-            <!-- Breadcrumbs -->
-            <nav class="monitor-breadcrumbs" aria-label="Breadcrumb">
-                <a href="{{ url_for('orders.index') }}">QB-SAO</a>
-                <span class="bc-sep">›</span>
-                <span class="bc-current">Monitor</span>
-            </nav>
+        <!-- Notification bell -->
+        <button type="button" id="btn-notifications"
+            class="notif-bell-btn"
+            style="background: transparent; border: none; cursor: pointer; color: #64748b; padding: 6px; position: relative;"
+            :style="notificationsEnabled ? 'color: #4a7dff;' : ''"
+            @click="toggleNotifications()"
+            :title="notificationsEnabled ? 'Notificaciones activas' : 'Activar notificaciones'">
+            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+            <span x-show="notificationsEnabled" x-cloak style="position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; background: #ef4444; border-radius: 50%;"></span>
+        </button>
 
-            <div class="header-controls">
-                <!-- Seller filter (only for managers/admins) -->
-                <template x-if="canSeeAll">
-                    <div class="filter-wrapper">
-                        <svg class="filter-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                        </svg>
-                        <select x-model="selectedSeller" @change="fetchOrders()" class="filter-select">
-                            <option value="">Todos los vendedores</option>
-                            <template x-for="s in sellers" :key="s">
-                                <option :value="s" x-text="s"></option>
-                            </template>
-                        </select>
-                    </div>
-                </template>
-
-                <!-- Notification bell -->
-                <button type="button" id="btn-notifications"
-                    class="notif-bell-btn"
-                    :class="notificationsEnabled ? 'notif-bell-on' : 'notif-bell-off'"
-                    @click="toggleNotifications()"
-                    :title="notificationsEnabled ? 'Notificaciones activas — clic para desactivar' : 'Activar notificaciones'">
-                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                    </svg>
-                    <span class="notif-badge" x-show="notificationsEnabled" x-cloak></span>
-                </button>
-
-                <!-- Refresh indicator -->
-                <div class="refresh-badge">
-                    <span class="refresh-dot" :class="loading ? 'pulse' : ''"></span>
-                    <span class="refresh-text" x-text="loading ? 'Sincronizando...' : 'Tiempo Real'"></span>
-                </div>
-
-                <!-- User -->
-                <div class="user-badge">
-                    <div class="user-avatar">
-                        {{ current_user.username[:2]|upper }}
-                    </div>
-                </div>
-            </div>
+        <!-- Refresh indicator -->
+        <div class="refresh-badge" style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: #f8fafc; border-radius: 20px; border: 1px solid #e2e8f0;">
+            <span class="refresh-dot" :style="loading ? 'background: #f59e0b;' : 'background: #22c55e;'" style="width: 8px; height: 8px; border-radius: 50%;"></span>
+            <span class="refresh-text" style="font-size: 11px; font-weight: 600; color: #64748b;" x-text="loading ? 'Sincronizando...' : 'Tiempo Real'"></span>
         </div>
-    </header>
+    </div>
 
     <!-- ═══════ KPI CARDS ═══════ -->
     <section class="kpi-bar">
@@ -945,6 +916,5 @@
             }));
         });
     </script>
-</body>
-
-</html>
+</div>
+{% endblock %}

@@ -273,8 +273,8 @@ class OrderStatusManager:
                 if records:
                     merge_sql = self._MERGE_SQL_TMPL.format(table=self.WRITE_TABLE)
                     with self.sql_engine.begin() as conn:
-                        for record in records:
-                            conn.exec_driver_sql(merge_sql, record)
+                        # Passing the entire list to exec_driver_sql performs an executemany
+                        conn.exec_driver_sql(merge_sql, records)
             except Exception as e:  # pragma: no cover
                 import traceback
                 logger.warning(f"[WARN] Error saving to SQL: {e}")
@@ -557,10 +557,7 @@ class OrderStatusManager:
     def get_active_orders(self) -> List[Dict[str, Any]]:
         """Get orders that are not shipped or cancelled."""
         self.reload_if_needed()
-        inactive_statuses = [
-            OrderStatus.SHIPPED.value,
-            OrderStatus.CANCELLED.value,
-        ]
+        inactive_statuses = []
         active = [
             o for o in self.orders.values() if o.get("status") not in inactive_statuses
         ]

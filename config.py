@@ -36,6 +36,7 @@ class Config:
 
     # Session
     PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
+    SESSION_COOKIE_NAME = "sao_session"  # Prevent collision with SGA on same IP
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
     WTF_CSRF_TIME_LIMIT = None
