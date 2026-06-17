@@ -462,7 +462,6 @@ def stream():
     resp = Response(event_stream(q), mimetype='text/event-stream')
     resp.headers['Cache-Control'] = 'no-cache'
     resp.headers['X-Accel-Buffering'] = 'no'   # disable Nginx proxy buffering
-    resp.headers['Connection'] = 'keep-alive'
     return resp
 
 
@@ -500,7 +499,6 @@ def stream_web():
     resp = Response(event_stream(q), mimetype='text/event-stream')
     resp.headers['Cache-Control'] = 'no-cache'
     resp.headers['X-Accel-Buffering'] = 'no'
-    resp.headers['Connection'] = 'keep-alive'
     return resp
 
 
