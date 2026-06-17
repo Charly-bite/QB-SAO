@@ -767,7 +767,7 @@ def global_search():  # pragma: no cover
 @login_required
 def update_status(order_id):
     """Update order status"""
-    if not current_user.can_print_labels():  # Operators can update status
+    if not current_user.can_edit_orders():  # Operators can update status
         return jsonify({"error": "Sin permisos"}), 403
 
     data = request.get_json()
@@ -1383,7 +1383,7 @@ def add_manual():
 @login_required
 def delete_order(order_id):
     """Delete order - Admin only"""
-    if not current_user.is_admin():
+    if not current_user.can_edit_orders():
         return jsonify({"error": "Solo administradores pueden eliminar pedidos"}), 403
 
     order_mgr = current_app.order_status_mgr
@@ -2926,7 +2926,7 @@ def api_facturas_export_custom():  # pragma: no cover
 @login_required
 def toggle_factura_status(invoice_number):  # pragma: no cover
     """Toggle Recibido or Entrega checkbox from the Facturas tab, which updates the related order status."""
-    if not current_user.can_print_labels():
+    if not current_user.can_edit_facturas():
         return jsonify({"error": "Sin permisos"}), 403
 
     data = request.get_json() or {}
