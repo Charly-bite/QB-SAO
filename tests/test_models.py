@@ -105,12 +105,12 @@ class TestRolePredicates:
 class TestCanSeeAllOrders:
     """can_see_all_orders — admins, operators, sell_managers can see all."""
 
-    @pytest.mark.parametrize('role', ['admin', 'operator', 'sell_manager'])
+    @pytest.mark.parametrize('role', ['admin', 'operator', 'sell_manager', 'billing', 'viewer'])
     def test_privileged_roles_can_see_all(self, role):
         u = _make_user(role=role)
         assert u.can_see_all_orders() is True
 
-    @pytest.mark.parametrize('role', ['viewer', 'seller'])
+    @pytest.mark.parametrize('role', ['seller'])
     def test_restricted_roles_cannot_see_all(self, role):
         u = _make_user(role=role)
         assert u.can_see_all_orders() is False

@@ -376,6 +376,10 @@ def _check_delivery_and_invoice(sap, order_mgr, recent_orders):  # pragma: no co
 @login_required
 def index():
     """Order status dashboard"""
+    from flask import redirect, url_for
+    if getattr(current_user, "username", "").lower() in ["mostrador", "monitor"]:
+        return redirect(url_for("orders.monitor"))
+
     order_mgr = current_app.order_status_mgr
 
     # Get filter params
@@ -1182,12 +1186,18 @@ def load_recent_from_sap():
                 "updated_by": sap_user,
                 "created_by": header.get("creator_name"),
                 "creator_name": header.get("creator_name"),
+                "shipping_type": header.get("shipping_type", "LOCAL"),
             }
 
             order_id = str(flattened_order["DocNum"])
 
             # Check if already exists
             if order_id in order_mgr.orders:
+                # Sync shipping_type from SAP (may have been missing on initial import)
+                new_ship = flattened_order.get("shipping_type")
+                if new_ship and new_ship != "LOCAL":
+                    order_mgr.orders[order_id]["shipping_type"] = new_ship
+
                 # Update delivery note number if not present
                 if flattened_order.get("delivery_number") and not order_mgr.orders[order_id].get("delivery_number"):  # pragma: no cover
                     order_mgr.orders[order_id]["delivery_number"] = flattened_order["delivery_number"]
@@ -1448,6 +1458,7 @@ def visor_sync():
                 "updated_by": sap_user,
                 "created_by": header.get("creator_name"),
                 "creator_name": header.get("creator_name"),
+                "shipping_type": header.get("shipping_type", "LOCAL"),
             }
 
             order_id = str(flattened_order["DocNum"])
@@ -1455,6 +1466,14 @@ def visor_sync():
             # Check if exists
             if order_id in order_mgr.orders:
                 needs_update = False
+
+                # Sync shipping_type from SAP (may have been missing on initial import)
+                new_ship = flattened_order.get("shipping_type")
+                if new_ship and new_ship != "LOCAL":
+                    cur_ship = order_mgr.orders[order_id].get("shipping_type", "LOCAL")
+                    if cur_ship != new_ship:
+                        order_mgr.orders[order_id]["shipping_type"] = new_ship
+                        needs_update = True
 
                 # Update SAP status if changed
                 current_sap_status = order_mgr.orders[order_id].get("sap_status")
@@ -1529,6 +1548,15 @@ def visor():
     # Get active orders (exclude delivered/cancelled)
     active_orders = order_mgr.get_active_orders()
 
+    if getattr(current_user, "username", "").lower() == "mostrador":
+        # Mostrador user sees only orders with shipping_type = VENTA MOSTRADOR
+        active_orders = [
+            o for o in active_orders
+            if o.get("shipping_type", "").upper().strip() in [
+                "VENTA MOSTRADOR", "VENTA DE MOSTRADOR", "VENTAS MOSTRADOR"
+            ]
+        ]
+
     # Calculate stats
     stats = {
         "total_active": len(active_orders),
@@ -1563,6 +1591,15 @@ def api_active_orders():
 
     # Get active orders
     active_orders = order_mgr.get_active_orders()
+
+    if getattr(current_user, "username", "").lower() == "mostrador":
+        # Mostrador user sees only orders with shipping_type = VENTA MOSTRADOR
+        active_orders = [
+            o for o in active_orders
+            if o.get("shipping_type", "").upper().strip() in [
+                "VENTA MOSTRADOR", "VENTA DE MOSTRADOR", "VENTAS MOSTRADOR"
+            ]
+        ]
 
     # Calculate stats
     stats = {
@@ -1613,18 +1650,28 @@ def api_seller_orders():
     can_see_all = user.can_see_all_orders()
     seller_filter = request.args.get("seller", "").strip()
 
-    if not can_see_all:
-        # Seller role — filter to own SAP seller name
-        sap_name = getattr(user, "sap_seller_name", "") or ""
-        if sap_name:
-            active_orders = [
-                o
-                for o in active_orders
-                if (o.get("created_by", "") or "").upper() == sap_name.upper()
+    # Mostrador user ALWAYS sees only orders with shipping_type = VENTA MOSTRADOR
+    # (regardless of can_see_all — Mostrador has viewer role but needs restricted view)
+    if getattr(user, "username", "").lower() == "mostrador":
+        active_orders = [
+            o
+            for o in active_orders
+            if o.get("shipping_type", "").upper().strip() in [
+                "VENTA MOSTRADOR", "VENTA DE MOSTRADOR", "VENTAS MOSTRADOR"
             ]
-        else:
-            # No SAP name configured — return empty
-            active_orders = []
+        ]
+    elif not can_see_all:
+            # Seller role — filter to own SAP seller name
+            sap_name = getattr(user, "sap_seller_name", "") or ""
+            if sap_name:
+                active_orders = [
+                    o
+                    for o in active_orders
+                    if (o.get("created_by", "") or "").upper() == sap_name.upper()
+                ]
+            else:
+                # No SAP name configured — return empty
+                active_orders = []
     elif seller_filter:
         # Manager/admin filtering by specific seller
         active_orders = [
@@ -1788,6 +1835,7 @@ def public_api_sync():
                 "updated_by": sap_user,
                 "created_by": header.get("creator_name"),
                 "creator_name": header.get("creator_name"),
+                "shipping_type": header.get("shipping_type", "LOCAL"),
             }
 
             order_id = str(flattened_order["DocNum"])
@@ -1795,6 +1843,15 @@ def public_api_sync():
             # Check if exists
             if order_id in order_mgr.orders:
                 needs_update = False
+
+                # Sync shipping_type from SAP (may have been missing on initial import)
+                new_ship = flattened_order.get("shipping_type")
+                if new_ship and new_ship != "LOCAL":
+                    cur_ship = order_mgr.orders[order_id].get("shipping_type", "LOCAL")
+                    if cur_ship != new_ship:
+                        order_mgr.orders[order_id]["shipping_type"] = new_ship
+                        needs_update = True
+
                 # Update SAP status if changed
                 current_sap_status = order_mgr.orders[order_id].get("sap_status")
                 new_sap_status = flattened_order["sap_status"]
@@ -1922,6 +1979,7 @@ def api_refresh_orders():
                                 "factura_number": header.get("factura_number"),
                                 "items": items,
                                 "updated_by": sap_user,
+                                "shipping_type": header.get("shipping_type", "LOCAL"),
                             }
 
                             oid = str(flattened["DocNum"])
@@ -1932,6 +1990,14 @@ def api_refresh_orders():
                                 new_fact = flattened.get("factura_number")
 
                                 needs_update = False
+
+                                # Sync shipping_type from SAP (may have been missing on initial import)
+                                new_ship = flattened.get("shipping_type")
+                                if new_ship and new_ship != "LOCAL":
+                                    cur_ship = order_mgr.orders[oid].get("shipping_type", "LOCAL")
+                                    if cur_ship != new_ship:
+                                        order_mgr.orders[oid]["shipping_type"] = new_ship
+                                        needs_update = True
 
                                 if cur_sap != new_sap:
                                     # Update SAP status silently — last_updated is handled by
@@ -2623,7 +2689,7 @@ def api_facturas_export():  # pragma: no cover
             style_range(ws_obj, "J2:K2", border=thin_border)
 
             # Row 3 (Headers)
-            headers = ["Fecha de\nPedido", "No. de\nPedido", "Fecha de\nFacturación", "No. de\nFactura", "Cliente", "Importe", "Observación", "Crédito", "Pagado", "Recibido", "Entrega"]
+            headers = ["Fecha de\nPedido", "No. de\nPedido", "Fecha de\nFacturación", "No. de\nFactura", "Cliente", "Importe", "Observación", "Crédito", "Contado", "Recibido", "Entrega"]
             for i, h in enumerate(headers, 1):
                 cell = ws_obj.cell(row=3, column=i, value=h)
                 style_cell(cell, font=bold_font, alignment=center_align, border=thin_border, fill=gray_fill)
@@ -2821,7 +2887,7 @@ def api_facturas_export_custom():  # pragma: no cover
             for c in r: c.border, c.fill = thin_border, gray_fill
 
         # Row 3
-        headers = ["No. Ordn Vnt", "No.Fact", "Cliente", "Importe", "Observación", "Crédito", "Pagado", "Recibido", "Entrega"]
+        headers = ["No. Ordn Vnt", "No.Fact", "Cliente", "Importe", "Observación", "Crédito", "Contado", "Recibido", "Entrega"]
         for i, h in enumerate(headers, 1):
             c = ws.cell(row=3, column=i, value=h)
             c.font = bold_font
@@ -2921,6 +2987,429 @@ def api_facturas_export_custom():  # pragma: no cover
         return jsonify({"error": str(e)}), 500
 
 
+# ─── Relación de Envíos API ─────────────────────────────────────────────────
+
+
+@orders_bp.route("/api/relaciones", methods=["POST"])
+@login_required
+def api_create_or_update_relacion():  # pragma: no cover
+    """Create or update the relación for a given date (one per day)."""
+    if not current_user.can_edit_facturas():
+        return jsonify({"error": "Sin permisos"}), 403
+
+    data = request.get_json() or {}
+    date_str = data.get("date", datetime.date.today().isoformat())
+    invoices = data.get("invoices", [])
+    notes = data.get("notes", "")
+
+    if not invoices:
+        return jsonify({"error": "No se proporcionaron facturas"}), 400
+
+    mgr = getattr(current_app, "relacion_mgr", None)
+    if not mgr:
+        return jsonify({"error": "Relacion manager not available"}), 500
+
+    try:
+        relacion = mgr.create_or_update_relacion(
+            date_str, invoices, current_user.username, notes=notes
+        )
+        _publish_event({
+            "type": "relacion_updated",
+            "folio": relacion["folio"],
+            "date": date_str,
+        })
+        return jsonify({"success": True, "relacion": relacion})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 409
+    except Exception as e:
+        logging.error(f"Error creating relacion: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@orders_bp.route("/api/relaciones", methods=["GET"])
+@login_required
+def api_get_relacion():  # pragma: no cover
+    """Get the relación for a specific date."""
+    date_str = request.args.get("date", datetime.date.today().isoformat())
+    mgr = getattr(current_app, "relacion_mgr", None)
+    if not mgr:
+        return jsonify({"error": "Relacion manager not available"}), 500
+
+    relacion = mgr.get_relacion(date_str)
+    if relacion:
+        return jsonify({"relacion": relacion})
+    return jsonify({"relacion": None})
+
+
+@orders_bp.route("/api/relaciones/list")
+@login_required
+def api_list_relaciones():  # pragma: no cover
+    """List all relaciones in a date range."""
+    date_from = request.args.get("date_from")
+    date_to = request.args.get("date_to")
+    mgr = getattr(current_app, "relacion_mgr", None)
+    if not mgr:
+        return jsonify({"error": "Relacion manager not available"}), 500
+
+    relaciones = mgr.get_relaciones_list(date_from, date_to)
+    return jsonify({"relaciones": relaciones})
+
+
+@orders_bp.route("/api/relaciones/<folio>/export")
+@login_required
+def api_export_relacion(folio):  # pragma: no cover
+    """Re-export the Excel file for a specific relación folio."""
+    mgr = getattr(current_app, "relacion_mgr", None)
+    if not mgr:
+        return jsonify({"error": "Relacion manager not available"}), 500
+
+    # Find the relación by folio — extract date from folio (RE-DDMMYY)
+    folio_date_part = folio.replace("RE-", "")
+    try:
+        d = datetime.datetime.strptime(folio_date_part, "%d%m%y")
+        date_str = d.strftime("%Y-%m-%d")
+    except ValueError:
+        return jsonify({"error": f"Folio inválido: {folio}"}), 400
+
+    relacion = mgr.get_relacion(date_str)
+    if not relacion:
+        return jsonify({"error": f"No se encontró relación {folio}"}), 404
+
+    invoices = relacion.get("invoices", [])
+    if not invoices:
+        return jsonify({"error": "La relación no tiene facturas"}), 400
+
+    try:
+        display_date = d.strftime("%d/%m/%Y")
+
+        # Build Excel with folio in header
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Relacion de Envios"
+
+        from openpyxl.worksheet.page import PageMargins
+        ws.page_setup.orientation = "landscape"
+        ws.page_setup.paperSize = 1
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
+        ws.page_margins = PageMargins(left=0.25, right=0.25, top=0.5, bottom=0.5, header=0.3, footer=0.3)
+
+        title_font = Font(bold=True, size=16)
+        bold_font = Font(bold=True)
+        folio_font = Font(bold=True, size=12)
+        center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        left_align = Alignment(horizontal="left", vertical="center", wrap_text=True)
+        right_align = Alignment(horizontal="right", vertical="center", wrap_text=True)
+        thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+        gray_fill = PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid")
+        dark_gray_fill = PatternFill(start_color="808080", end_color="808080", fill_type="solid")
+
+        def style_cell(cell, font=None, alignment=None, border=None, fill=None):
+            if font: cell.font = font
+            if alignment: cell.alignment = alignment
+            if border: cell.border = border
+            if fill: cell.fill = fill
+
+        # Row 1: Title
+        ws.merge_cells("B1:D1")
+        cell = ws.cell(row=1, column=2, value="RELACIÓN DE ENVÍOS")
+        style_cell(cell, font=title_font, alignment=center_align, border=thin_border)
+        for r in ws["A1:D1"]:
+            for c in r: c.border = thin_border
+
+        ws.merge_cells("G1:H1")
+        cell = ws.cell(row=1, column=7, value="QB-IT-VE-01-F06")
+        style_cell(cell, alignment=center_align, border=thin_border)
+        for r in ws["E1:H1"]:
+            for c in r: c.border = thin_border
+
+        # Row 2: Folio
+        ws.merge_cells("A2:H2")
+        cell = ws.cell(row=2, column=1, value=f"Folio: {folio}")
+        style_cell(cell, font=folio_font, alignment=center_align, border=thin_border)
+        for r in ws["A2:H2"]:
+            for c in r: c.border = thin_border
+
+        # Row 3: Date + Section headers
+        cell = ws.cell(row=3, column=2, value="Fecha:")
+        style_cell(cell, font=bold_font, alignment=center_align, border=thin_border, fill=gray_fill)
+        for r in ws["A3:A3"]:
+            for c in r: c.border, c.fill = thin_border, gray_fill
+
+        ws.merge_cells("C3:D3")
+        cell = ws.cell(row=3, column=3, value=display_date)
+        style_cell(cell, font=bold_font, alignment=center_align, border=thin_border, fill=gray_fill)
+        for r in ws["C3:D3"]:
+            for c in r: c.border, c.fill = thin_border, gray_fill
+
+        ws.merge_cells("E3:F3")
+        cell = ws.cell(row=3, column=5, value="Crédito y Cobranza")
+        style_cell(cell, font=bold_font, alignment=center_align, border=thin_border, fill=gray_fill)
+        for r in ws["E3:F3"]:
+            for c in r: c.border, c.fill = thin_border, gray_fill
+
+        ws.merge_cells("G3:H3")
+        cell = ws.cell(row=3, column=7, value="Almacén y Logística")
+        style_cell(cell, font=bold_font, alignment=center_align, border=thin_border, fill=gray_fill)
+        for r in ws["G3:H3"]:
+            for c in r: c.border, c.fill = thin_border, gray_fill
+
+        # Row 4: Column headers (main — spans 2 rows with rowspan)
+        ws.merge_cells("A4:A5")
+        cell = ws.cell(row=4, column=1, value="No. de\nFactura")
+        style_cell(cell, font=bold_font, alignment=center_align, border=thin_border, fill=gray_fill)
+
+        ws.merge_cells("B4:B5")
+        cell = ws.cell(row=4, column=2, value="Cliente")
+        style_cell(cell, font=bold_font, alignment=center_align, border=thin_border, fill=gray_fill)
+
+        ws.merge_cells("C4:C5")
+        cell = ws.cell(row=4, column=3, value="Importe")
+        style_cell(cell, font=bold_font, alignment=center_align, border=thin_border, fill=gray_fill)
+
+        ws.merge_cells("D4:D5")
+        cell = ws.cell(row=4, column=4, value="Observación")
+        style_cell(cell, font=bold_font, alignment=center_align, border=thin_border, fill=gray_fill)
+
+        # Row 5: Sub-headers for check columns
+        for col_idx in range(5, 9):
+            ws.cell(row=4, column=col_idx).border = thin_border
+            ws.cell(row=4, column=col_idx).fill = gray_fill
+
+        sub_headers = ["Crédito", "Contado", "Recibido", "Entrega"]
+        for i, h in enumerate(sub_headers, 5):
+            cell = ws.cell(row=5, column=i, value=h)
+            style_cell(cell, font=bold_font, alignment=center_align, border=thin_border, fill=gray_fill)
+
+        # Group invoices by category
+        category_order = ['LOCAL', 'ENVIO LOCAL', 'PAQUETERIA', 'PASE A PAQUETERIA', 'PASE DIRECTO', 'PASE PROGRAMADO', 'FLETE INTERNO', 'FORANEO']
+        groups = {}
+        for inv in invoices:
+            cat = (inv.get('shipping_type') or inv.get('observaciones') or inv.get('nota') or 'LOCAL').upper()
+            if cat not in groups:
+                groups[cat] = []
+            groups[cat].append(inv)
+
+        def cat_sort_key(cat_name):
+            try:
+                return category_order.index(cat_name)
+            except ValueError:
+                return 100
+
+        sorted_cats = sorted(groups.keys(), key=cat_sort_key)
+
+        # Category separator colors
+        cat_colors = {
+            'LOCAL': 'D9D9D9',
+            'ENVIO LOCAL': 'E8D5F5',
+            'PAQUETERIA': 'FECDD3',
+            'PASE A PAQUETERIA': 'FECDD3',
+            'PASE DIRECTO': 'D1FAE5',
+            'PASE PROGRAMADO': 'E0E7FF',
+            'FLETE INTERNO': 'DBEAFE',
+            'FORANEO': 'FEF3C7',
+        }
+
+        # Write grouped invoice rows
+        row_idx = 6
+        for cat in sorted_cats:
+            cat_invs = groups[cat]
+            # Category separator row
+            sep_color = cat_colors.get(cat, '475569')
+            sep_fill = PatternFill(start_color=sep_color, end_color=sep_color, fill_type="solid")
+            ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=8)
+            cell = ws.cell(row=row_idx, column=1, value=cat)
+            style_cell(cell, font=Font(bold=True, size=10), alignment=Alignment(horizontal="left", vertical="center"), border=thin_border, fill=sep_fill)
+            for col_idx in range(1, 9):
+                ws.cell(row=row_idx, column=col_idx).border = thin_border
+                ws.cell(row=row_idx, column=col_idx).fill = sep_fill
+            row_idx += 1
+
+            for inv in cat_invs:
+                pay_term = inv.get('payment_terms', '').upper()
+                credito = "X" if pay_term != 'CONTADO' else ""
+                total = float(inv.get('total', 0))
+                pagado = "X" if float(inv.get('paid_to_date', 0)) >= total and total > 0 else ""
+                recibido = "X" if inv.get('recibido') else ""
+                entrega = "X" if inv.get('entrega') else ""
+                nota = inv.get('observaciones', '') or inv.get('nota', '') or (inv.get('shipping_type') or 'LOCAL')
+
+                # No. de Factura = order_number/invoice_number
+                order_num = inv.get('order_number', '')
+                invoice_num = inv.get('invoice_number', '')
+                no_factura = f"{order_num}/{invoice_num}" if order_num else str(invoice_num)
+
+                data = [no_factura, inv.get('customer_name', ''), total, nota, credito, pagado, recibido, entrega]
+                for c_idx, val in enumerate(data, 1):
+                    cell = ws.cell(row=row_idx, column=c_idx, value=val)
+                    style_cell(cell, font=bold_font if c_idx in [2, 4] else None,
+                               alignment=center_align,
+                               border=thin_border)
+                    if c_idx == 3:
+                        cell.number_format = '$#,##0.00'
+                ws.row_dimensions[row_idx].height = 28
+                row_idx += 1
+
+        # End colored bars (red, orange, green)
+        red_fill = PatternFill(start_color="DC2626", end_color="DC2626", fill_type="solid")
+        orange_fill = PatternFill(start_color="EA580C", end_color="EA580C", fill_type="solid")
+        green_fill = PatternFill(start_color="16A34A", end_color="16A34A", fill_type="solid")
+        for bar_fill in [red_fill, orange_fill, green_fill]:
+            for col_idx in range(1, 9):
+                style_cell(ws.cell(row=row_idx, column=col_idx), fill=bar_fill, border=thin_border)
+            row_idx += 1
+
+        # Spacer rows
+        row_idx += 2
+
+        # Gray signature bars
+        for col_pair in [(1, 2), (4, 5), (7, 8)]:
+            for c in col_pair:
+                style_cell(ws.cell(row=row_idx, column=c), fill=gray_fill)
+        row_idx += 2
+
+        # AUTORIZADO POR CORREO
+        ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=4)
+        cell = ws.cell(row=row_idx, column=1, value="AUTORIZADO POR CORREO")
+        style_cell(cell, font=bold_font, alignment=center_align)
+        row_idx += 1
+
+        # Signature labels
+        ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=2)
+        cell = ws.cell(row=row_idx, column=1, value="Facturación")
+        facturacion_fill = PatternFill(start_color="94A3B8", end_color="94A3B8", fill_type="solid")
+        style_cell(cell, font=Font(bold=True, color="FFFFFF"), alignment=center_align, fill=facturacion_fill, border=thin_border)
+        ws.cell(row=row_idx, column=2).fill = facturacion_fill
+        ws.cell(row=row_idx, column=2).border = thin_border
+
+        ws.merge_cells(start_row=row_idx, start_column=4, end_row=row_idx, end_column=5)
+        cell = ws.cell(row=row_idx, column=4, value="Crédito y Cobranza")
+        credito_fill = PatternFill(start_color="64748B", end_color="64748B", fill_type="solid")
+        style_cell(cell, font=Font(bold=True, color="FFFFFF"), alignment=center_align, fill=credito_fill, border=thin_border)
+        ws.cell(row=row_idx, column=5).fill = credito_fill
+        ws.cell(row=row_idx, column=5).border = thin_border
+
+        ws.merge_cells(start_row=row_idx, start_column=7, end_row=row_idx, end_column=8)
+        cell = ws.cell(row=row_idx, column=7, value="Almacén")
+        almacen_fill = PatternFill(start_color="475569", end_color="475569", fill_type="solid")
+        style_cell(cell, font=Font(bold=True, color="FFFFFF"), alignment=center_align, fill=almacen_fill, border=thin_border)
+        ws.cell(row=row_idx, column=8).fill = almacen_fill
+        ws.cell(row=row_idx, column=8).border = thin_border
+
+        # Column widths
+        ws.column_dimensions['A'].width = 15
+        ws.column_dimensions['B'].width = 30
+        ws.column_dimensions['C'].width = 15
+        ws.column_dimensions['D'].width = 20
+        ws.column_dimensions['E'].width = 10
+        ws.column_dimensions['F'].width = 10
+        ws.column_dimensions['G'].width = 10
+        ws.column_dimensions['H'].width = 10
+
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        filename = f"Relacion_Envios_{folio}_{display_date.replace('/', '-')}.xlsx"
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        logging.error(f"Relacion export error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@orders_bp.route("/api/relaciones/cerrar-dia", methods=["POST"])
+@login_required
+def api_cerrar_dia():  # pragma: no cover
+    """Close the day: mark relación as closed, roll unsent invoices to next business day."""
+    if not current_user.can_edit_facturas():
+        return jsonify({"error": "Sin permisos"}), 403
+
+    data = request.get_json() or {}
+    date_str = data.get("date", datetime.date.today().isoformat())
+    unsent_invoices = data.get("unsent_invoices", [])
+
+    mgr = getattr(current_app, "relacion_mgr", None)
+    if not mgr:
+        return jsonify({"error": "Relacion manager not available"}), 500
+
+    # Validate all 3 signatures are present
+    folio = mgr.generate_folio(date_str)
+    signatures = mgr.get_signatures(folio)
+    required_areas = {"facturacion", "credito", "almacen"}
+    signed_areas = set(signatures.keys()) if signatures else set()
+    missing = required_areas - signed_areas
+    if missing:
+        return jsonify({
+            "error": f"Faltan firmas: {', '.join(missing)}. Se requieren las 3 firmas para cerrar el día."
+        }), 400
+
+    try:
+        result = mgr.cerrar_dia(date_str, unsent_invoices, current_user.username)
+        _publish_event({
+            "type": "dia_cerrado",
+            "date": date_str,
+            "next_day": result.get("next_business_day"),
+            "rolled": result.get("rolled_invoices", 0),
+        })
+        return jsonify({"success": True, **result})
+    except Exception as e:
+        logging.error(f"Error cerrando día: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@orders_bp.route("/api/relaciones/<folio>/signatures", methods=["POST"])
+@login_required
+def api_update_signature(folio):  # pragma: no cover
+    """Sign or unsign a specific area of the relación."""
+    if not current_user.can_edit_facturas():
+        return jsonify({"error": "Sin permisos"}), 403
+
+    data = request.get_json() or {}
+    area = data.get("area")  # 'facturacion', 'credito', 'almacen'
+    action = data.get("action")  # 'sign' or 'unsign'
+
+    if not area or not action:
+        return jsonify({"error": "Se requieren 'area' y 'action'"}), 400
+
+    # Validate role-based permissions for signing
+    if action == "sign":
+        permission_map = {
+            "facturacion": current_user.can_sign_facturacion(),
+            "credito": current_user.can_sign_credito(),
+            "almacen": current_user.can_sign_almacen(),
+        }
+        if area in permission_map and not permission_map[area]:
+            area_labels = {
+                "facturacion": "Facturación",
+                "credito": "Crédito y Cobranza",
+                "almacen": "Almacén",
+            }
+            return jsonify({
+                "error": f"No tienes permiso para firmar el área de {area_labels.get(area, area)}."
+            }), 403
+
+    mgr = getattr(current_app, "relacion_mgr", None)
+    if not mgr:
+        return jsonify({"error": "Relacion manager not available"}), 500
+
+    try:
+        full_name = current_user.full_name or current_user.username
+        signatures = mgr.save_signatures(
+            folio, area, action, current_user.username, full_name
+        )
+        return jsonify({"success": True, "signatures": signatures})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logging.error(f"Error updating signature: {e}")
+        return jsonify({"error": str(e)}), 500
+
 
 @orders_bp.route("/api/facturas/<int:invoice_number>/toggle", methods=["POST"])
 @login_required
@@ -2986,3 +3475,114 @@ def toggle_factura_status(invoice_number):  # pragma: no cover
         return jsonify({"success": True, "new_status": new_status})
     
     return jsonify({"error": "Error al actualizar estado"}), 500
+
+
+@orders_bp.route("/api/facturas/<int:invoice_number>/relationship-map")
+@login_required
+def api_invoice_relationship_map(invoice_number):
+    """API endpoint to get the relationship map for a specific invoice.
+    
+    If SAP is available, queries the database. Otherwise, returns a mock map.
+    """
+    if current_app.sap_available:
+        try:
+            sap = current_app.sap_connector
+            if not sap or not sap.connected:
+                from core.sap_connector import SAPHanaConnector
+                sap = SAPHanaConnector()
+                sap.connect()
+                current_app.sap_connector = sap
+                
+            data = sap.get_invoice_relationship_map(invoice_number)
+            if data:
+                return jsonify({"success": True, "data": data})
+            else:
+                return jsonify({"success": False, "error": f"Factura #{invoice_number} no encontrada en SAP"}), 404
+        except Exception as e:
+            logging.error(f"Error fetching relationship map from SAP for invoice {invoice_number}: {e}")
+            # Fallback to simulated mapping on connection error or exception
+            pass
+
+    # Dynamic offline/simulated fallback map
+    # Search local orders to see if we can find a matching order or invoice number
+    order_mgr = current_app.order_status_mgr
+    related_order = next((o for o in order_mgr.orders.values() if o.get("factura_number") == str(invoice_number)), None)
+    
+    # Generate realistic mock data
+    total = float(related_order.get("total", 10000.0)) if related_order else 10000.0
+    currency = related_order.get("currency", "MXN") if related_order else "MXN"
+    customer_code = related_order.get("customer_code", "CL9999") if related_order else "CL9999"
+    customer_name = related_order.get("customer_name", "Cliente Simulado") if related_order else "Cliente Simulado"
+    
+    # Dates: Today, Yesterday, 3 days ago, etc.
+    today_str = datetime.date.today().isoformat()
+    yesterday_str = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+    three_days_ago_str = (datetime.date.today() - datetime.timedelta(days=3)).isoformat()
+    
+    order_num = int(related_order.get("order_id", invoice_number - 100)) if related_order else (invoice_number - 100)
+    del_num = invoice_number + 50000
+    
+    # Check status
+    is_delivered = related_order.get("status") in [OrderStatus.READY.value, OrderStatus.SHIPPED.value] if related_order else True
+    is_shipped = related_order.get("status") == OrderStatus.SHIPPED.value if related_order else False
+    
+    invoice_node = {
+        "type": "Factura",
+        "doc_num": invoice_number,
+        "doc_entry": invoice_number * 10,
+        "doc_date": today_str,
+        "total": total,
+        "currency": currency,
+        "status": "Cerrado" if is_shipped else "Abierto",
+        "paid_to_date": total if is_shipped else 0.0
+    }
+    
+    delivery_node = {
+        "type": "Entrega",
+        "doc_num": del_num,
+        "doc_entry": del_num * 10,
+        "doc_date": yesterday_str,
+        "total": total,
+        "currency": currency,
+        "status": "Cerrado"
+    } if is_delivered else None
+    
+    order_node = {
+        "type": "Pedido",
+        "doc_num": order_num,
+        "doc_entry": order_num * 10,
+        "doc_date": three_days_ago_str,
+        "total": total,
+        "currency": currency,
+        "status": "Cerrado"
+    }
+    
+    payments = []
+    if is_shipped:
+        pay_num = invoice_number + 2000
+        payments.append({
+            "type": "Pago Recibido",
+            "doc_num": pay_num,
+            "doc_entry": pay_num * 10,
+            "doc_date": today_str,
+            "total": total,
+            "currency": currency,
+            "status": "Aplicado",
+            "applied_total": total
+        })
+        
+    return jsonify({
+        "success": True,
+        "simulated": True,
+        "data": {
+            "invoice": invoice_node,
+            "delivery": delivery_node,
+            "order": order_node,
+            "payments": payments,
+            "customer": {
+                "card_code": customer_code,
+                "card_name": customer_name
+            }
+        }
+    })
+

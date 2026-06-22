@@ -394,6 +394,7 @@
 
                         {% if current_user.is_authenticated %}
                         <div class="flex items-center gap-1 flex-wrap">
+                            {% if current_user.username.lower() != 'mostrador' %}
                             <a
                                 href="{{ url_for('orders.index') }}"
                                 class="qb-nav-link {% if request.endpoint == 'orders.index' or request.endpoint == 'orders.detail' %}active{% endif %}"
@@ -415,6 +416,7 @@
                                 </svg>
                                 Facturas
                             </a>
+                            {% endif %}
                             <a
                                 href="{{ url_for('orders.monitor') }}"
                                 class="qb-nav-link {% if request.endpoint == 'orders.monitor' %}active-violet{% endif %}"
@@ -425,6 +427,7 @@
                                 </svg>
                                 Monitor
                             </a>
+                            {% if current_user.username.lower() != 'mostrador' %}
                             {% if current_user.can_view_dashboard() %}
                             <a
                                 href="{{ url_for('orders.dashboard') }}"
@@ -449,6 +452,7 @@
                                 Usuarios
                             </a>
                             {% endif %}
+                            {% endif %}
                         </div>
                         {% endif %}
                     </div>
@@ -457,6 +461,7 @@
                     <div class="flex items-center gap-4">
                         {% if current_user.is_authenticated %}
                         
+                        {% if current_user.username.lower() != 'mostrador' %}
                         <!-- Omnibox Search -->
                         <div class="relative hidden sm:block" x-data="omniboxSearch()" @click.away="close()">
                             <div class="flex items-center bg-slate-100 rounded-lg px-3 py-1.5 focus-within:ring-2 focus-within:ring-[#4a7dff] focus-within:bg-white transition-colors w-64 border border-transparent focus-within:border-[#4a7dff]/20">
@@ -483,6 +488,7 @@
                                 </div>
                             </div>
                         </div>
+                        {% endif %}
 
                         
                         <!-- Theme Toggle -->

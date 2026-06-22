@@ -16,7 +16,7 @@ def check_sga_status(timeout=0.5, cache_ttl=10, max_attempts=3, retry_delay=0.1)
 
     sga = False
     sql_server = os.environ.get("SQL_SERVER", "192.168.2.237")
-    sga_web = os.environ.get("SGA_WEB_HOST", "192.168.2.218")
+    sga_web = os.environ.get("SGA_WEB_HOST", "192.168.2.134")
     
     for attempt in range(1, max_attempts + 1):
         # Fast check: ping SQL Server (1433) or Web (5000)
