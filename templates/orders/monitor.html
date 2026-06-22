@@ -262,8 +262,13 @@
 
                     <!-- Customer info -->
                     <div class="card-customer">
-                        <div class="customer-name" x-text="order.customer_name"></div>
-                        <div class="customer-id-row">
+                        <template x-if="isMostrador">
+                            <div class="customer-name" style="color: #94a3b8; font-style: italic;">*** PRIVADO ***</div>
+                        </template>
+                        <template x-if="!isMostrador">
+                            <div class="customer-name" x-text="order.customer_name"></div>
+                        </template>
+                        <div class="customer-id-row" x-show="!isMostrador">
                             <span class="customer-code" x-text="order.customer_code"></span>
                             <template x-if="order.created_by">
                                 <span class="customer-seller" x-text="order.created_by"></span>
@@ -467,6 +472,7 @@
     <script>
         document.addEventListener('alpine:init', () => {
             Alpine.data('monitorApp', () => ({
+                isMostrador: {{ 'true' if current_user.username|lower == 'mostrador' else 'false' }},
                 orders: [],
                 stats: {},
                 sellers: [],
@@ -775,14 +781,14 @@
                     // Toast
                     this.showToast(
                         `📦 Pedido #${order_id}`,
-                        `${customerName || ''} · ${fromStatus} → ${toStatus}`,
+                        `${this.isMostrador ? '*** PRIVADO ***' : (customerName || '')} · ${fromStatus} → ${toStatus}`,
                         'info'
                     );
                     // Browser notification (if permitted)
                     if ('Notification' in window && Notification.permission === 'granted') {
                         try {
                             new Notification(`QB-SAO · Pedido #${order_id}`, {
-                                body: `${customerName ? customerName + '\n' : ''}${fromStatus} → ${toStatus}`,
+                                body: `${this.isMostrador ? '*** PRIVADO ***\n' : (customerName ? customerName + '\n' : '')}${fromStatus} → ${toStatus}`,
                                 icon: '/static/images/logo_new.png',
                                 tag: `order-${order_id}`,  // collapse duplicates
                                 renotify: true,
