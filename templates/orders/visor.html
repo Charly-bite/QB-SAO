@@ -271,14 +271,14 @@ endblock %} {% block page_title %}Visor de Estado de Pedidos{% endblock %}
                         d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
                 <input type="text" x-model="searchQuery" @input="currentPage = 1"
-                    placeholder="Buscar por #pedido, factura, cliente o vendedor..."
+                    :placeholder="isMostrador ? 'Buscar por #pedido o factura...' : 'Buscar por #pedido, factura, cliente o vendedor...'"
                     class="search-input">
                 <button class="search-clear" x-show="searchQuery.length > 0" x-cloak
                     @click="searchQuery = ''; currentPage = 1" title="Limpiar">&times;</button>
             </div>
 
             <div class="filters-row">
-                <div class="filter-group">
+                <div class="filter-group" x-show="!isMostrador">
                     <label class="filter-label">
                         <svg class="filter-label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                         Vendedor
@@ -368,13 +368,12 @@ endblock %} {% block page_title %}Visor de Estado de Pedidos{% endblock %}
                         <tr>
                             <td><span class="qb-visor-oid"><span class="qb-visor-oid-hash">#</span><span x-text="order.order_id"></span></span></td>
                             <td>
-                                <template x-if="isMostrador">
-                                    <div class="qb-visor-cust" style="color: #94a3b8; font-style: italic;">*** PRIVADO ***</div>
-                                </template>
                                 <template x-if="!isMostrador">
-                                    <div class="qb-visor-cust" x-text="order.customer_name"></div>
+                                    <div>
+                                        <div class="qb-visor-cust" x-text="order.customer_name"></div>
+                                        <div class="qb-visor-code" x-text="order.customer_code"></div>
+                                    </div>
                                 </template>
-                                <div class="qb-visor-code" x-show="!isMostrador" x-text="order.customer_code"></div>
                             </td>
                             <td><span class="qb-sap-badge" :class="getSapStatusClass(order.sap_status)" x-text="order.sap_status"></span></td>
                             <td>
@@ -453,6 +452,11 @@ function visorData() {
                     if (to && oDate > to) return false;
                 }
                 if (!q) return true;
+                if (this.isMostrador) {
+                    return String(o.order_id).includes(q) ||
+                        (o.factura_number && String(o.factura_number).includes(q)) ||
+                        (o.delivery_number && String(o.delivery_number).includes(q));
+                }
                 return String(o.order_id).includes(q) ||
                     (o.customer_name || '').toLowerCase().includes(q) ||
                     (o.customer_code || '').toLowerCase().includes(q) ||
