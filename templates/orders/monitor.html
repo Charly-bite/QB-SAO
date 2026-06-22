@@ -619,7 +619,12 @@
                 toast: { visible: false, title: '', message: '', type: 'info', _timer: null },
 
                 // ── Status pipeline (order matters) ──
-                statusSteps: [
+                statusSteps: {{ 'true' if current_user.username|lower == 'mostrador' else 'false' }} ? [
+                    { key: 'Pendiente', short: 'Pend' },
+                    { key: 'En Proceso', short: 'Proc' },
+                    { key: 'Entregado', short: 'Surt' },
+                    { key: 'Facturacion', short: 'Fact' },
+                ] : [
                     { key: 'Pendiente', short: 'Pend' },
                     { key: 'En Proceso', short: 'Proc' },
                     { key: 'Entregado', short: 'Surt' },
@@ -629,9 +634,16 @@
                 ],
 
                 get statusIndex() {
-                    const map = {};
-                    this.statusSteps.forEach((s, i) => map[s.key] = i);
-                    return map;
+                    return {
+                        'Pendiente': 0,
+                        'En Proceso': 1,
+                        'Entregado': 2,
+                        'Preparando': 2,
+                        'Facturacion': 3,
+                        'Relacion de envio': 4,
+                        'Recibido por almacen': 4,
+                        'Enviado al cliente': 5,
+                    };
                 },
 
                 // Base filtered: date + search only (no KPI top filter, no max cap)
