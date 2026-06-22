@@ -368,8 +368,13 @@ endblock %} {% block page_title %}Visor de Estado de Pedidos{% endblock %}
                         <tr>
                             <td><span class="qb-visor-oid"><span class="qb-visor-oid-hash">#</span><span x-text="order.order_id"></span></span></td>
                             <td>
-                                <div class="qb-visor-cust" x-text="order.customer_name"></div>
-                                <div class="qb-visor-code" x-text="order.customer_code"></div>
+                                <template x-if="isMostrador">
+                                    <div class="qb-visor-cust" style="color: #94a3b8; font-style: italic;">*** PRIVADO ***</div>
+                                </template>
+                                <template x-if="!isMostrador">
+                                    <div class="qb-visor-cust" x-text="order.customer_name"></div>
+                                </template>
+                                <div class="qb-visor-code" x-show="!isMostrador" x-text="order.customer_code"></div>
                             </td>
                             <td><span class="qb-sap-badge" :class="getSapStatusClass(order.sap_status)" x-text="order.sap_status"></span></td>
                             <td>
@@ -415,6 +420,7 @@ endblock %} {% block page_title %}Visor de Estado de Pedidos{% endblock %}
 <script>
 function visorData() {
     return {
+        isMostrador: {{ 'true' if current_user.username|lower == 'mostrador' else 'false' }},
         orders: {{ orders | tojson }},
         stats: {{ stats | tojson }},
         timer: 10,
