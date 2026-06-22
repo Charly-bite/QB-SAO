@@ -5,6 +5,134 @@
 
 {% block extra_head %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/monitor.css') }}">
+    {% if current_user.username|lower == 'mostrador' %}
+    <style>
+        /* Hide everything except the cards container */
+        .qb-nav,
+        .qb-breadcrumbs,
+        .qb-page-title,
+        .monitor-controls-bar,
+        .kpi-bar,
+        .search-bar,
+        .pagination-bar,
+        .qb-toast-container,
+        .qb-flash,
+        .qb-loading-overlay,
+        div[x-show="!sapOnline || !sgaOnline"] {
+            display: none !important;
+        }
+
+        /* Expand body and content container to use all screen space */
+        body {
+            background: #0f172a !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        main.max-w-7xl {
+            max-width: 100% !important;
+            padding: 24px !important;
+            margin: 0 !important;
+        }
+        .orders-container {
+            max-width: 100% !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+
+        /* Order Cards Grid adjustments */
+        .orders-grid {
+            grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)) !important;
+            gap: 24px !important;
+        }
+
+        /* Order Card Scaling */
+        .order-card {
+            padding: 24px !important;
+            border-radius: 20px !important;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2) !important;
+        }
+
+        .card-top {
+            align-items: center !important;
+            margin-bottom: 16px !important;
+        }
+
+        .card-order-id {
+            font-size: 54px !important;
+            line-height: 1.0 !important;
+            font-weight: 900 !important;
+        }
+
+        .order-hash {
+            font-size: 36px !important;
+            margin-right: 2px !important;
+        }
+
+        .card-aging {
+            font-size: 14px !important;
+            padding: 6px 12px !important;
+            border-radius: 12px !important;
+        }
+
+        .aging-icon {
+            width: 14px !important;
+            height: 14px !important;
+        }
+
+        /* Progress steps timeline scaling */
+        .progress-timeline {
+            margin-bottom: 20px !important;
+            padding: 12px 0 !important;
+        }
+
+        .step-dot {
+            width: 26px !important;
+            height: 26px !important;
+            border-width: 3px !important;
+        }
+
+        .step-check {
+            width: 12px !important;
+            height: 12px !important;
+            stroke-width: 4 !important;
+        }
+
+        .step-label {
+            font-size: 11px !important;
+            margin-top: 6px !important;
+            font-weight: 800 !important;
+        }
+
+        .step-connector {
+            top: 12px !important;
+            left: calc(50% + 13px) !important;
+            width: calc(100% - 26px) !important;
+            height: 3px !important;
+        }
+
+        /* Card footer scaling */
+        .card-footer {
+            margin-top: 8px !important;
+        }
+
+        .pill {
+            padding: 6px 12px !important;
+            font-size: 13px !important;
+            border-radius: 8px !important;
+        }
+
+        .pill-icon {
+            width: 14px !important;
+            height: 14px !important;
+        }
+
+        .sap-status {
+            font-size: 11px !important;
+            padding: 5px 10px !important;
+            border-radius: 8px !important;
+        }
+    </style>
+    {% endif %}
 {% endblock %}
 
 {% block breadcrumbs %}
@@ -480,7 +608,7 @@
                 maxOrders: '0',
                 activeTopFilter: 'all',
                 currentPage: 1,
-                pageSize: 50,
+                pageSize: {{ '200' if current_user.username|lower == 'mostrador' else '50' }},
                 loading: false,
                 firstLoad: true,
                 _interval: null,
