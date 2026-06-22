@@ -80,9 +80,9 @@
             <button type="button" class="kpi-card kpi-picking"
                 :class="activeTopFilter === 'picking' ? 'is-active' : ''"
                 @click="toggleTopFilter('picking')"
-                title="Filtrar entregados">
+                title="Filtrar surtidos">
                 <div class="kpi-value" x-text="activeStats.picking || 0">0</div>
-                <div class="kpi-label">Entregados</div>
+                <div class="kpi-label">Surtidos</div>
             </button>
             <button type="button" class="kpi-card kpi-invoice"
                 :class="activeTopFilter === 'invoice' ? 'is-active' : ''"
@@ -493,7 +493,7 @@
                 statusSteps: [
                     { key: 'Pendiente', short: 'Pend' },
                     { key: 'En Proceso', short: 'Proc' },
-                    { key: 'Entregado', short: 'Entr' },
+                    { key: 'Entregado', short: 'Surt' },
                     { key: 'Facturacion', short: 'Fact' },
                     { key: 'Relacion de envio', short: 'Rel' },
                     { key: 'Enviado al cliente', short: 'Env' },
@@ -620,7 +620,7 @@
                     const labels = {
                         pending: 'Pendientes',
                         process: 'En Proceso',
-                        picking: 'Entregados',
+                        picking: 'Surtidos',
                         invoice: 'Facturados',
                         relation: 'Relación',
                         shipped: 'Enviados',

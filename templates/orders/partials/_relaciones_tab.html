@@ -1,0 +1,359 @@
+<!-- Action Bar -->
+<div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden print-hide">
+    <div class="px-6 py-4 flex flex-wrap items-center gap-3 bg-gradient-to-r from-indigo-50 to-white">
+        <!-- Actualizar: re-save from current facturas data -->
+        <template x-if="currentRelacion && !currentRelacion.is_closed">
+            <button @click="updateRelacionFromFacturas()" :disabled="relacionLoading"
+                class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-0.5 active:scale-95">
+                <svg class="w-5 h-5" :class="relacionLoading && 'animate-spin'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                Actualizar
+            </button>
+        </template>
+
+        <!-- Reimprimir: download Excel -->
+        <template x-if="currentRelacion">
+            <button @click="reprintRelacion(currentRelacion.folio)" :disabled="relacionLoading"
+                class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg transition-all disabled:opacity-50 hover:-translate-y-0.5 active:scale-95">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                Descargar Excel
+            </button>
+        </template>
+
+        <!-- Print directly -->
+        <template x-if="currentRelacion">
+            <button @click="window.print()" 
+                class="inline-flex items-center gap-2 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-bold rounded-lg transition-all hover:-translate-y-0.5 active:scale-95">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                🖨️ Imprimir
+            </button>
+        </template>
+        
+        <!-- No relación yet -->
+        <template x-if="!currentRelacion">
+            <p class="text-sm text-slate-400 italic">Genera una relación desde la pestaña de Facturas primero.</p>
+        </template>
+
+        <!-- Spacer -->
+        <div class="flex-1"></div>
+
+        <!-- Status badge -->
+        <template x-if="currentRelacion">
+            <div class="flex items-center gap-2">
+                <template x-if="currentRelacion.is_closed">
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-green-50 text-green-700 rounded-md text-xs font-semibold border border-green-200">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        Día Cerrado
+                    </span>
+                </template>
+            </div>
+        </template>
+
+        <!-- Cerrar Día -->
+        <template x-if="currentRelacion && !currentRelacion.is_closed">
+            <button @click="cerrarDia()" :disabled="relacionLoading || !allSigned()"
+                class="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-0.5 active:scale-95"
+                :title="!allSigned() ? 'Se requieren las 3 firmas para cerrar el día' : 'Cerrar el día'">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                Cerrar Día
+            </button>
+        </template>
+    </div>
+</div>
+
+<!-- ══ EXCEL-STYLE DATASHEET PREVIEW ══ -->
+<template x-if="currentRelacion && currentRelacion.invoices && currentRelacion.invoices.length > 0">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full border-collapse" style="min-width: 800px; font-family: 'Calibri', 'Segoe UI', sans-serif; font-size: 13px; border: 1px solid #999;">
+
+                <thead>
+                    <!-- Row 1: Title -->
+                    <tr style="height: 32px;">
+                        <td style="border: 1px solid #999; width: 120px;" class="bg-white"></td>
+                        <td colspan="3" style="border: 1px solid #999; font-size: 22px; font-weight: bold; text-align: center;" class="bg-white">RELACIÓN DE ENVÍOS <span x-show="currentRelacion && currentRelacion.folio" style="color: #3949AB;" x-text="currentRelacion ? currentRelacion.folio : ''"></span></td>
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                        <td colspan="2" style="border: 1px solid #999; text-align: center; font-size: 12px;" class="bg-white">QB-IT-VE-01-F06</td>
+                    </tr>
+
+                    <!-- Row 2: Empty (matching Excel) -->
+                    <tr style="height: 18px;">
+                        <td colspan="8" style="border: 1px solid #999;" class="bg-white"></td>
+                    </tr>
+
+                    <!-- Row 3: Fecha + Section headers -->
+                    <tr style="height: 26px;">
+                        <td style="border: 1px solid #999; background: #D9D9D9;"></td>
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 13px;">Fecha:</td>
+                        <td colspan="2" style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 13px;" x-text="selectedDate.split('-').reverse().join('/')"></td>
+                        <td colspan="2" style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 12px;">Crédito y Cobranza</td>
+                        <td colspan="2" style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 12px;">Almacén y Logística</td>
+                    </tr>
+
+                    <!-- Row 4: Column headers (merged with row 5) -->
+                    <tr style="height: 22px;">
+                        <th rowspan="2" style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 12px; vertical-align: middle; width: 120px;">No. De<br>Factura</th>
+                        <th rowspan="2" style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 12px; vertical-align: middle; min-width: 200px;">Cliente</th>
+                        <th rowspan="2" style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 12px; vertical-align: middle; width: 110px;">Importe</th>
+                        <th rowspan="2" style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 12px; vertical-align: middle; width: 140px;">Observación</th>
+                        <th style="border: 1px solid #999; background: #D9D9D9; width: 70px;"></th>
+                        <th style="border: 1px solid #999; background: #D9D9D9; width: 70px;"></th>
+                        <th style="border: 1px solid #999; background: #D9D9D9; width: 70px;"></th>
+                        <th style="border: 1px solid #999; background: #D9D9D9; width: 70px;"></th>
+                    </tr>
+                    <!-- Row 5: Sub-headers -->
+                    <tr style="height: 22px;">
+                        <th style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Crédito</th>
+                        <th style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Contado</th>
+                        <th style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Recibido</th>
+                        <th style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Entrega</th>
+                    </tr>
+                </thead>
+
+                <!-- Data Rows grouped by category -->
+                <template x-for="(group, gIdx) in relacionInvoiceGroups" :key="group.category">
+                    <tbody>
+                        <!-- Empty separator row between groups (not for first group) -->
+                        <template x-if="gIdx > 0">
+                            <tr style="height: 16px;">
+                                <td colspan="8" style="border: 1px solid #999;" class="bg-white"></td>
+                            </tr>
+                        </template>
+                        <!-- Category labeled separator bar -->
+                        <tr style="height: 26px;">
+                            <td colspan="8"
+                                :style="(() => {
+                                    const cat = group.category.toUpperCase();
+                                    if (cat.includes('PAQUETERIA') || cat.includes('PASE A PAQUETERIA')) return 'background-color: #FF00FF; border: 1px solid #999; color: #fff; font-size: 13px; font-weight: bold; padding: 2px 8px; text-transform: uppercase; text-align: center;';
+                                    if (cat.includes('FLETE')) return 'background-color: #FF00FF; border: 1px solid #999; color: #fff; font-size: 13px; font-weight: bold; padding: 2px 8px; text-transform: uppercase; text-align: center;';
+                                    if (cat.includes('FORANEO')) return 'background-color: #FFC000; border: 1px solid #999; color: #000; font-size: 13px; font-weight: bold; padding: 2px 8px; text-transform: uppercase; text-align: center;';
+                                    if (cat.includes('PASE DIRECTO')) return 'background-color: #92D050; border: 1px solid #999; color: #000; font-size: 13px; font-weight: bold; padding: 2px 8px; text-transform: uppercase; text-align: center;';
+                                    if (cat.includes('PASE PROGRAMADO')) return 'background-color: #BDD7EE; border: 1px solid #999; color: #000; font-size: 13px; font-weight: bold; padding: 2px 8px; text-transform: uppercase; text-align: center;';
+                                    if (cat.includes('ENVIO LOCAL')) return 'background-color: #D9D9D9; border: 1px solid #999; color: #000; font-size: 13px; font-weight: bold; padding: 2px 8px; text-transform: uppercase; text-align: center;';
+                                    return 'background-color: #404040; border: 1px solid #999; color: #fff; font-size: 13px; font-weight: bold; padding: 2px 8px; text-transform: uppercase; text-align: center;';
+                                })()"
+                                x-text="group.category">
+                            </td>
+                        </tr>
+                        <!-- Invoice data rows -->
+                        <template x-for="(inv, idx) in group.invoices" :key="inv.invoice_number || idx">
+                            <tr style="height: 26px;">
+                                <td style="border: 1px solid #999; text-align: center; font-size: 12px; font-weight: bold; padding: 2px 5px;"
+                                    x-text="(inv.order_number ? inv.order_number + '/' : '') + (inv.invoice_number || '')"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 12px; font-weight: bold; padding: 2px 5px;"
+                                    x-text="inv.customer_name || ''"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 12px; padding: 2px 5px;"
+                                    x-text="'$' + Number(inv.total || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 12px; font-weight: bold; padding: 2px 5px;"
+                                    x-text="inv.observaciones || inv.nota || inv.shipping_type || 'LOCAL'"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 12px; padding: 2px 5px;"
+                                    x-text="(() => { const pt = (inv.payment_terms || '').toUpperCase(); return pt !== 'CONTADO' ? 'X' : ''; })()"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 12px; padding: 2px 5px;"
+                                    x-text="(() => { const total = Number(inv.total || 0); const paid = Number(inv.paid_to_date || 0); return (paid >= total && total > 0) ? 'X' : ''; })()"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 12px; padding: 2px 5px;"
+                                    x-text="inv.recibido ? 'X' : ''"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 12px; padding: 2px 5px;"
+                                    x-text="inv.entrega ? 'X' : ''"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </template>
+
+                <!-- End section -->
+                <tfoot>
+                    <!-- ═══ SPACER BEFORE ANEXOS ═══ -->
+                    <tr style="height: 30px;"><td colspan="8" class="bg-white" style="border: none;"></td></tr>
+
+                    <!-- ═══ ANEXADAS GDL ═══ -->
+                    <!-- Cyan banner -->
+                    <tr style="height: 28px;">
+                        <td colspan="8" style="background-color: #00B0F0; border: 1px solid #999; text-align: center; font-weight: bold; font-size: 14px; color: #000;" x-text="selectedDate.split('-').reverse().join('/')"></td>
+                    </tr>
+                    <!-- Title -->
+                    <tr style="height: 28px;">
+                        <td colspan="8" style="border: 1px solid #999; text-align: center; font-weight: bold; font-size: 16px; text-decoration: underline;" class="bg-white">ANEXADAS GDL</td>
+                    </tr>
+                    <!-- Subtitle -->
+                    <tr style="height: 22px;">
+                        <td colspan="8" style="border: 1px solid #999; text-align: center; font-weight: bold; font-size: 12px; text-decoration: underline;" class="bg-white">RELACION DE ENVIOS</td>
+                    </tr>
+                    <!-- GDL Headers row 1 -->
+                    <tr style="height: 22px;">
+                        <td style="border: 1px solid #999; background: #D9D9D9;"></td>
+                        <td style="border: 1px solid #999; background: #D9D9D9;"></td>
+                        <td style="border: 1px solid #999; background: #D9D9D9;"></td>
+                        <td style="border: 1px solid #999; background: #D9D9D9;"></td>
+                        <td colspan="2" style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Crédito y Cobranza</td>
+                        <td colspan="2" style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Almacén y Logística</td>
+                    </tr>
+                    <!-- GDL Headers row 2 -->
+                    <tr style="height: 22px;">
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">No. de<br>Factura</td>
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Cliente</td>
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Importe</td>
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Observación</td>
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Crédito</td>
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Contado</td>
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Recibido</td>
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Entrega</td>
+                    </tr>
+                    <!-- GDL Empty data row -->
+                    <tr style="height: 22px;">
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                    </tr>
+
+                    <!-- ═══ SPACER ═══ -->
+                    <tr style="height: 30px;"><td colspan="8" class="bg-white" style="border: none;"></td></tr>
+
+                    <!-- ═══ ANEXADAS MTY ═══ -->
+                    <!-- Orange banner -->
+                    <tr style="height: 28px;">
+                        <td colspan="8" style="background-color: #FFC000; border: 1px solid #999; text-align: center; font-weight: bold; font-size: 14px; color: #000;"></td>
+                    </tr>
+                    <!-- Title -->
+                    <tr style="height: 28px;">
+                        <td colspan="8" style="border: 1px solid #999; text-align: center; font-weight: bold; font-size: 16px; text-decoration: underline;" class="bg-white">ANEXADAS MTY</td>
+                    </tr>
+                    <!-- Subtitle -->
+                    <tr style="height: 22px;">
+                        <td colspan="8" style="border: 1px solid #999; text-align: center; font-weight: bold; font-size: 12px; text-decoration: underline;" class="bg-white">RELACION DE ENVIOS</td>
+                    </tr>
+                    <!-- MTY Headers row 1 -->
+                    <tr style="height: 22px;">
+                        <td style="border: 1px solid #999; background: #D9D9D9;"></td>
+                        <td style="border: 1px solid #999; background: #D9D9D9;"></td>
+                        <td style="border: 1px solid #999; background: #D9D9D9;"></td>
+                        <td style="border: 1px solid #999; background: #D9D9D9;"></td>
+                        <td colspan="2" style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Crédito y Cobranza</td>
+                        <td colspan="2" style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Almacén y Logística</td>
+                    </tr>
+                    <!-- MTY Headers row 2 -->
+                    <tr style="height: 22px;">
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">No. de<br>Factura</td>
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Cliente</td>
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Importe</td>
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Observación</td>
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Crédito</td>
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Contado</td>
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Recibido</td>
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Entrega</td>
+                    </tr>
+                    <!-- MTY Empty data row -->
+                    <tr style="height: 22px;">
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                    </tr>
+
+                    <!-- ═══ SPACER ═══ -->
+                    <tr style="height: 30px;"><td colspan="8" class="bg-white" style="border: none;"></td></tr>
+
+                    <!-- ═══ ANEXADAS IRAPUATO ═══ -->
+                    <!-- Orange banner -->
+                    <tr style="height: 28px;">
+                        <td colspan="8" style="background-color: #FFC000; border: 1px solid #999; text-align: center; font-weight: bold; font-size: 14px; color: #000;"></td>
+                    </tr>
+                    <!-- Title -->
+                    <tr style="height: 28px;">
+                        <td colspan="8" style="border: 1px solid #999; text-align: center; font-weight: bold; font-size: 16px; text-decoration: underline;" class="bg-white">ANEXADAS IRAPUATO</td>
+                    </tr>
+                    <!-- Subtitle -->
+                    <tr style="height: 22px;">
+                        <td colspan="8" style="border: 1px solid #999; text-align: center; font-weight: bold; font-size: 12px; text-decoration: underline;" class="bg-white">RELACION DE ENVIOS</td>
+                    </tr>
+                    <!-- IRP Headers row 1 -->
+                    <tr style="height: 22px;">
+                        <td style="border: 1px solid #999; background: #D9D9D9;"></td>
+                        <td style="border: 1px solid #999; background: #D9D9D9;"></td>
+                        <td style="border: 1px solid #999; background: #D9D9D9;"></td>
+                        <td style="border: 1px solid #999; background: #D9D9D9;"></td>
+                        <td colspan="2" style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Crédito y Cobranza</td>
+                        <td colspan="2" style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Almacén y Logística</td>
+                    </tr>
+                    <!-- IRP Headers row 2 -->
+                    <tr style="height: 22px;">
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">No. de<br>Factura</td>
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Cliente</td>
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Importe</td>
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Observación</td>
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Crédito</td>
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Contado</td>
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Recibido</td>
+                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Entrega</td>
+                    </tr>
+                    <!-- IRP Empty data row -->
+                    <tr style="height: 22px;">
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                    </tr>
+
+                    <!-- ═══ SINGLE SIGNATURE BLOCK (at the very end) ═══ -->
+                    <tr style="height: 20px;"><td colspan="8" class="bg-white" style="border: none;"></td></tr>
+                    <!-- Signature name rows (above the line) -->
+                    <tr style="height: 30px;">
+                        <td colspan="3" style="border: none; text-align: center; vertical-align: bottom; padding: 0 4px;" class="bg-white"
+                            @click="toggleSignature('facturacion')" :style="{ cursor: 'pointer' }">
+                            <span x-show="signatures.facturacion" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 14px; color: #1a3c7a;" x-text="signatures.facturacion?.name || ''"></span>
+                        </td>
+                        <td style="border: none;" class="bg-white"></td>
+                        <td colspan="2" style="border: none; text-align: center; vertical-align: bottom; padding: 0 4px;" class="bg-white"
+                            @click="toggleSignature('credito')" :style="{ cursor: 'pointer' }">
+                            <span x-show="signatures.credito" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 14px; color: #1a3c7a;" x-text="signatures.credito?.name || ''"></span>
+                        </td>
+                        <td style="border: none;" class="bg-white"></td>
+                        <td style="border: none; text-align: center; vertical-align: bottom; padding: 0 4px;" class="bg-white"
+                            @click="toggleSignature('almacen')" :style="{ cursor: 'pointer' }">
+                            <span x-show="signatures.almacen" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 14px; color: #1a3c7a;" x-text="signatures.almacen?.name || ''"></span>
+                        </td>
+                    </tr>
+                    <!-- Thin black signature lines -->
+                    <tr style="height: 2px;">
+                        <td colspan="3" style="background-color: #000000; border: none; padding: 0;" @click="toggleSignature('facturacion')" :style="{ cursor: 'pointer' }"></td>
+                        <td style="border: none;" class="bg-white"></td>
+                        <td colspan="2" style="background-color: #000000; border: none; padding: 0;" @click="toggleSignature('credito')" :style="{ cursor: 'pointer' }"></td>
+                        <td style="border: none;" class="bg-white"></td>
+                        <td style="background-color: #000000; border: none; padding: 0;" @click="toggleSignature('almacen')" :style="{ cursor: 'pointer' }"></td>
+                    </tr>
+                    <tr style="height: 6px;"><td colspan="8" class="bg-white" style="border: none;"></td></tr>
+                    <!-- Signature label boxes (clickable) -->
+                    <tr style="height: 28px;">
+                        <td colspan="3" @click="toggleSignature('facturacion')" style="text-align: center; font-weight: bold; font-size: 12px; background-color: #A6A6A6; border: 1px solid #808080; padding: 5px; cursor: pointer;" :style="signatures.facturacion ? { backgroundColor: '#7CB342', color: '#fff' } : { backgroundColor: '#A6A6A6' }">Facturación</td>
+                        <td style="border: none;" class="bg-white"></td>
+                        <td colspan="2" @click="toggleSignature('credito')" style="text-align: center; font-weight: bold; font-size: 12px; background-color: #A6A6A6; border: 1px solid #808080; padding: 5px; cursor: pointer;" :style="signatures.credito ? { backgroundColor: '#7CB342', color: '#fff' } : { backgroundColor: '#A6A6A6' }">Crédito y Cobranza</td>
+                        <td style="border: none;" class="bg-white"></td>
+                        <td @click="toggleSignature('almacen')" style="text-align: center; font-weight: bold; font-size: 12px; background-color: #A6A6A6; border: 1px solid #808080; padding: 5px; cursor: pointer;" :style="signatures.almacen ? { backgroundColor: '#7CB342', color: '#fff' } : { backgroundColor: '#A6A6A6' }">Almacén</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</template>
+
+<!-- Empty state when no relación -->
+<template x-if="!currentRelacion || !currentRelacion.invoices || currentRelacion.invoices.length === 0">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-100 px-6 py-16 text-center">
+        <svg class="w-16 h-16 text-slate-200 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        <p class="text-slate-400 font-medium text-lg">Sin relación de envíos</p>
+        <p class="text-slate-300 text-sm mt-1">Genera una relación desde la pestaña de Facturas para ver la vista previa aquí.</p>
+    </div>
+</template>

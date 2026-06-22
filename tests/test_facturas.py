@@ -297,3 +297,56 @@ class TestApiFacturas:
         app.sap_available = True
         resp = client.get("/orders/api/facturas")
         assert resp.status_code in (302, 401)
+
+
+class TestApiFacturasRelationshipMap:
+    def test_requires_login(self, client):
+        resp = client.get("/orders/api/facturas/12345/relationship-map")
+        assert resp.status_code in (302, 401)
+
+    def test_sap_available_success(self, auth_client, app):
+        app.sap_available = True
+        mock_sap = MagicMock()
+        mock_sap.connected = True
+        mock_data = {
+            "invoice": {"doc_num": 12345, "status": "Abierto", "total": 150.0},
+            "delivery": None,
+            "order": None,
+            "payments": [],
+            "customer": {"card_code": "C1", "card_name": "Cust 1"}
+        }
+        mock_sap.get_invoice_relationship_map.return_value = mock_data
+        app.sap_connector = mock_sap
+
+        resp = auth_client.get("/orders/api/facturas/12345/relationship-map")
+        assert resp.status_code == 200
+        res_data = resp.get_json()
+        assert res_data["success"] is True
+        assert res_data["data"]["invoice"]["doc_num"] == 12345
+
+    def test_sap_available_not_found(self, auth_client, app):
+        app.sap_available = True
+        mock_sap = MagicMock()
+        mock_sap.connected = True
+        mock_sap.get_invoice_relationship_map.return_value = None
+        app.sap_connector = mock_sap
+
+        resp = auth_client.get("/orders/api/facturas/12345/relationship-map")
+        assert resp.status_code == 404
+        res_data = resp.get_json()
+        assert res_data["success"] is False
+        assert "no encontrada" in res_data["error"]
+
+    def test_sap_unavailable_fallback(self, auth_client, app):
+        app.sap_available = False
+        
+        # Test simulated fallback response
+        resp = auth_client.get("/orders/api/facturas/12345/relationship-map")
+        assert resp.status_code == 200
+        res_data = resp.get_json()
+        assert res_data["success"] is True
+        assert res_data["simulated"] is True
+        assert res_data["data"]["invoice"]["doc_num"] == 12345
+        assert res_data["data"]["order"]["doc_num"] == 12245  # fallback subtraction (invoice_number - 100)
+        app.sap_available = True
+

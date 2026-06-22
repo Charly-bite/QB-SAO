@@ -31,38 +31,99 @@
     .btn-color-gris { background-color: #94a3b8 !important; border-color: transparent !important; }
 
 @media print {
-    /* Prevent SVGs from expanding to full page width during print */
-    svg {
-        max-width: 2rem !important;
-        max-height: 2rem !important;
+    /* Force landscape and minimal margins */
+    @page {
+        size: letter landscape;
+        margin: 5mm;
     }
-    /* Hide UI controls that shouldn't be printed */
-    .print-hide, .export-btn, .controls-container {
+
+    /* Scale everything down to fit */
+    body {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        font-size: 9.5px !important;
+    }
+
+    /* Prevent SVGs from expanding */
+    svg {
+        max-width: 1.2rem !important;
+        max-height: 1.2rem !important;
+    }
+
+    /* Hide ALL UI controls */
+    .print-hide, .export-btn, .controls-container,
+    .qb-nav, .qb-breadcrumbs, nav, header, footer {
         display: none !important;
     }
-    /* Ensure the table takes full width and breaks properly */
+
+    /* Hide header, action bar, filters, history, facturas tab */
+    .space-y-6 > .flex,
+    .space-y-6 > .bg-amber-50,
+    .space-y-6 > .bg-white.rounded-xl.shadow-sm.border.border-slate-100.flex,
+    .space-y-6 > div[x-show="activeTab === 'facturas'"] {
+        display: none !important;
+    }
+
+    /* Make table compact but readable */
     table {
         width: 100% !important;
         page-break-inside: auto;
+        font-size: 9.5px !important;
+    }
+    td, th {
+        padding: 1px 4px !important;
+        font-size: 9.5px !important;
+        line-height: 1.2 !important;
     }
     tr {
         page-break-inside: avoid;
-        page-break-after: auto;
+        height: auto !important;
+        min-height: 0 !important;
     }
-    /* Hide breadcrumbs if they exist */
-    .qb-breadcrumbs {
-        display: none !important;
+    /* Compact separator and header rows */
+    tr[style*="height: 16px"], tr[style*="height: 18px"] {
+        height: 8px !important;
     }
+    tr[style*="height: 26px"], tr[style*="height: 28px"], tr[style*="height: 30px"], tr[style*="height: 32px"] {
+        height: 18px !important;
+    }
+
     /* Hide drag handle columns */
     th.drag-handle, td.drag-handle {
         display: none !important;
     }
-    /* Hide unselected rows if there is any selection */
+    /* Hide unselected rows */
     .print-selected-only tr.invoice-row:not(.is-selected) {
         display: none !important;
     }
     .print-selected-only tbody:not(.has-selected) {
         display: none !important;
+    }
+
+    /* Remove shadows, rounded corners */
+    .rounded-xl, .shadow-sm {
+        border-radius: 0 !important;
+        box-shadow: none !important;
+    }
+    /* Remove all outer spacing */
+    .space-y-6 {
+        margin: 0 !important;
+        padding: 0 !important;
+        gap: 0 !important;
+    }
+    .space-y-6 > * {
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+    }
+    /* Compact the relación container */
+    .overflow-x-auto {
+        overflow: visible !important;
+    }
+    .bg-white.rounded-xl.shadow-sm.border {
+        border: none !important;
+        padding: 0 !important;
     }
 }
 /* Fallback SVG sizing in case Tailwind missed these classes */
@@ -91,6 +152,408 @@ input[type=number]::-webkit-outer-spin-button {
 input[type=number] {
     -moz-appearance: textfield;
 }
+
+/* Sticky table headers for screen view */
+#facturas-table thead {
+    position: sticky !important;
+    top: 2.5rem !important;
+    z-index: 20 !important;
+}
+#facturas-table thead tr:nth-child(1) th {
+    background-color: #ffffff !important;
+}
+#facturas-table thead tr:nth-child(2) th,
+#facturas-table thead tr:nth-child(3) th {
+    background-color: #D9D9D9 !important;
+}
+
+/* Custom Styles for Context Menu & Relationship Map Modal */
+.sao-context-menu {
+    position: fixed !important;
+    z-index: 9999 !important;
+    width: 250px !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    border: 1px solid #94a3b8 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15) !important;
+    overflow: hidden !important;
+    padding: 6px !important;
+    opacity: 1 !important;
+}
+
+.sao-context-menu-header {
+    padding: 8px 12px !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    background-color: #f8fafc !important;
+}
+
+.sao-context-menu-options {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 2px !important;
+    margin-top: 4px !important;
+}
+
+.sao-context-menu-item {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    width: 100% !important;
+    padding: 8px 12px !important;
+    text-align: left !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: #334155 !important;
+    border: none !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    border-radius: 6px !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+    text-decoration: none !important;
+    opacity: 1 !important;
+}
+
+.sao-context-menu-item:hover {
+    background: #f59e0b !important;
+    background-color: #f59e0b !important;
+    color: #ffffff !important;
+}
+
+.sao-context-menu-item:hover svg {
+    color: #ffffff !important;
+}
+
+/* Modal Overlay & Container */
+.sao-modal-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 999 !important;
+    background-color: rgba(15, 23, 42, 0.6) !important;
+    backdrop-filter: blur(4px) !important;
+    display: flex; /* NO !important so Alpine x-show inline style display: none; can hide it */
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 16px !important;
+}
+
+.sao-modal-container {
+    background-color: #ffffff !important;
+    border-radius: 16px !important;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+    border: 1px solid #cbd5e1 !important;
+    width: 100% !important;
+    max-width: 1100px !important;
+    max-height: 90vh !important;
+    display: flex; /* NO !important so Alpine x-show inline style display: none; can hide it */
+    flex-direction: column !important;
+    overflow: hidden !important;
+}
+
+.sao-modal-header {
+    padding: 16px 24px !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    background-color: #f8fafc !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+}
+
+.sao-modal-body {
+    padding: 24px !important;
+    overflow-y: auto !important;
+    background-color: #f8fafc !important;
+    flex: 1 !important;
+}
+
+.sao-modal-footer {
+    padding: 16px 24px !important;
+    border-top: 1px solid #e2e8f0 !important;
+    background-color: #f8fafc !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+}
+
+/* Relationship Map Layout (Horizontal with flex-wrap: nowrap) */
+.sao-rel-map-container {
+    display: flex; /* NO !important so Alpine x-show inline style display: none; can hide it */
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 24px !important;
+    width: 100% !important;
+}
+
+.sao-rel-map-flow {
+    display: flex; /* NO !important */
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: center !important;
+    justify-content: safe center !important; /* Center content, fallback to start scrolling on overflow */
+    width: 100% !important;
+    gap: 12px !important;
+    padding: 24px 10px !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+}
+
+/* Reworked SAP B1 Relationship Map Card Style */
+.sao-rel-node {
+    width: 170px !important; /* Resized card width for a better fit */
+    min-height: 165px !important; /* Uniform compact height */
+    background-color: #ffffff !important;
+    border-radius: 12px !important; /* More modern rounded corners */
+    border: 1.5px solid #cbd5e1 !important; /* Softer neutral gray border */
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05) !important;
+    display: flex; /* NO !important */
+    flex-direction: column !important;
+    overflow: hidden !important;
+    transition: all 0.2s ease-in-out !important;
+    flex-shrink: 0 !important;
+    position: relative !important;
+}
+
+.sao-rel-node:hover {
+    transform: translateY(-4px) !important;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1) !important;
+    border-color: #94a3b8 !important;
+}
+
+/* Node Header Colors based on document type */
+.sao-rel-node-header {
+    padding: 6px 10px !important; /* More compact header padding */
+    color: #ffffff !important;
+    font-size: 10.5px !important; /* Sized to fit text better */
+    font-weight: 800 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    display: flex; /* NO !important */
+    align-items: center !important;
+    justify-content: space-between !important;
+    min-height: 32px !important;
+}
+
+/* SAP colors for document headers with modern gradients */
+.sao-header-order {
+    background: linear-gradient(135deg, #1e3a8a, #3b82f6) !important; /* Blue gradient for Pedido */
+}
+.sao-header-delivery {
+    background: linear-gradient(135deg, #0f766e, #0d9488) !important; /* Teal gradient for Entrega */
+}
+.sao-header-invoice {
+    background: linear-gradient(135deg, #b45309, #d97706) !important; /* Amber gradient for Factura */
+}
+.sao-header-payment {
+    background: linear-gradient(135deg, #15803d, #16a34a) !important; /* Green gradient for Pago Recibido */
+}
+
+.sao-rel-node-body {
+    padding: 12px !important;
+    display: flex; /* NO !important */
+    flex-direction: column !important;
+    gap: 6px !important;
+    background-color: #ffffff !important;
+    flex-grow: 1 !important;
+}
+
+.sao-rel-node-title {
+    font-size: 15px !important;
+    font-weight: 800 !important;
+    color: #1e293b !important;
+    margin: 0 !important;
+}
+
+.sao-rel-node-date {
+    font-size: 11px !important;
+    color: #64748b !important;
+    margin: 0 !important;
+}
+
+.sao-rel-node-total {
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    color: #0f172a !important;
+    margin-top: 2px !important;
+}
+
+/* Active/Selected Node (The document that was clicked) */
+.sao-rel-node.active-node {
+    border: 2.5px solid #f59e0b !important; /* Gold border */
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.15), 0 12px 24px rgba(245, 158, 11, 0.2) !important;
+}
+
+.sao-rel-node-source-badge {
+    background-color: #fef08a !important;
+    color: #854d0e !important;
+    font-size: 9px !important;
+    font-weight: 800 !important;
+    padding: 2px 6px !important;
+    border-radius: 4px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    border: 1px solid #fef08a !important;
+}
+
+/* Stamp for Cerrado / Abierto / Cancelado - Modern Badge Pill */
+.sao-rel-stamp {
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    padding: 3px 8px !important;
+    border-radius: 9999px !important; /* Full rounded pill */
+    letter-spacing: 0.05em !important;
+    align-self: flex-start !important;
+    margin-top: 4px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+}
+.sao-stamp-closed {
+    color: #b91c1c !important; /* Red for Cerrado */
+    background-color: #fee2e2 !important;
+    border: 1px solid #fca5a5 !important;
+}
+.sao-stamp-open {
+    color: #1d4ed8 !important; /* Blue for Abierto */
+    background-color: #dbeafe !important;
+    border: 1px solid #93c5fd !important;
+}
+.sao-stamp-cancelled {
+    color: #475569 !important; /* Gray for Cancelado */
+    background-color: #f1f5f9 !important;
+    border: 1px solid #cbd5e1 !important;
+}
+.sao-stamp-applied {
+    color: #15803d !important; /* Green for Aplicado */
+    background-color: #dcfce7 !important;
+    border: 1px solid #86efac !important;
+}
+
+/* Color-coded Empty Nodes styling */
+.sao-rel-node-empty {
+    width: 170px !important; /* Sized to match standard node width */
+    height: 165px !important; /* Match uniform compact height */
+    border-radius: 12px !important;
+    display: flex; /* NO !important */
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 12px !important;
+    text-align: center !important;
+    flex-shrink: 0 !important;
+    transition: all 0.2s ease !important;
+}
+
+.sao-rel-node-empty-order {
+    border: 2px dashed #bfdbfe !important;
+    background-color: #f0f9ff !important;
+    color: #3b82f6 !important;
+}
+.sao-rel-node-empty-order:hover {
+    border-color: #3b82f6 !important;
+    background-color: #e0f2fe !important;
+}
+.sao-rel-node-empty-order .sao-rel-node-empty-title {
+    color: #1d4ed8 !important;
+}
+
+.sao-rel-node-empty-delivery {
+    border: 2px dashed #99f6e4 !important;
+    background-color: #f0fdfa !important;
+    color: #0d9488 !important;
+}
+.sao-rel-node-empty-delivery:hover {
+    border-color: #0d9488 !important;
+    background-color: #ccfbf1 !important;
+}
+.sao-rel-node-empty-delivery .sao-rel-node-empty-title {
+    color: #0f766e !important;
+}
+
+.sao-rel-node-empty-payment {
+    border: 2px dashed #bbf7d0 !important;
+    background-color: #f0fdf4 !important;
+    color: #16a34a !important;
+}
+.sao-rel-node-empty-payment:hover {
+    border-color: #16a34a !important;
+    background-color: #dcfce7 !important;
+}
+.sao-rel-node-empty-payment .sao-rel-node-empty-title {
+    color: #15803d !important;
+}
+
+.sao-rel-node-empty-title {
+    font-size: 12px !important;
+    font-weight: 700;
+    margin: 8px 0 0 0 !important;
+}
+
+/* Connector line connecting documents */
+.sao-rel-connector {
+    display: flex; /* NO !important */
+    align-items: center !important;
+    justify-content: center !important;
+    width: 30px !important; /* Narrower spacing between cards */
+    flex-shrink: 0 !important;
+    position: relative !important;
+}
+
+.sao-rel-connector::before {
+    content: '' !important;
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: 50% !important;
+    height: 2px !important;
+    background-color: #cbd5e1 !important;
+    z-index: 1 !important;
+}
+
+.sao-rel-connector-arrow {
+    z-index: 2 !important;
+    background-color: #f8fafc !important;
+    padding: 4px !important;
+    border-radius: 50% !important;
+    border: 1px solid #cbd5e1 !important;
+    display: flex; /* NO !important */
+    align-items: center !important;
+    justify-content: center !important;
+    color: #94a3b8 !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+}
+
+.sao-rel-connector-arrow svg {
+    width: 14px !important;
+    height: 14px !important;
+}
+
+@media (max-width: 768px) {
+    .sao-rel-map-flow {
+        flex-direction: column !important;
+        align-items: center !important;
+        gap: 16px !important;
+        justify-content: flex-start !important;
+    }
+    
+    .sao-rel-connector {
+        width: 2px !important;
+        height: 40px !important;
+    }
+    
+    .sao-rel-connector::before {
+        top: 0 !important;
+        bottom: 0 !important;
+        left: 50% !important;
+        width: 2px !important;
+        height: 100% !important;
+    }
+    
+    .sao-rel-connector-arrow {
+        transform: rotate(90deg) !important;
+    }
+}
+</style>
 </style>
 <div class="space-y-6" x-data="facturasApp()" x-init="init()" @refresh-data.window="fetchInvoices()" @keydown.window="handleGlobalKeydown($event)" :class="{'print-selected-only': invoices.some(i => i._selected)}">
 
@@ -157,6 +620,12 @@ input[type=number] {
                 Estado:
             </span>
             
+            <button @click="statusFilter = ''; shippingFilter = ''" 
+                class="px-4 py-2 rounded-full text-sm font-semibold transition-colors"
+                :class="statusFilter === '' ? 'bg-slate-800 text-white ring-2 ring-slate-800' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'">
+                Todas <span class="ml-1 opacity-70 text-xs" x-text="'(' + (stats.total_count || 0) + ')'"></span>
+            </button>
+            
             <button @click="statusFilter = 'Cerrada'; shippingFilter = ''" 
                 class="px-4 py-2 rounded-full text-sm font-semibold transition-colors"
                 :class="statusFilter === 'Cerrada' ? 'bg-green-100 text-green-800 ring-2 ring-green-500' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'">
@@ -174,325 +643,319 @@ input[type=number] {
                 :class="statusFilter === 'Cancelada' ? 'bg-red-100 text-red-800 ring-2 ring-red-500' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'">
                 Canceladas <span class="ml-1 opacity-70 text-xs" x-text="'(' + (stats.cancelled_count || 0) + ')'"></span>
             </button>
-            
-            <button @click="statusFilter = ''; shippingFilter = ''" 
-                class="px-4 py-2 rounded-full text-sm font-semibold transition-colors"
-                :class="statusFilter === '' ? 'bg-slate-800 text-white ring-2 ring-slate-800' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'">
-                Todas <span class="ml-1 opacity-70 text-xs" x-text="'(' + (stats.total_count || 0) + ')'"></span>
-            </button>
         </div>
 
-        <!-- No tabs needed, showing all groups -->
+        <!-- Tab Buttons: Facturas / Relaciones -->
+        <div class="flex items-center gap-2">
+            <button @click="activeTab = 'facturas'" 
+                class="px-4 py-2 rounded-full text-sm font-semibold transition-colors"
+                :class="activeTab === 'facturas' ? 'bg-amber-500 text-white ring-2 ring-amber-500' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'">
+                📋 Facturas
+            </button>
+            <button @click="activeTab = 'relaciones'; fetchRelaciones()" 
+                class="px-4 py-2 rounded-full text-sm font-semibold transition-colors"
+                :class="activeTab === 'relaciones' ? 'bg-indigo-600 text-white ring-2 ring-indigo-600 shadow-md' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'">
+                📦 <span style="color: inherit;">Relaciones de Envío</span>
+                <template x-if="currentRelacion">
+                    <span class="ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold" :class="activeTab === 'relaciones' ? 'bg-white text-indigo-700' : 'bg-indigo-100 text-indigo-600'" x-text="currentRelacion.folio"></span>
+                </template>
+            </button>
+        </div>
     </div>
 
     <!-- Invoice Table -->
     <!-- Invoice Table -->
-    <div class="bg-white rounded-xl shadow-sm">
-        <div class="px-6 py-4 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center bg-slate-50 gap-4 rounded-t-xl shadow-md" style="position: sticky; top: 0; z-index: 40;">
-            <h3 class="font-bold text-slate-800 flex items-center gap-2">
-                <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                </svg>
-                Listado de Facturas
-                <span class="text-sm font-normal text-slate-500" x-text="searchQuery ? '(' + filteredInvoices.filter(i => isMatch(i)).length + ' coincidencias)' : '(' + filteredInvoices.length + ' de ' + invoices.length + ')'"></span>
-            </h3>
+    <!-- Invoice Table Tab -->
+    {% include 'orders/partials/_facturas_tab.html' %}
 
-            <!-- Search -->
-            <div class="flex flex-col md:flex-row gap-3 w-full md:w-auto">
-                <div class="flex flex-wrap gap-2">
-                    <button @click="exportToExcel()" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 shadow-sm text-white text-sm font-bold rounded-lg transition-all duration-200 hover:-translate-y-0.5 active:scale-95">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                        <span>Imprimir Relación</span>
-                    </button>
-                    <button x-show="canEditFacturas" @click="addExtraInvoice()" :disabled="loading" class="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-white bg-slate-800 rounded-lg hover:bg-slate-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 active:scale-95" title="Añadir factura manualmente">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                        Añadir Factura
-                    </button>
-                </div>
-                <!-- Text search -->
-                <div class="relative w-full md:w-72">
-                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <svg class="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+    <!-- ═══════ RELACIONES DE ENVÍO TAB ═══════ -->
+    <!-- Relaciones Tab -->
+    <div x-show="activeTab === 'relaciones'" x-cloak class="space-y-6">
+        {% include 'orders/partials/_relaciones_tab.html' %}
+        {% include 'orders/partials/_relaciones_history.html' %}
+    </div>
+
+    <!-- Custom Context Menu (Solid, Opaque Background) -->
+    <div x-show="contextMenuShow" 
+         class="sao-context-menu"
+         :style="`left: ${contextMenuX}px; top: ${contextMenuY}px;`"
+         @click.away="contextMenuShow = false"
+         x-cloak>
+        
+        <!-- Header info -->
+        <div class="sao-context-menu-header">
+            <p style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">Factura Seleccionada</p>
+            <p style="font-size: 14px; font-weight: 800; color: #334155; margin: 2px 0 0 0;" x-text="selectedInvoiceForMenu ? 'Factura #' + selectedInvoiceForMenu.invoice_number : ''"></p>
+        </div>
+
+        <!-- Menu Options -->
+        <div class="sao-context-menu-options">
+            <!-- Ver Mapa de Relaciones -->
+            <button @click="openRelationshipMap(selectedInvoiceForMenu.invoice_number)"
+                    class="sao-context-menu-item">
+                <svg style="width: 16px; height: 16px; color: #64748b;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 01.553-.894L9 2m0 18l6-3m-6 3V2m6 15l5.447 2.724A1 1 0 0021 18.82V8.058a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 2"/>
+                </svg>
+                <span>Mapa de Relaciones (SAP)</span>
+            </button>
+
+            <!-- Ver Pedido Relacionado -->
+            <template x-if="selectedInvoiceForMenu && selectedInvoiceForMenu.order_number">
+                <a :href="`/orders/` + selectedInvoiceForMenu.order_number"
+                   class="sao-context-menu-item">
+                    <svg style="width: 16px; height: 16px; color: #64748b;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                    </svg>
+                    <span>Ver Pedido Local <span x-text="'#' + selectedInvoiceForMenu.order_number"></span></span>
+                </a>
+            </template>
+
+            <!-- Copiar No. de Factura -->
+            <button @click="navigator.clipboard.writeText(selectedInvoiceForMenu.invoice_number); contextMenuShow = false;"
+                    class="sao-context-menu-item">
+                <svg style="width: 16px; height: 16px; color: #64748b;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/>
+                </svg>
+                <span>Copiar No. de Factura</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Relationship Map Modal -->
+    <div x-show="relationshipMapShow"
+         class="sao-modal-overlay"
+         style="display: none;"
+         x-cloak>
+        
+        <div class="sao-modal-container"
+             @click.away="closeRelationshipMap()">
+            
+            <!-- Header -->
+            <div class="sao-modal-header">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 40px; height: 40px; border-radius: 10px; background-color: #fef3c7; display: flex; align-items: center; justify-content: center; color: #d97706;">
+                        <svg style="width: 24px; height: 24px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 01.553-.894L9 2m0 18l6-3m-6 3V2m6 15l5.447 2.724A1 1 0 0021 18.82V8.058a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 2"/>
                         </svg>
                     </div>
-                    <input type="text" x-model.debounce.300ms="searchQuery" @keydown.enter="scrollToFirstMatch()"
-                        class="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 sm:text-sm transition-shadow"
-                        placeholder="Buscar factura, cliente o vendedor..." />
+                    <div>
+                        <h3 style="font-size: 18px; font-weight: 800; color: #1e293b; margin: 0;">Mapa de Relaciones (SAP Business One)</h3>
+                        <p style="font-size: 12px; font-weight: 600; color: #64748b; margin: 2px 0 0 0;" x-text="relationshipMapLoading ? 'Consultando SAP...' : (relationshipMapData && relationshipMapData.customer ? `${relationshipMapData.customer.card_code} — ${relationshipMapData.customer.card_name}` : 'Cargando información del cliente...')"></p>
+                    </div>
+                </div>
+                <button @click.stop="closeRelationshipMap()" 
+                        style="padding: 8px; border-radius: 8px; border: none; background: none; color: #94a3b8; cursor: pointer; transition: background-color 0.2s;"
+                        onmouseover="this.style.backgroundColor='#f1f5f9'; this.style.color='#475569';"
+                        onmouseout="this.style.backgroundColor='transparent'; this.style.color='#94a3b8';">
+                    <svg style="width: 20px; height: 20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Content Area -->
+            <div class="sao-modal-body">
+                
+                <!-- Loading State -->
+                <div x-show="relationshipMapLoading" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 0; gap: 16px;">
+                    <svg class="animate-spin" style="width: 40px; height: 40px; color: #f59e0b;" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p style="font-size: 14px; font-weight: 600; color: #64748b;">Consultando base de datos de SAP...</p>
+                </div>
+
+                <!-- Map Render -->
+                <div x-show="!relationshipMapLoading && relationshipMapData" class="sao-rel-map-container">
+                    
+                    <!-- Flow Cards Wrapper -->
+                    <div class="sao-rel-map-flow">
+                        
+                        <!-- 1. Pedido (Sales Order) Card -->
+                        <template x-if="relationshipMapData && relationshipMapData.order">
+                            <div class="sao-rel-node" 
+                                 @click="window.open('/orders/' + relationshipMapData.order.doc_num, '_blank')" 
+                                 style="cursor: pointer;" 
+                                 title="Ver Pedido Local en una nueva pestaña">
+                                <div class="sao-rel-node-header sao-header-order">
+                                    <span>Pedido de cliente</span>
+                                    <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                </div>
+                                <div class="sao-rel-node-body">
+                                    <h4 class="sao-rel-node-title" x-text="'#' + relationshipMapData.order.doc_num"></h4>
+                                    <p class="sao-rel-node-date" x-text="'Fecha: ' + formatDocDate(relationshipMapData.order.doc_date)"></p>
+                                    <p class="sao-rel-node-total" x-text="formatMoney(relationshipMapData.order.total) + ' ' + relationshipMapData.order.currency"></p>
+                                    <span class="sao-rel-stamp" :class="relationshipMapData.order.status === 'Cerrado' ? 'sao-stamp-closed' : 'sao-stamp-open'" x-text="relationshipMapData.order.status"></span>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="!relationshipMapData || !relationshipMapData.order">
+                            <div class="sao-rel-node-empty sao-rel-node-empty-order">
+                                <svg style="width: 32px; height: 32px; color: currentColor;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                                <div class="sao-rel-node-empty-title">Sin Pedido SAP</div>
+                            </div>
+                        </template>
+
+                        <!-- Connector Arrow 1 -->
+                        <div class="sao-rel-connector">
+                            <div class="sao-rel-connector-arrow">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/>
+                                </svg>
+                            </div>
+                        </div>
+
+                        <!-- 2. Entrega (Delivery Note) Card -->
+                        <template x-if="relationshipMapData && relationshipMapData.delivery">
+                            <div class="sao-rel-node" 
+                                 @click="copyToClipboard(relationshipMapData.delivery.doc_num, 'Entrega')" 
+                                 style="cursor: pointer;" 
+                                 title="Copiar número de entrega al portapapeles">
+                                <div class="sao-rel-node-header sao-header-delivery">
+                                    <span>Entrega</span>
+                                    <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0zM13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10M21 16V10a2 2 0 00-2-2h-3M16 5h2a2 2 0 012 2v3"/>
+                                    </svg>
+                                </div>
+                                <div class="sao-rel-node-body">
+                                    <h4 class="sao-rel-node-title" x-text="'#' + relationshipMapData.delivery.doc_num"></h4>
+                                    <p class="sao-rel-node-date" x-text="'Fecha: ' + formatDocDate(relationshipMapData.delivery.doc_date)"></p>
+                                    <p class="sao-rel-node-total" x-text="formatMoney(relationshipMapData.delivery.total) + ' ' + relationshipMapData.delivery.currency"></p>
+                                    <span class="sao-rel-stamp" :class="relationshipMapData.delivery.status === 'Cerrado' ? 'sao-stamp-closed' : 'sao-stamp-open'" x-text="relationshipMapData.delivery.status"></span>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="!relationshipMapData || !relationshipMapData.delivery">
+                            <div class="sao-rel-node-empty sao-rel-node-empty-delivery">
+                                <svg style="width: 32px; height: 32px; color: currentColor;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10M21 16V10a2 2 0 00-2-2h-3M16 5h2a2 2 0 012 2v3"/>
+                                </svg>
+                                <div class="sao-rel-node-empty-title">Pendiente de Entrega</div>
+                            </div>
+                        </template>
+
+                        <!-- Connector Arrow 2 -->
+                        <div class="sao-rel-connector">
+                            <div class="sao-rel-connector-arrow">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/>
+                                </svg>
+                            </div>
+                        </div>
+
+                        <!-- 3. Factura (Invoice) Card -->
+                        <div class="sao-rel-node active-node" 
+                             @click="copyToClipboard(relationshipMapData.invoice.doc_num, 'Factura')" 
+                             style="cursor: pointer;" 
+                             title="Copiar número de factura al portapapeles">
+                            <div style="background: linear-gradient(90deg, #b45309, #d97706); color: #ffffff; font-size: 9px; font-weight: 800; text-align: center; padding: 4px 0; text-transform: uppercase; letter-spacing: 0.1em; border-bottom: 1.5px solid #fef08a;">
+                                Documento Origen
+                            </div>
+                            <div class="sao-rel-node-header sao-header-invoice">
+                                <span>Factura de deudor</span>
+                                <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                            </div>
+                            <div class="sao-rel-node-body">
+                                <h4 class="sao-rel-node-title" x-text="relationshipMapData ? '#' + relationshipMapData.invoice.doc_num : ''"></h4>
+                                <p class="sao-rel-node-date" x-text="relationshipMapData ? 'Fecha: ' + formatDocDate(relationshipMapData.invoice.doc_date) : ''"></p>
+                                <p class="sao-rel-node-total" x-text="relationshipMapData ? formatMoney(relationshipMapData.invoice.total) + ' ' + relationshipMapData.invoice.currency : ''"></p>
+                                <span class="sao-rel-stamp" :class="relationshipMapData && relationshipMapData.invoice.status === 'Cerrado' ? 'sao-stamp-closed' : (relationshipMapData && relationshipMapData.invoice.status === 'Cancelado' ? 'sao-stamp-cancelled' : 'sao-stamp-open')" x-text="relationshipMapData ? relationshipMapData.invoice.status : ''"></span>
+                                
+                                <div class="sao-rel-node-detail-row" style="margin-top: auto; border-top: 1px solid #f1f5f9; padding-top: 8px; display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="color: #64748b; font-size: 11px; font-weight: 600;">Cobrado:</span>
+                                    <span :style="relationshipMapData && relationshipMapData.invoice.paid_to_date >= relationshipMapData.invoice.total ? 'color: #16a34a; font-weight: 800;' : 'color: #64748b; font-weight: 800;'"
+                                          x-text="relationshipMapData ? formatMoney(relationshipMapData.invoice.paid_to_date) : ''"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Connector Arrow 3 -->
+                        <div class="sao-rel-connector">
+                            <div class="sao-rel-connector-arrow">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/>
+                                </svg>
+                            </div>
+                        </div>
+
+                        <!-- 4. Pago Recibido (Incoming Payment) Card -->
+                        <div class="sao-rel-column" style="display: flex; flex-direction: column; gap: 12px; min-width: 170px; width: 170px;">
+                            <template x-if="relationshipMapData && relationshipMapData.payments && relationshipMapData.payments.length > 0">
+                                <div style="display: flex; flex-direction: column; gap: 12px;">
+                                    <template x-for="pay in relationshipMapData.payments" :key="pay.doc_num">
+                                        <div class="sao-rel-node" 
+                                             @click="copyToClipboard(pay.doc_num, 'Pago')" 
+                                             style="cursor: pointer;" 
+                                             title="Copiar número de pago al portapapeles">
+                                            <div class="sao-rel-node-header sao-header-payment">
+                                                <span>Pago recibido</span>
+                                                <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                                </svg>
+                                            </div>
+                                            <div class="sao-rel-node-body">
+                                                <h4 class="sao-rel-node-title" x-text="'#' + pay.doc_num"></h4>
+                                                <p class="sao-rel-node-date" x-text="'Fecha: ' + formatDocDate(pay.doc_date)"></p>
+                                                <p class="sao-rel-node-total" x-text="formatMoney(pay.total) + ' ' + pay.currency"></p>
+                                                <span class="sao-rel-stamp" :class="pay.status === 'Cancelado' ? 'sao-stamp-cancelled' : (pay.status === 'Aplicado' ? 'sao-stamp-applied' : 'sao-stamp-open')" x-text="pay.status"></span>
+                                                
+                                                <div class="sao-rel-node-detail-row" x-show="pay.applied_total !== pay.total" style="margin-top: auto; border-top: 1px solid #f1f5f9; padding-top: 8px; display: flex; justify-content: space-between; align-items: center;">
+                                                    <span style="color: #64748b; font-size: 11px; font-weight: 600;">Aplicado:</span>
+                                                    <span style="color: #0f172a; font-weight: 800;" x-text="formatMoney(pay.applied_total)"></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                            <template x-if="!relationshipMapData || !relationshipMapData.payments || relationshipMapData.payments.length === 0">
+                                <div class="sao-rel-node-empty sao-rel-node-empty-payment">
+                                    <svg style="width: 32px; height: 32px; color: currentColor;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    <div class="sao-rel-node-empty-title">Pendiente de Pago</div>
+                                </div>
+                            </template>
+                        </div>
+
+                    </div>
+
+                    <!-- Additional details / Footer note -->
+                    <div style="width: 100%; max-width: 900px; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; display: flex; align-items: start; gap: 12px; background-color: #ffffff; margin-top: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                        <svg style="width: 20px; height: 20px; color: #6366f1; flex-shrink: 0; margin-top: 2px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <div style="font-size: 12px; color: #475569; line-height: 1.5; text-align: left;">
+                            <p style="font-weight: 700; color: #1e293b; margin: 0 0 4px 0;">Flujo de Documentación en SAP</p>
+                            <p style="margin: 0;">El mapa de relaciones rastrea los enlaces directos establecidos en SAP Business One mediante la referencia a documentos base. La secuencia típica es: Pedido de venta ➔ Nota de entrega ➔ Factura de deudor ➔ Pago recibido.</p>
+                            <p x-show="relationshipMapData && relationshipMapData.simulated" style="color: #d97706; font-weight: 700; margin: 4px 0 0 0;">⚠️ Mostrando datos simulados (SAP no disponible o en modo offline).</p>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Botón Deshacer -->
-        <div class="fixed bottom-4 right-4 z-50">
-            <button x-show="undoStack.length > 0" @click="undo()" x-transition
-                class="bg-slate-800 text-white px-4 py-2 rounded-full shadow-lg hover:bg-slate-700 hover:scale-105 transition-all flex items-center gap-2 font-medium text-sm">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
-                Deshacer (Ctrl+Z)
-            </button>
-        </div>
+            <!-- Footer Buttons -->
+            <div class="sao-modal-footer">
+                <button @click.stop="closeRelationshipMap()" 
+                        style="padding: 8px 20px; font-weight: 600; border-radius: 8px; border: none; background-color: #1e293b; color: #ffffff; cursor: pointer; transition: background-color 0.2s;"
+                        onmouseover="this.style.backgroundColor='#0f172a';"
+                        onmouseout="this.style.backgroundColor='#1e293b';">
+                    Cerrar
+                </button>
+            </div>
 
-        <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse" id="facturas-table">
-                <thead>
-                    <!-- Fila Superior: RELACIÓN DE ENVÍOS -->
-                    <tr class="bg-white">
-                        <th colspan="10" class="px-4 py-3 text-center text-lg font-bold text-slate-800 border border-slate-400">
-                            RELACIÓN DE ENVÍOS
-                        </th>
-                        <th colspan="2" class="px-4 py-3 border border-slate-400"></th>
-                        <th colspan="2" class="px-4 py-3 text-center font-bold text-slate-800 border border-slate-400">
-                            QB-IT-VE-01-F06
-                        </th>
-                        <th class="border border-slate-400 hidden print:table-cell"></th>
-                    </tr>
-                    <!-- Fila de Fecha -->
-                    <tr class="bg-white">
-                        <th colspan="4" class="px-4 py-2 text-right font-bold text-slate-800 border border-slate-400 bg-[#D9D9D9]">Fecha:</th>
-                        <th colspan="6" class="px-4 py-2 text-center font-bold text-slate-800 border border-slate-400 bg-[#D9D9D9]" x-text="selectedDate.split('-').reverse().join('/')"></th>
-                        <th colspan="2" class="px-4 py-2 text-center font-bold text-slate-800 border border-slate-400 bg-[#D9D9D9]">Crédito y Cobranza</th>
-                        <th colspan="2" class="px-4 py-2 text-center font-bold text-slate-800 border border-slate-400 bg-[#D9D9D9]">Almacén y Logística</th>
-                        <th class="border border-slate-400 hidden print:table-cell bg-[#D9D9D9]"></th>
-                    </tr>
-                    <!-- Encabezados de Columna -->
-                    <tr class="text-xs font-semibold tracking-wide text-slate-800 uppercase bg-[#D9D9D9] text-center">
-                        <th class="px-1 py-3 w-8 drag-handle border border-slate-400 align-middle"></th>
-                        <th class="px-2 py-3 border border-slate-400 align-middle w-10 text-center">
-                            <input type="checkbox" :checked="allSelected" @change="toggleAll()" :disabled="!canEditFacturas" class="w-4 h-4 text-amber-500 rounded focus:ring-amber-500 border-slate-400 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" title="Seleccionar todas">
-                        </th>
-                        <th class="px-2 py-3 border border-slate-400 align-middle w-10 text-center">#</th>
-                        <th class="px-2 py-3 border border-slate-400 align-middle w-24">Fecha de<br>Pedido</th>
-                        <th class="px-2 py-3 border border-slate-400 align-middle">No. de<br>Pedido</th>
-                        <th class="px-2 py-3 border border-slate-400 align-middle w-24">Fecha de<br>Facturación</th>
-                        <th class="px-2 py-3 cursor-pointer hover:text-slate-600 border border-slate-400 align-middle" @click="sortBy('invoice_number')">
-                            No. de<br>Factura
-                            <span x-show="sortColumn === 'invoice_number'" x-text="sortDir === 'asc' ? '↑' : '↓'"></span>
-                        </th>
-                        <th class="px-4 py-3 border border-slate-400 align-middle text-left">Cliente</th>
-                        <th class="px-3 py-3 cursor-pointer hover:text-slate-600 border border-slate-400 align-middle text-right" @click="sortBy('total')">Importe</th>
-                        <th class="px-3 py-3 border border-slate-400 align-middle w-56 text-left">Observación</th>
-                        <th class="px-2 py-3 border border-slate-400 align-middle">Crédito</th>
-                        <th class="px-2 py-3 border border-slate-400 align-middle">Pagado</th>
-                        <th class="px-2 py-3 border border-slate-400 align-middle">Recibido</th>
-                        <th class="px-2 py-3 border border-slate-400 align-middle">Entrega</th>
-                        <th class="px-4 py-3 hidden print:table-cell w-32 border border-slate-400 align-middle">Firma</th>
-                    </tr>
-                </thead>
-
-                <!-- AGRUPADOS POR OBSERVACION (SHIPPING TYPE) -->
-                <template x-for="group in invoiceGroups" :key="group.name">
-                    <tbody class="divide-y divide-slate-100" :data-category="group.category" x-init="initGroupSortable($el, group.category)" x-show="group.invoices.length > 0" :class="{'has-selected': group.invoices.some(i => i._selected)}">
-                        <!-- Dark Gray Separator Row -->
-                        <tr class="border border-slate-400 ignore-elements" :style="group.category.startsWith('ANEXO') ? 'background-color: #b91c1c; color: white;' : 'background-color: #475569; color: white;'">
-                            <td colspan="14" class="px-4 py-1.5 border border-slate-400">
-                                <div class="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
-                                    <template x-if="group.category.startsWith('ANEXO')">
-                                        <span class="flex items-center gap-1.5 text-red-100 font-extrabold">
-                                            <svg class="w-4 h-4 text-white animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
-                                            </svg>
-                                            <span x-text="group.name + ' (URGENTE / PRIORIDAD)'"></span>
-                                        </span>
-                                    </template>
-                                    <template x-if="!group.category.startsWith('ANEXO')">
-                                        <span x-text="group.name"></span>
-                                    </template>
-                                    <span class="ml-2 text-gray-300 text-[10px] lowercase italic" x-show="group.category.startsWith('ANEXO') || ['LOCAL', 'ENVIO LOCAL', 'PAQUETERIA', 'PASE A PAQUETERIA', 'PASE PROGRAMADO'].includes(group.category)">(Arrastrable para ordenar)</span>
-                                </div>
-                            </td>
-                            <td class="hidden print:table-cell border border-slate-400"></td>
-                        </tr>
-                        <template x-for="inv in group.invoices" :key="inv.invoice_number">
-                            <tr @click="handleRowClick($event, inv)" class="transition-colors fade-in invoice-row" :class="(isMatch(inv) ? 'bg-amber-50 ring-2 ring-amber-300 match-row ' : (rowColors[inv.invoice_number] ? 'row-color-' + rowColors[inv.invoice_number] + ' ' : (inv._global_index % 2 === 0 ? 'bg-slate-100 hover:bg-slate-200 ' : 'bg-white hover:bg-slate-50 '))) + (inv._selected ? 'is-selected' : '')" :data-id="inv.invoice_number">
-                                <td class="px-2 py-3 border border-slate-400 text-center align-middle">
-                                    <div class="relative flex flex-col items-center gap-3" x-data="{ showColors: false }">
-                                        <div x-show="canEditFacturas" class="p-1 cursor-grab drag-handle touch-none select-none" title="Arrastrar para ordenar">
-                                            <svg class="w-5 h-5 text-slate-400 hover:text-slate-600 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/></svg>
-                                        </div>
-                                        <button x-show="canEditFacturas" @click="showColors = !showColors" @click.away="showColors = false"
-                                                class="w-4 h-4 rounded-full border shadow-sm transition-transform hover:scale-110"
-                                                :class="getColorClass(inv.invoice_number, true)"
-                                                title="Cambiar color de etiqueta"></button>
-                                        
-                                        <!-- Selector de colores -->
-                                        <div x-show="showColors" x-transition.opacity
-                                             class="absolute left-full ml-3 top-0 z-50 grid grid-cols-4 gap-2 p-3 bg-white border border-slate-200 rounded-xl shadow-2xl"
-                                             style="display: none; width: max-content;">
-                                            <template x-for="c in availableColors" :key="c">
-                                                <button @click="setColor(inv.invoice_number, c); showColors = false"
-                                                        class="w-5 h-5 rounded-full border shadow-sm hover:scale-110 transition-transform flex-shrink-0 flex items-center justify-center text-slate-400"
-                                                        :class="getBaseColorClass(c)"
-                                                        :title="c === '' ? 'Quitar color a selección' : 'Seleccionar color'">
-                                                    <template x-if="c === ''">
-                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                                    </template>
-                                                </button>
-                                            </template>
-                                        </div>
-                                    </div>
-                                </td>
-                                <!-- Checkbox -->
-                                <td class="px-2 py-3 border border-slate-400 text-center align-middle">
-                                    <input type="checkbox" x-model="inv._selected" @click="handleCheck($event, inv)" :disabled="!canEditFacturas" class="w-4 h-4 text-amber-500 rounded focus:ring-amber-500 border-slate-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
-                                </td>
-                                <!-- Posición -->
-                                <td class="px-2 py-3 border border-slate-400 text-center align-middle font-bold text-slate-700 text-sm group">
-                                    <div class="flex items-center justify-center gap-1">
-                                        <button x-show="canEditFacturas" @click.stop="moveRowByOffset(inv, -1)" class="text-slate-300 hover:text-slate-600 focus:outline-none opacity-0 group-hover:opacity-100 transition-opacity" title="Mover arriba">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>
-                                        </button>
-                                        <div :class="{'cursor-pointer': canEditFacturas}" @dblclick.stop="if(canEditFacturas) { inv._editing_position = true; $nextTick(() => { $refs['posInput_' + inv.invoice_number].focus(); $refs['posInput_' + inv.invoice_number].select(); }) }" title="Doble clic para cambiar posición">
-                                            <span x-show="!inv._editing_position" x-text="inv._global_index + '°'"></span>
-                                            <input :ref="'posInput_' + inv.invoice_number" x-show="inv._editing_position" type="number" :value="inv._global_index" @keydown.enter="changeRowPosition(inv, $event.target.value)" @keydown.up.prevent="moveRowByOffset(inv, -1)" @keydown.down.prevent="moveRowByOffset(inv, 1)" @keydown.escape="inv._editing_position = false" @blur="inv._editing_position = false" class="w-12 text-center border border-amber-400 rounded px-0.5 py-0.5 text-sm font-bold text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-sm" style="display: none;" min="1" :max="invoices.length" />
-                                        </div>
-                                        <button x-show="canEditFacturas" @click.stop="moveRowByOffset(inv, 1)" class="text-slate-300 hover:text-slate-600 focus:outline-none opacity-0 group-hover:opacity-100 transition-opacity" title="Mover abajo">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                                        </button>
-                                    </div>
-                                </td>
-                                <!-- Fecha de Pedido -->
-                                <td class="px-2 py-3 font-medium text-slate-800 border border-slate-400 text-center text-[11px]">
-                                    <div x-text="inv.order_date ? inv.order_date.substring(0,10).split('-').reverse().join('/') : ''"></div>
-                                </td>
-                                <!-- No. de Pedido -->
-                                <td class="px-2 py-3 font-medium text-slate-800 border border-slate-400 text-center">
-                                    <div class="flex flex-col items-center justify-center gap-1">
-                                        <span x-html="highlightText(inv.order_number || '')"></span>
-                                        <template x-if="inv.order_status === 'Cancelado' || inv.order_sap_status === 'Cancelado'">
-                                            <span class="px-1.5 py-0.5 text-[9px] font-bold bg-red-100 text-red-800 rounded uppercase tracking-wide">Cancelado</span>
-                                        </template>
-                                    </div>
-                                </td>
-                                <!-- Fecha de Facturación -->
-                                <td class="px-2 py-3 font-medium text-slate-800 border border-slate-400 text-center text-[11px]">
-                                    <div x-text="inv.invoice_date ? inv.invoice_date.substring(0,10).split('-').reverse().join('/') : ''"></div>
-                                </td>
-                                <!-- No. de Factura -->
-                                <td class="px-2 py-3 font-bold text-slate-800 border border-slate-400 text-center">
-                                    <div class="flex flex-col items-center justify-center gap-1">
-                                        <span x-html="highlightText(inv.invoice_number)"></span>
-                                        <template x-if="inv.status === 'Cancelada' || inv.canceled === 'Y'">
-                                            <span class="px-1.5 py-0.5 text-[9px] font-bold bg-red-100 text-red-800 rounded uppercase tracking-wide">Cancelada</span>
-                                        </template>
-                                    </div>
-                                </td>
-                                <!-- Cliente -->
-                                <td class="px-4 py-3 border border-slate-400 text-sm relative group">
-                                    <template x-if="(inv.customer_name || '').includes('VENTAS MOSTRADOR')">
-                                        <div @dblclick="if(canEditFacturas) editCustomerName(inv)" title="Doble clic para cambiar nombre (Venta de mostrador)">
-                                            <template x-if="!inv._editing_customer">
-                                                <div class="font-medium text-slate-800 cursor-pointer border-b border-dashed border-slate-300 inline-block" x-html="highlightText(getDisplayCustomerName(inv))"></div>
-                                            </template>
-                                            <template x-if="inv._editing_customer">
-                                                <input type="text" x-model="inv._temp_customer"
-                                                    @keydown.enter="saveCustomerName(inv)"
-                                                    @keydown.escape="inv._editing_customer = false"
-                                                    @blur="saveCustomerName(inv)"
-                                                    x-init="$el.focus()"
-                                                    class="w-full px-2 py-1 border border-amber-400 rounded focus:outline-none focus:ring-1 focus:ring-amber-500 bg-white shadow-sm" />
-                                            </template>
-                                        </div>
-                                    </template>
-                                    <template x-if="!(inv.customer_name || '').includes('VENTAS MOSTRADOR')">
-                                        <div class="font-medium text-slate-800" x-html="highlightText(inv.customer_name)"></div>
-                                    </template>
-                                </td>
-                                <!-- Importe -->
-                                <td class="px-3 py-3 text-right font-semibold text-slate-800 border border-slate-400 text-sm">
-                                    <div x-text="formatMoney(inv.total)"></div>
-                                </td>
-                                <!-- Observación (Combines Select + Notes) -->
-                                <td class="px-2 py-2 border border-slate-400 font-medium text-slate-700 align-top">
-                                    <div class="flex flex-col gap-1 w-full">
-                                        <select :disabled="!canEditFacturas" :value="inv.shipping_type" @change="handleCategoryDropdownChange(inv.invoice_number, $event.target.value, inv.shipping_type)" class="w-full text-xs font-semibold px-1 py-1 border border-slate-300 rounded text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-sm disabled:bg-slate-50 disabled:opacity-75 disabled:cursor-not-allowed">
-                                            <option value="ANEXO GDL">ANEXO GDL</option>
-                                            <option value="ANEXO MY">ANEXO MY</option>
-                                            <option value="ANEXO IRP">ANEXO IRP</option>
-                                            <option value="LOCAL">LOCAL</option>
-                                            <option value="PAQUETERIA">PAQUETERIA</option>
-                                            <option value="PASE A PAQUETERIA">PASE A PAQUETERIA</option>
-                                            <option value="PASE PROGRAMADO">PASE PROGRAMADO</option>
-                                            <option value="FLETE INTERNO">FLETE INTERNO</option>
-                                        </select>
-                                        
-                                        <div class="mt-0.5" @dblclick="if(canEditFacturas) editObservacion(inv)" title="Doble clic para editar nota">
-                                            <template x-if="!inv._editing">
-                                                <div class="w-full min-h-[1.5rem] px-1 py-0.5 bg-yellow-50 border border-yellow-200 rounded text-[11px] cursor-pointer" :class="!inv.observaciones ? 'text-slate-400 italic bg-slate-50 border-transparent' : 'text-slate-800'">
-                                                    <span x-text="inv.observaciones || 'Doble clic para añadir nota'"></span>
-                                                </div>
-                                            </template>
-                                            <template x-if="inv._editing">
-                                                <input type="text" x-model="inv._temp_observaciones" 
-                                                    @keydown.enter="saveObservacion(inv)" 
-                                                    @keydown.escape="inv._editing = false"
-                                                    @blur="saveObservacion(inv)"
-                                                    x-init="$el.focus()"
-                                                    class="w-full px-1 py-0.5 border border-amber-400 rounded focus:outline-none focus:ring-1 focus:ring-amber-500 bg-white text-[11px] shadow-sm" />
-                                            </template>
-                                        </div>
-                                    </div>
-                                    <div class="text-[10px] text-slate-400 mt-0.5 text-right font-normal" x-show="inv.warehouse" x-text="'📦 ' + formatWarehouse(inv.warehouse)"></div>
-                                </td>
-                                
-                                <!-- Crédito -->
-                                <td class="px-2 py-3 text-center font-bold border border-slate-400">
-                                    <template x-if="inv.payment_terms && inv.payment_terms.toUpperCase() !== 'CONTADO'">
-                                        <span class="text-slate-800">X</span>
-                                    </template>
-                                </td>
-                                <!-- Pagado -->
-                                <td class="px-2 py-3 text-center border border-slate-400">
-                                    <template x-if="inv.paid_to_date >= inv.total && inv.total > 0">
-                                        <span class="font-bold text-slate-800">X</span>
-                                    </template>
-                                </td>
-                                <!-- Recibido -->
-                                <td class="px-2 py-3 text-center border border-slate-400 relative" :title="!inv.related_order_id ? 'No hay pedido local vinculado' : ''">
-                                    <input type="checkbox" x-model="inv.recibido" @change="toggleFactura(inv.invoice_number, 'recibido', inv.recibido)" :disabled="!canEditFacturas || !inv.related_order_id"
-                                        class="w-4 h-4 rounded border-slate-400 text-amber-500 focus:ring-amber-500 print:w-4 print:h-4 print:border-black print:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-all">
-                                </td>
-                                <!-- Entrega -->
-                                <td class="px-2 py-3 text-center border border-slate-400 relative" :title="!inv.related_order_id ? 'No hay pedido local vinculado' : ''">
-                                    <input type="checkbox" x-model="inv.entrega" @change="toggleFactura(inv.invoice_number, 'entrega', inv.entrega)" :disabled="!canEditFacturas || !inv.related_order_id"
-                                        class="w-4 h-4 rounded border-slate-400 text-amber-500 focus:ring-amber-500 print:w-4 print:h-4 print:border-black print:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-all">
-                                </td>
-                                <!-- Firma -->
-                                <td class="px-4 py-3 hidden print:table-cell border border-slate-400"></td>
-                            </tr>
-                        </template>
-                    </template>
-                          <tbody class="divide-y divide-slate-100">
-                    <!-- Empty state -->
-                    <tr x-show="filteredInvoices.length === 0 && !loading" style="display: none;">
-                        <td colspan="13" class="px-6 py-16 text-center">
-                            <div class="flex flex-col items-center gap-3">
-                                <svg class="w-12 h-12 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                </svg>
-                                <p class="text-slate-500 font-medium">No se encontraron facturas</p>
-                                <p class="text-sm text-slate-400" x-text="searchQuery ? 'Intenta con otra bsqueda' : 'No hay facturas para la fecha seleccionada'"></p>
-                            </div>
-                        </td>
-                    </tr>
-
-                    <!-- Loading state -->
-                    <tr x-show="loading && invoices.length === 0" style="display: none;">
-                        <td colspan="13" class="px-6 py-16 text-center">
-                            <div class="flex flex-col items-center gap-3">
-                                <svg class="w-8 h-8 text-amber-500 animate-spin" fill="none" viewBox="0 0 24 24">
-                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                <p class="text-slate-500 font-medium">Cargando facturas de SAP...</p>
-                            </div>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
         </div>
     </div>
+
+</div>
+
 </div>
 
 <script>
@@ -521,10 +984,163 @@ function facturasApp() {
         customCustomerNames: {},
         undoStack: [],
         eventSource: null,
+        // Relación de Envíos tracking
+        activeTab: 'facturas',  // 'facturas' or 'relaciones'
+        currentRelacion: null,
+        relaciones: [],
+        relacionLoading: false,
+        relacionDateFrom: new Date(Date.now() - 30*86400000).toISOString().split('T')[0],
+        relacionDateTo: new Date().toISOString().split('T')[0],
+        // Signature state
+        currentUserFullName: '{{ current_user.full_name|default(current_user.username, true) }}',
+        signatures: { facturacion: null, credito: null, almacen: null },
+        canSignFacturacion: {{ 'true' if current_user.can_sign_facturacion() else 'false' }},
+        canSignCredito: {{ 'true' if current_user.can_sign_credito() else 'false' }},
+        canSignAlmacen: {{ 'true' if current_user.can_sign_almacen() else 'false' }},
+
+        // Context Menu & Relationship Map State
+        contextMenuShow: false,
+        contextMenuX: 0,
+        contextMenuY: 0,
+        selectedInvoiceForMenu: null,
+        relationshipMapShow: false,
+        relationshipMapLoading: false,
+        relationshipMapData: null,
+
+        showContextMenu(event, inv) {
+            if (this.activeTab !== 'facturas') return;
+            this.selectedInvoiceForMenu = inv;
+            this.contextMenuX = event.clientX;
+            this.contextMenuY = event.clientY;
+            this.contextMenuShow = true;
+        },
+
+        closeRelationshipMap() {
+            this.relationshipMapShow = false;
+        },
+
+        formatDocDate(dateStr) {
+            if (!dateStr || dateStr === 'None') return '';
+            try {
+                const parts = dateStr.split(' ')[0].split('-');
+                if (parts.length === 3) {
+                    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+                }
+                return dateStr;
+            } catch (e) {
+                console.error('Error formatting date:', e);
+                return dateStr || '';
+            }
+        },
+
+        showToast(title, message, icon = '🔔') {
+            const container = document.getElementById('qbGlobalToastContainer');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            toast.className = 'qb-toast';
+            toast.style.pointerEvents = 'auto';
+            toast.innerHTML = `
+                <div class="qb-toast-icon">${icon}</div>
+                <div class="qb-toast-body">
+                    <div class="qb-toast-title">${title}</div>
+                    <div class="qb-toast-msg">${message}</div>
+                    <div class="qb-toast-time">${new Date().toLocaleTimeString('es-MX')}</div>
+                </div>
+            `;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.add('qb-toast-out');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        },
+
+        copyToClipboard(text, docType) {
+            if (!text) return;
+            navigator.clipboard.writeText(text).then(() => {
+                this.showToast('Copiado', `${docType} #${text} copiado al portapapeles.`, '📋');
+            }).catch(err => {
+                console.error('Error copying text:', err);
+            });
+        },
+
+        async openRelationshipMap(invoiceNum) {
+            this.contextMenuShow = false;
+            this.relationshipMapShow = true;
+            this.relationshipMapLoading = true;
+            this.relationshipMapData = null;
+            try {
+                const res = await fetch(`/orders/api/facturas/${invoiceNum}/relationship-map`);
+                const data = await res.json();
+                if (data.success && data.data) {
+                    this.relationshipMapData = data.data;
+                } else {
+                    alert(data.error || 'Error al obtener el mapa de relaciones');
+                    this.relationshipMapShow = false;
+                }
+            } catch (e) {
+                console.error('Error fetching relationship map:', e);
+                alert('Error de conexión al obtener el mapa de relaciones');
+                this.relationshipMapShow = false;
+            } finally {
+                this.relationshipMapLoading = false;
+            }
+        },
 
         pushUndo(action) {
             this.undoStack.push(action);
             if (this.undoStack.length > 50) this.undoStack.shift();
+        },
+
+        async toggleSignature(area) {
+            if (!this.currentRelacion || !this.currentRelacion.folio) return;
+            const isSigned = !!this.signatures[area];
+            const action = isSigned ? 'unsign' : 'sign';
+
+            // Check client-side permissions before calling API
+            if (action === 'sign') {
+                const canSign = {
+                    facturacion: this.canSignFacturacion,
+                    credito: this.canSignCredito,
+                    almacen: this.canSignAlmacen,
+                };
+                if (!canSign[area]) {
+                    const labels = {
+                        facturacion: 'Facturación',
+                        credito: 'Crédito y Cobranza',
+                        almacen: 'Almacén',
+                    };
+                    alert(`Solo el jefe de ${labels[area]} puede firmar esta área.`);
+                    return;
+                }
+            }
+
+            try {
+                const res = await fetch(`/orders/api/relaciones/${this.currentRelacion.folio}/signatures`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ area, action }),
+                });
+                const data = await res.json();
+                if (data.success && data.signatures) {
+                    this.signatures = {
+                        facturacion: data.signatures.facturacion || null,
+                        credito: data.signatures.credito || null,
+                        almacen: data.signatures.almacen || null,
+                    };
+                } else {
+                    alert(data.error || 'Error al actualizar firma');
+                }
+            } catch (e) {
+                console.error('Error toggling signature:', e);
+                // Optimistic fallback
+                if (isSigned) {
+                    this.signatures[area] = null;
+                } else {
+                    this.signatures[area] = { name: this.currentUserFullName };
+                }
+            }
         },
 
         async undo() {
@@ -727,11 +1343,14 @@ function facturasApp() {
                 result = result.filter(i => i.status === this.statusFilter);
             }
 
-            // Sort
+            return this.sortInvoicesArray(result);
+        },
+
+        sortInvoicesArray(arr) {
             const col = this.sortColumn;
             
             if (col === 'manual' && this.manualOrder.length > 0) {
-                result = [...result].sort((a, b) => {
+                return [...arr].sort((a, b) => {
                     const idxA = this.manualOrder.indexOf(String(a.invoice_number));
                     const idxB = this.manualOrder.indexOf(String(b.invoice_number));
                     if (idxA === -1 && idxB === -1) return 0;
@@ -739,11 +1358,10 @@ function facturasApp() {
                     if (idxB === -1) return -1;
                     return idxA - idxB;
                 });
-                return result;
             }
 
             const dir = this.sortDir === 'asc' ? 1 : -1;
-            result = [...result].sort((a, b) => {
+            return [...arr].sort((a, b) => {
                 let av = a[col];
                 let bv = b[col];
                 
@@ -760,8 +1378,6 @@ function facturasApp() {
                 if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
                 return String(av).localeCompare(String(bv)) * dir;
             });
-
-            return result;
         },
 
         formatWarehouse(whCode) {
@@ -857,6 +1473,29 @@ function facturasApp() {
             });
         },
 
+        get relacionInvoiceGroups() {
+            if (!this.currentRelacion || !this.currentRelacion.invoices) return [];
+            const groups = {};
+            const categoryOrder = ['LOCAL', 'ENVIO LOCAL', 'PAQUETERIA', 'PASE A PAQUETERIA', 'PASE DIRECTO', 'PASE PROGRAMADO', 'FLETE INTERNO', 'FORANEO'];
+
+            this.currentRelacion.invoices.forEach(inv => {
+                const cat = (inv.shipping_type || inv.observaciones || inv.nota || 'LOCAL').toUpperCase();
+                if (!groups[cat]) {
+                    groups[cat] = { category: cat, invoices: [] };
+                }
+                groups[cat].invoices.push(inv);
+            });
+
+            return Object.values(groups).sort((a, b) => {
+                const ai = categoryOrder.indexOf(a.category);
+                const bi = categoryOrder.indexOf(b.category);
+                const aIdx = ai >= 0 ? ai : 100;
+                const bIdx = bi >= 0 ? bi : 100;
+                if (aIdx !== bIdx) return aIdx - bIdx;
+                return a.category.localeCompare(b.category);
+            });
+        },
+
         isMatch(i) {
             if (!this.searchQuery || this.searchQuery.trim() === '') return false;
             const q = this.searchQuery.toLowerCase().trim();
@@ -898,6 +1537,7 @@ function facturasApp() {
 
         init() {
             this.fetchInvoices();
+            this.fetchRelacionForDate();
             // Load saved views
             try {
                 const saved = localStorage.getItem('qb_facturas_saved_views');
@@ -916,6 +1556,7 @@ function facturasApp() {
                 if (value) {
                     localStorage.setItem('qb_facturas_date', value);
                     this.fetchInvoices();
+                    this.fetchRelacionForDate();
                 }
             });
 
@@ -1253,6 +1894,38 @@ function facturasApp() {
             }
         },
 
+        async batchToggleEntrega(checked) {
+            const targets = this.invoices.filter(i => i.status !== 'Cancelada');
+            if (targets.length === 0) return;
+
+            const action = checked ? 'marcar' : 'desmarcar';
+            if (!confirm(`¿${checked ? 'Marcar' : 'Desmarcar'} entrega en ${targets.length} facturas?`)) {
+                // Revert the checkbox since user canceled
+                return;
+            }
+
+            // Set all locally first for instant feedback
+            targets.forEach(inv => { inv.entrega = checked; });
+
+            // Then sync with backend
+            let errors = 0;
+            for (const inv of targets) {
+                try {
+                    const res = await fetch(`{{ url_for('orders.index') }}api/facturas/${inv.invoice_number}/toggle`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ field: 'entrega', value: checked })
+                    });
+                    if (!res.ok) errors++;
+                } catch (e) {
+                    errors++;
+                }
+            }
+            if (errors > 0) {
+                alert(`⚠️ ${errors} factura(s) no pudieron ser actualizadas.`);
+            }
+        },
+
         editObservacion(inv) {
             if (!inv.related_order_id) {
                 alert('Esta factura no tiene un pedido local vinculado. No se puede agregar nota.');
@@ -1414,6 +2087,263 @@ function facturasApp() {
                 console.error(e);
                 alert('Error de conexión al guardar observación');
                 inv.observaciones = oldVal;
+            }
+        },
+
+        // ── Relación de Envíos Methods ──
+
+        async fetchRelacionForDate() {
+            try {
+                const res = await fetch(`/orders/api/relaciones?date=${this.selectedDate}`);
+                const data = await res.json();
+                this.currentRelacion = data.relacion || null;
+
+                // Restore persisted signatures
+                if (this.currentRelacion && this.currentRelacion.signatures) {
+                    const sigs = this.currentRelacion.signatures;
+                    this.signatures = {
+                        facturacion: sigs.facturacion || null,
+                        credito: sigs.credito || null,
+                        almacen: sigs.almacen || null,
+                    };
+                } else {
+                    this.signatures = { facturacion: null, credito: null, almacen: null };
+                }
+            } catch (e) {
+                console.error('Error fetching relacion:', e);
+            }
+        },
+
+        async fetchRelaciones() {
+            this.relacionLoading = true;
+            try {
+                const res = await fetch(`/orders/api/relaciones/list?date_from=${this.relacionDateFrom}&date_to=${this.relacionDateTo}`);
+                const data = await res.json();
+                this.relaciones = data.relaciones || [];
+                // Also refresh current day's relacion
+                await this.fetchRelacionForDate();
+            } catch (e) {
+                console.error('Error fetching relaciones:', e);
+            } finally {
+                this.relacionLoading = false;
+            }
+        },
+
+        async generateRelacion() {
+            const dateVal = this.selectedDate;
+            if (!dateVal || !/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) {
+                alert('Fecha inválida.');
+                return;
+            }
+
+            // Gather all non-cancelled invoices and sort them according to visual order
+            const hasSelected = this.invoices.some(i => i._selected);
+            let invoicesToSave = hasSelected 
+                ? this.invoices.filter(i => i._selected && i.status !== 'Cancelada')
+                : this.invoices.filter(i => i.status !== 'Cancelada');
+            
+            invoicesToSave = this.sortInvoicesArray(invoicesToSave);
+
+            if (invoicesToSave.length === 0) {
+                alert('No hay facturas para incluir en la relación.');
+                return;
+            }
+
+            this.relacionLoading = true;
+            try {
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+                
+                // Save the relación to the database (no download)
+                const saveRes = await fetch('/orders/api/relaciones', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                    body: JSON.stringify({ date: dateVal, invoices: invoicesToSave })
+                });
+
+                const saveData = await saveRes.json();
+                if (!saveRes.ok) {
+                    alert(saveData.error || 'Error al guardar la relación');
+                    return;
+                }
+
+                this.currentRelacion = saveData.relacion;
+                const folio = saveData.relacion.folio;
+                const isNew = !this.currentRelacion || saveData.relacion.created_at === saveData.relacion.updated_at;
+
+                // Show success notification
+                alert(`✅ Relación ${isNew ? 'generada' : 'actualizada'} exitosamente.\n\nFolio: ${folio}\nFacturas: ${invoicesToSave.length}\n\nRevisa y descarga en la pestaña "Relaciones de Envío".`);
+
+                // Refresh relaciones data
+                this.fetchRelacionForDate();
+            } catch (e) {
+                console.error('Error generating relacion:', e);
+                alert('Error de conexión al generar la relación.');
+            } finally {
+                this.relacionLoading = false;
+            }
+        },
+
+        async updateRelacionFromFacturas() {
+            // Same as generateRelacion but called from the Relaciones tab
+            // Updates the current relación with the latest facturas data
+            const dateVal = this.selectedDate;
+            if (!dateVal || !/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) {
+                alert('Fecha inválida.');
+                return;
+            }
+
+            let invoicesToSave = this.invoices.filter(i => i.status !== 'Cancelada');
+            invoicesToSave = this.sortInvoicesArray(invoicesToSave);
+
+            if (invoicesToSave.length === 0) {
+                alert('No hay facturas para actualizar.');
+                return;
+            }
+
+            this.relacionLoading = true;
+            try {
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+                
+                const saveRes = await fetch('/orders/api/relaciones', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                    body: JSON.stringify({ date: dateVal, invoices: invoicesToSave })
+                });
+
+                const saveData = await saveRes.json();
+                if (!saveRes.ok) {
+                    alert(saveData.error || 'Error al actualizar la relación');
+                    return;
+                }
+
+                this.currentRelacion = saveData.relacion;
+                
+                // Refresh relaciones list
+                this.fetchRelaciones();
+            } catch (e) {
+                console.error('Error updating relacion:', e);
+                alert('Error de conexión al actualizar la relación.');
+            } finally {
+                this.relacionLoading = false;
+            }
+        },
+
+        allSigned() {
+            return !!this.signatures.facturacion && !!this.signatures.credito && !!this.signatures.almacen;
+        },
+
+        async reprintRelacion(folio) {
+            // Warn if not all signatures are set
+            if (!this.allSigned()) {
+                if (!confirm('No se han juntado todas las firmas, ¿seguro que quieres descargar?')) {
+                    return;
+                }
+            }
+            this.relacionLoading = true;
+            try {
+                const res = await fetch(`/orders/api/relaciones/${folio}/export`);
+                if (!res.ok) {
+                    let errMsg = 'Error al reimprimir.';
+                    try { const ed = await res.json(); errMsg = ed.error || errMsg; } catch(_) {}
+                    alert(errMsg);
+                    return;
+                }
+
+                let filename = `Relacion_Envios_${folio}.xlsx`;
+                const disposition = res.headers.get('Content-Disposition');
+                if (disposition) {
+                    const match = disposition.match(/filename[^;=\n]*=(['"]?)([^'"\n;]+)\1/);
+                    if (match && match[2]) filename = decodeURIComponent(match[2]);
+                }
+
+                const blob = await res.blob();
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(a.href);
+            } catch (e) {
+                console.error('Error reprinting relacion:', e);
+                alert('Error de conexión al reimprimir.');
+            } finally {
+                this.relacionLoading = false;
+            }
+        },
+
+        async cerrarDia() {
+            const dateVal = this.selectedDate;
+
+            // Collect unsent invoices (not canceled, not delivered)
+            const unsentInvoices = this.invoices
+                .filter(i => i.status !== 'Cancelada' && !i.entrega)
+                .map(i => ({
+                    invoice_number: i.invoice_number,
+                    customer_name: i.customer_name,
+                    total: i.total,
+                    shipping_type: i.shipping_type,
+                    order_number: i.order_number,
+                    order_date: i.order_date,
+                    invoice_date: i.invoice_date,
+                    payment_terms: i.payment_terms,
+                    paid_to_date: i.paid_to_date,
+                    currency: i.currency,
+                    observaciones: i.observaciones || '',
+                }));
+
+            const totalInvoices = this.invoices.filter(i => i.status !== 'Cancelada').length;
+            const deliveredCount = totalInvoices - unsentInvoices.length;
+            const displayDate = dateVal.split('-').reverse().join('/');
+
+            let confirmMsg = `¿Está seguro que desea cerrar el día ${displayDate}?\n\n`;
+            confirmMsg += `📊 Resumen:\n`;
+            confirmMsg += `  ✅ Entregadas: ${deliveredCount} de ${totalInvoices}\n`;
+            if (unsentInvoices.length > 0) {
+                confirmMsg += `  📦 Pendientes (se moverán al siguiente día hábil): ${unsentInvoices.length}\n`;
+            }
+            confirmMsg += `\n⚠️ Esta acción no se puede deshacer.`;
+
+            if (!confirm(confirmMsg)) {
+                return;
+            }
+
+            this.relacionLoading = true;
+            try {
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+                const res = await fetch('/orders/api/relaciones/cerrar-dia', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                    body: JSON.stringify({ date: dateVal, unsent_invoices: unsentInvoices })
+                });
+
+                const data = await res.json();
+                if (!res.ok) {
+                    alert(data.error || 'Error al cerrar el día');
+                    return;
+                }
+
+                let msg = `✅ Día cerrado exitosamente.\nFolio: ${data.closed_folio}`;
+                if (data.rolled_invoices > 0) {
+                    msg += `\n\n📦 ${data.rolled_invoices} factura(s) movidas al siguiente día hábil: ${data.next_business_day.split('-').reverse().join('/')}`;
+                    if (data.next_folio) msg += `\nNuevo folio: ${data.next_folio}`;
+                }
+                alert(msg);
+
+                // Navigate to the next business day
+                if (data.next_business_day) {
+                    this.selectedDate = data.next_business_day;
+                }
+
+                // Refresh data
+                await this.fetchInvoices();
+                await this.fetchRelacionForDate();
+                await this.fetchRelaciones();
+            } catch (e) {
+                console.error('Error closing day:', e);
+                alert('Error de conexión al cerrar el día.');
+            } finally {
+                this.relacionLoading = false;
             }
         }
     }

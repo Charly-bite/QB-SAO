@@ -371,6 +371,9 @@ class OrderStatusManager:
             existing_factura_number = self.orders[order_id].get("factura_number")
             existing_delivery_number = self.orders[order_id].get("delivery_number")
             existing_doc_entry = self.orders[order_id].get("doc_entry")
+            existing_shipping_type = self.orders[order_id].get("shipping_type", "LOCAL")
+        else:
+            existing_shipping_type = "LOCAL"
 
         doc_entry = sap_order.get("DocEntry", sap_order.get("doc_entry"))
         if doc_entry is not None:
@@ -409,6 +412,7 @@ class OrderStatusManager:
                 if not existing_status
                 else self.orders.get(order_id, {}).get("created_by", "system")
             ),
+            "shipping_type": sap_order.get("shipping_type") or existing_shipping_type,
         }
 
         if not existing_status:
@@ -463,6 +467,7 @@ class OrderStatusManager:
                     "items": sap_order.get("items", []),
                     "updated_by": sap_order["header"].get("updater_name") or "system_sync",
                     "created_by": creator,
+                    "shipping_type": sap_order["header"].get("shipping_type", "LOCAL"),
                 }
 
                 self.import_from_sap(order_data, imported_by=creator, save=False)
