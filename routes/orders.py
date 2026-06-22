@@ -1554,7 +1554,7 @@ def visor():
             o for o in active_orders
             if o.get("shipping_type", "").upper().strip() in [
                 "VENTA MOSTRADOR", "VENTA DE MOSTRADOR", "VENTAS MOSTRADOR"
-            ]
+            ] or "VENTAS MOSTRADOR" in str(o.get("customer_name", "")).upper()
         ]
 
     # Calculate stats
@@ -1598,7 +1598,7 @@ def api_active_orders():
             o for o in active_orders
             if o.get("shipping_type", "").upper().strip() in [
                 "VENTA MOSTRADOR", "VENTA DE MOSTRADOR", "VENTAS MOSTRADOR"
-            ]
+            ] or "VENTAS MOSTRADOR" in str(o.get("customer_name", "")).upper()
         ]
 
     # Calculate stats
@@ -1658,7 +1658,7 @@ def api_seller_orders():
             for o in active_orders
             if o.get("shipping_type", "").upper().strip() in [
                 "VENTA MOSTRADOR", "VENTA DE MOSTRADOR", "VENTAS MOSTRADOR"
-            ]
+            ] or "VENTAS MOSTRADOR" in str(o.get("customer_name", "")).upper()
         ]
     elif not can_see_all:
             # Seller role — filter to own SAP seller name
