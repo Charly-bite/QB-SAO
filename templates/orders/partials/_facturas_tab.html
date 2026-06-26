@@ -110,7 +110,8 @@
                                 </div>
                             </td>
                             <!-- Checkbox -->
-                            <td class="px-2 py-1.5 border border-slate-400 text-center align-middle cursor-pointer" @click.stop="if(canEditFacturas) { inv._selected = !inv._selected; handleCheck($event, inv); saveSelection(); }">
+                            <td class="px-2 py-1.5 border border-slate-400 text-center align-middle cursor-pointer" 
+                                @click.stop="if(canEditFacturas) { inv._selected = !inv._selected; lastCheckedIndex = inv._global_index; saveSelection(); toggleInvoiceSelection([inv], inv._selected); }">
                                 <input type="checkbox" :checked="inv._selected" :disabled="!canEditFacturas" class="w-4 h-4 text-amber-500 rounded focus:ring-amber-500 border-slate-300 pointer-events-none disabled:opacity-50">
                             </td>
                             <!-- Posición -->
