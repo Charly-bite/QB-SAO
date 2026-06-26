@@ -428,6 +428,10 @@ function facturasApp() {
             return this.sortInvoicesArray(result);
         },
 
+        get pendingInvoices() {
+            return this.invoices.filter(i => !i._selected && i.status !== 'Cancelada');
+        },
+
         sortInvoicesArray(arr) {
             const col = this.sortColumn;
             
