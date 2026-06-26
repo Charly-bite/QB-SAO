@@ -19,16 +19,11 @@
                         FACTURAS DEL DÍA
                         <span x-show="currentRelacion && currentRelacion.folio" class="ml-2 text-indigo-600" x-text="currentRelacion ? currentRelacion.folio : ''"></span>
                     </th>
-                    <th colspan="2" class="px-3 py-1.5 text-center text-xs font-bold text-slate-800 border border-slate-400">
-                        QB-IT-VE-01-F06
-                    </th>
-                    <th class="border border-slate-400 hidden print:table-cell"></th>
                 </tr>
                 <!-- Fila de Fecha -->
                 <tr class="bg-white">
-                    <th colspan="8" class="px-3 py-1 text-right text-xs font-bold text-slate-800 border border-slate-400 bg-[#D9D9D9]">Fecha:</th>
+                    <th colspan="6" class="px-3 py-1 text-right text-xs font-bold text-slate-800 border border-slate-400 bg-[#D9D9D9]">Fecha:</th>
                     <th colspan="4" class="px-3 py-1 text-center text-xs font-bold text-slate-800 border border-slate-400 bg-[#D9D9D9]" x-text="selectedDate.split('-').reverse().join('/')"></th>
-                    <th class="border border-slate-400 hidden print:table-cell bg-[#D9D9D9]"></th>
                 </tr>
                 <!-- Encabezados de Columna -->
                 <tr class="text-[10px] font-semibold tracking-wide text-slate-800 uppercase bg-[#D9D9D9] text-center">
@@ -50,7 +45,6 @@
                     <th class="px-2 py-1.5 border border-slate-400 align-middle text-left">Cliente</th>
                     <th class="px-2 py-1.5 cursor-pointer hover:text-slate-600 border border-slate-400 align-middle text-center" @click="sortBy('total')">Importe</th>
                     <th class="px-2 py-1.5 border border-slate-400 align-middle w-56 text-left">Observación</th>
-                    <th class="px-2 py-1.5 hidden print:table-cell w-32 border border-slate-400 align-middle">Firma</th>
                 </tr>
             </thead>
 
@@ -59,7 +53,7 @@
                 <tbody class="divide-y divide-slate-100" :data-category="group.category" x-init="initGroupSortable($el, group.category)" x-show="group.invoices.length > 0" :class="{'has-selected': group.invoices.some(i => i._selected)}">
                     <!-- Dark Gray Separator Row -->
                     <tr class="border border-slate-400 ignore-elements" :style="group.category.startsWith('ANEXO') ? 'background-color: #b91c1c; color: white;' : 'background-color: #475569; color: white;'">
-                        <td colspan="11" class="px-4 py-1.5 border border-slate-400">
+                        <td colspan="10" class="px-4 py-1.5 border border-slate-400">
                             <div class="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
                                 <template x-if="group.category.startsWith('ANEXO')">
                                     <span class="flex items-center gap-1.5 text-red-100 font-extrabold">
@@ -75,7 +69,6 @@
                                 <span class="ml-2 text-gray-300 text-[10px] lowercase italic" x-show="group.category.startsWith('ANEXO') || ['LOCAL', 'ENVIO LOCAL', 'PAQUETERIA', 'PASE A PAQUETERIA', 'PASE PROGRAMADO'].includes(group.category)">(Arrastrable para ordenar)</span>
                             </div>
                         </td>
-                        <td class="hidden print:table-cell border border-slate-400"></td>
                     </tr>
                     <template x-for="inv in group.invoices" :key="inv.invoice_number">
                         <tr @click="handleRowClick($event, inv)" @contextmenu.prevent="showContextMenu($event, inv)" class="fade-in invoice-row" :class="(isMatch(inv) ? 'bg-amber-50 ring-2 ring-amber-300 match-row ' : (inv._highlighted ? 'invoice-row-highlighted ' : (rowColors[inv.invoice_number] ? 'row-color-' + rowColors[inv.invoice_number] + ' ' : (inv._global_index % 2 === 0 ? 'bg-slate-100 hover:bg-slate-200 ' : 'bg-white hover:bg-slate-50 ')))) + (inv._selected ? 'is-selected' : '')" :data-id="inv.invoice_number">
@@ -215,16 +208,13 @@
                                 </div>
                                 <div class="text-[10px] text-slate-400 mt-0.5 text-right font-normal" x-show="inv.warehouse" x-text="'📦 ' + formatWarehouse(inv.warehouse)"></div>
                             </td>
-                            
-                            <!-- Firma -->
-                            <td class="px-3 py-1.5 hidden print:table-cell border border-slate-400"></td>
                         </tr>
                     </template>
                 </template>
                       <tbody class="divide-y divide-slate-100">
                 <!-- Empty state -->
                 <tr x-show="filteredInvoices.length === 0 && !loading" style="display: none;">
-                    <td colspan="11" class="px-6 py-16 text-center">
+                    <td colspan="10" class="px-6 py-16 text-center">
                         <div class="flex flex-col items-center gap-3">
                             <svg class="w-12 h-12 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
@@ -238,7 +228,7 @@
 
                 <!-- Loading state -->
                 <tr x-show="loading && invoices.length === 0" style="display: none;">
-                    <td colspan="11" class="px-6 py-16 text-center">
+                    <td colspan="10" class="px-6 py-16 text-center">
                         <div class="flex flex-col items-center gap-3">
                             <svg class="w-8 h-8 text-amber-500 animate-spin" fill="none" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
