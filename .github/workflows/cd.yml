@@ -5,7 +5,7 @@ on:
   workflow_run:
     workflows: ["CI"]
     types: [completed]
-    branches: [develop, main]
+    branches: [develop, staging, main]
   workflow_dispatch:
     inputs:
       target:
@@ -55,6 +55,8 @@ jobs:
           BRANCH="${{ github.event.workflow_run.head_branch || github.ref_name }}"
           if [[ "$BRANCH" == "main" ]]; then
             echo "environment=production" >> "$GITHUB_OUTPUT"
+          elif [[ "$BRANCH" == "staging" ]]; then
+            echo "environment=staging" >> "$GITHUB_OUTPUT"
           else
             echo "environment=development" >> "$GITHUB_OUTPUT"
           fi
