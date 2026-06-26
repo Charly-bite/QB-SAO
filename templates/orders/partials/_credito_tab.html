@@ -1,0 +1,138 @@
+<!-- Crédito y Cobranza Tab — Per-invoice authorization -->
+<div x-show="activeTab === 'credito'" x-cloak class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+
+    <!-- Action Bar -->
+    <div class="px-4 py-3 flex flex-wrap items-center gap-3 bg-gradient-to-r from-emerald-50 to-white border-b border-slate-100">
+
+        <!-- No relación yet -->
+        <template x-if="!currentRelacion">
+            <p class="text-sm text-slate-400 italic">Genera una relación desde la pestaña de Facturas primero.</p>
+        </template>
+
+        <!-- Relación info -->
+        <template x-if="currentRelacion">
+            <div class="flex items-center gap-2">
+                <span class="text-sm font-bold text-slate-700">Relación:</span>
+                <span class="text-sm font-bold text-indigo-600" x-text="currentRelacion.folio"></span>
+            </div>
+        </template>
+
+        <div class="flex-1"></div>
+
+        <!-- Authorization progress badge -->
+        <template x-if="currentRelacion && currentRelacion.invoices && currentRelacion.invoices.length > 0">
+            <div class="auth-progress-badge" :class="authorizationSummary().pending === 0 ? 'complete' : 'incomplete'">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span x-text="authorizationSummary().authorized + '/' + authorizationSummary().total + ' Autorizados'"></span>
+            </div>
+        </template>
+    </div>
+
+    <!-- Authorization Table -->
+    <template x-if="currentRelacion && currentRelacion.invoices && currentRelacion.invoices.length > 0">
+        <div class="overflow-x-auto">
+            <table class="w-full border-collapse text-sm">
+                <thead>
+                    <tr class="bg-slate-700 text-white">
+                        <th class="px-3 py-2 text-left font-bold text-xs">#</th>
+                        <th class="px-3 py-2 text-left font-bold text-xs">No. Factura</th>
+                        <th class="px-3 py-2 text-left font-bold text-xs">Cliente</th>
+                        <th class="px-3 py-2 text-right font-bold text-xs">Importe</th>
+                        <th class="px-3 py-2 text-center font-bold text-xs">Condición</th>
+                        <th class="px-3 py-2 text-center font-bold text-xs">Observación</th>
+                        <th class="px-3 py-2 text-center font-bold text-xs w-28">Autorización</th>
+                        <th class="px-3 py-2 text-center font-bold text-xs w-40">Autorizado por</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="(inv, idx) in currentRelacion.invoices" :key="inv.invoice_number || idx">
+                        <tr class="border-b border-slate-100 transition-colors"
+                            :class="idx % 2 === 0 ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/50 hover:bg-slate-100/50'">
+                            <!-- # -->
+                            <td class="px-3 py-2.5 text-slate-500 text-xs font-medium" x-text="idx + 1"></td>
+                            <!-- No. Factura -->
+                            <td class="px-3 py-2.5 font-bold text-slate-800" x-text="inv.invoice_number || ''"></td>
+                            <!-- Cliente -->
+                            <td class="px-3 py-2.5 text-slate-700 text-xs" x-text="inv.customer_name || ''"></td>
+                            <!-- Importe -->
+                            <td class="px-3 py-2.5 text-right font-semibold text-slate-800 text-xs">
+                                <span x-text="'$' + Number(inv.total || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})"></span>
+                                <span class="text-slate-400 ml-1 text-[10px]" x-text="inv.currency || 'MXN'"></span>
+                            </td>
+                            <!-- Condición de pago -->
+                            <td class="px-3 py-2.5 text-center">
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase"
+                                    :class="isCredito(inv) 
+                                        ? 'bg-blue-100 text-blue-700 border border-blue-200' 
+                                        : 'bg-amber-100 text-amber-700 border border-amber-200'"
+                                    x-text="isCredito(inv) ? 'CRÉDITO' : 'CONTADO'">
+                                </span>
+                            </td>
+                            <!-- Observación -->
+                            <td class="px-3 py-2.5 text-center text-xs text-slate-600" x-text="inv.observaciones || inv.nota || inv.shipping_type || 'LOCAL'"></td>
+                            <!-- Autorización -->
+                            <td class="px-3 py-2.5 text-center">
+                                <button @click="authorizeInvoice(inv, isCredito(inv) ? 'credito' : 'contado')"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200"
+                                    :class="inv.credito_authorized 
+                                        ? 'bg-green-100 text-green-700 border border-green-300 hover:bg-green-200' 
+                                        : 'bg-yellow-100 text-yellow-700 border border-yellow-300 hover:bg-yellow-200 hover:scale-105'"
+                                    :disabled="!canAuthorizarCredito && !inv.credito_authorized"
+                                    :title="canAuthorizarCredito ? (inv.credito_authorized ? 'Clic para revocar' : 'Clic para autorizar') : 'Solo Crédito y Cobranza puede autorizar'">
+                                    <template x-if="inv.credito_authorized">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                    </template>
+                                    <template x-if="!inv.credito_authorized">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                    </template>
+                                    <span x-text="inv.credito_authorized ? 'Autorizado' : 'Pendiente'"></span>
+                                </button>
+                            </td>
+                            <!-- Autorizado por -->
+                            <td class="px-3 py-2.5 text-center">
+                                <template x-if="inv.credito_authorized && inv.credito_authorized_name">
+                                    <div class="flex flex-col items-center gap-0.5">
+                                        <span class="text-xs font-medium text-slate-700" x-text="inv.credito_authorized_name"></span>
+                                        <span class="text-[10px] text-slate-400" x-text="inv.credito_authorized_at ? new Date(inv.credito_authorized_at).toLocaleString('es-MX', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : ''"></span>
+                                    </div>
+                                </template>
+                                <template x-if="!inv.credito_authorized">
+                                    <span class="text-slate-300 text-xs">—</span>
+                                </template>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+                <!-- Totals footer -->
+                <tfoot>
+                    <tr class="bg-slate-100 border-t-2 border-slate-300">
+                        <td colspan="3" class="px-3 py-2.5 text-right font-bold text-slate-700 text-xs uppercase">Total</td>
+                        <td class="px-3 py-2.5 text-right font-bold text-slate-800 text-sm"
+                            x-text="'$' + currentRelacion.invoices.reduce((s, i) => s + Number(i.total || 0), 0).toLocaleString('es-MX', {minimumFractionDigits: 2})">
+                        </td>
+                        <td colspan="2"></td>
+                        <td class="px-3 py-2.5 text-center">
+                            <div class="auth-progress-badge" :class="authorizationSummary().pending === 0 ? 'complete' : 'incomplete'">
+                                <span x-text="authorizationSummary().authorized + '/' + authorizationSummary().total"></span>
+                            </div>
+                        </td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </template>
+
+    <!-- Empty state -->
+    <template x-if="!currentRelacion || !currentRelacion.invoices || currentRelacion.invoices.length === 0">
+        <div class="px-6 py-16 text-center">
+            <div class="flex flex-col items-center gap-3">
+                <svg class="w-12 h-12 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                </svg>
+                <p class="text-slate-500 font-medium">No hay facturas para autorizar</p>
+                <p class="text-sm text-slate-400">Genera una relación desde la pestaña de Facturas primero</p>
+            </div>
+        </div>
+    </template>
+</div>
