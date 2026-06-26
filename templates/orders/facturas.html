@@ -34,6 +34,11 @@
                         </span>
                     </template>
                 </button>
+                <button @click="activeTab = 'almacen'; fetchRelaciones()" 
+                    class="px-3 py-1.5 rounded-md text-xs font-bold transition-all duration-200 flex items-center gap-1"
+                    :class="activeTab === 'almacen' ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'">
+                    📦 Almacén
+                </button>
                 <button @click="activeTab = 'relaciones'; fetchRelaciones()" 
                     class="px-3 py-1.5 rounded-md text-xs font-bold transition-all duration-200 flex items-center gap-1"
                     :class="activeTab === 'relaciones' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'">
@@ -157,6 +162,9 @@
 
     <!-- ═══════ CRÉDITO Y COBRANZA TAB ═══════ -->
     {% include 'orders/partials/_credito_tab.html' %}
+
+    <!-- ═══════ ALMACÉN Y LOGÍSTICA TAB ═══════ -->
+    {% include 'orders/partials/_almacen_tab.html' %}
 
     <!-- ═══════ RELACIONES DE ENVÍO TAB ═══════ -->
     <!-- Relaciones Tab -->
