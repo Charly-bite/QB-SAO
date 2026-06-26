@@ -1,0 +1,592 @@
+/* ══════════════════════════════════════════════════════
+   facturas.css — Styles for the Facturas page
+   Extracted from templates/orders/facturas.html
+   ══════════════════════════════════════════════════════ */
+
+/* Custom Colors for Rows and Buttons to bypass Tailwind compilation */
+.row-color-rojo { background-color: #fee2e2 !important; }
+.row-color-rojo:hover { background-color: #fef2f2 !important; }
+.btn-color-rojo { background-color: #f87171 !important; border-color: transparent !important; }
+
+.row-color-azul { background-color: #dbeafe !important; }
+.row-color-azul:hover { background-color: #eff6ff !important; }
+.btn-color-azul { background-color: #60a5fa !important; border-color: transparent !important; }
+
+.row-color-verde { background-color: #d1fae5 !important; }
+.row-color-verde:hover { background-color: #ecfdf5 !important; }
+.btn-color-verde { background-color: #34d399 !important; border-color: transparent !important; }
+
+.row-color-amarillo { background-color: #fef3c7 !important; }
+.row-color-amarillo:hover { background-color: #fffbeb !important; }
+.btn-color-amarillo { background-color: #fbbf24 !important; border-color: transparent !important; }
+
+.row-color-morado { background-color: #f3e8ff !important; }
+.row-color-morado:hover { background-color: #faf5ff !important; }
+.btn-color-morado { background-color: #c084fc !important; border-color: transparent !important; }
+
+.row-color-rosa { background-color: #fce7f3 !important; }
+.row-color-rosa:hover { background-color: #fdf2f8 !important; }
+.btn-color-rosa { background-color: #f472b6 !important; border-color: transparent !important; }
+
+.row-color-gris { background-color: #e2e8f0 !important; }
+.row-color-gris:hover { background-color: #f1f5f9 !important; }
+.btn-color-gris { background-color: #94a3b8 !important; border-color: transparent !important; }
+/* Highlight effect classes to bypass Tailwind compilation */
+tr.invoice-row {
+    transition: background-color 1s ease, transform 600ms cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: grab;
+}
+
+tr.invoice-row.invoice-row-highlighted {
+    background-color: #fef08a !important; /* Yellow 200 */
+}
+
+.invoice-row-highlighted-relacion {
+    background-color: #fde047 !important; /* Yellow 300 */
+}
+
+.transition-colors-custom {
+    transition: background-color 1s ease, transform 600ms cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+}
+
+@media print {
+    /* Force landscape and minimal margins */
+    @page {
+        size: letter landscape;
+        margin: 5mm;
+    }
+
+    /* Scale everything down to fit */
+    body {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        font-size: 9.5px !important;
+    }
+
+    /* Prevent SVGs from expanding */
+    svg {
+        max-width: 1.2rem !important;
+        max-height: 1.2rem !important;
+    }
+
+    /* Hide ALL UI controls */
+    .print-hide, .export-btn, .controls-container,
+    .qb-nav, .qb-breadcrumbs, nav, header, footer {
+        display: none !important;
+    }
+
+    /* Hide header, action bar, filters, history, facturas tab */
+    .space-y-6 > .flex,
+    .space-y-6 > .bg-amber-50,
+    .space-y-6 > .bg-white.rounded-xl.shadow-sm.border.border-slate-100.flex,
+    .space-y-6 > div[x-show="activeTab === 'facturas'"] {
+        display: none !important;
+    }
+
+    /* Make table compact but readable */
+    table {
+        width: 100% !important;
+        page-break-inside: auto;
+        font-size: 9.5px !important;
+    }
+    td, th {
+        padding: 1px 4px !important;
+        font-size: 9.5px !important;
+        line-height: 1.2 !important;
+    }
+    tr {
+        page-break-inside: avoid;
+        height: auto !important;
+        min-height: 0 !important;
+    }
+    /* Compact separator and header rows */
+    tr[style*="height: 16px"], tr[style*="height: 18px"] {
+        height: 8px !important;
+    }
+    tr[style*="height: 26px"], tr[style*="height: 28px"], tr[style*="height: 30px"], tr[style*="height: 32px"] {
+        height: 18px !important;
+    }
+
+    /* Hide drag handle columns */
+    th.drag-handle, td.drag-handle {
+        display: none !important;
+    }
+    /* Hide unselected rows */
+    .print-selected-only tr.invoice-row:not(.is-selected) {
+        display: none !important;
+    }
+    .print-selected-only tbody:not(.has-selected) {
+        display: none !important;
+    }
+
+    /* Remove shadows, rounded corners */
+    .rounded-xl, .shadow-sm {
+        border-radius: 0 !important;
+        box-shadow: none !important;
+    }
+    /* Remove all outer spacing */
+    .space-y-6 {
+        margin: 0 !important;
+        padding: 0 !important;
+        gap: 0 !important;
+    }
+    .space-y-6 > * {
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+    }
+    /* Compact the relación container */
+    .overflow-x-auto {
+        overflow: visible !important;
+    }
+    .bg-white.rounded-xl.shadow-sm.border {
+        border: none !important;
+        padding: 0 !important;
+    }
+}
+/* Fallback SVG sizing in case Tailwind missed these classes */
+.w-4 { width: 1rem; } .h-4 { height: 1rem; }
+.w-5 { width: 1.25rem; } .h-5 { height: 1.25rem; }
+.w-6 { width: 1.5rem; } .h-6 { height: 1.5rem; }
+.w-7 { width: 1.75rem; } .h-7 { height: 1.75rem; }
+.w-8 { width: 2rem; } .h-8 { height: 2rem; }
+.w-12 { width: 3rem; } .h-12 { height: 3rem; }
+
+/* ── SortableJS Drag & Drop States ──────────────────── */
+
+/* The drag handle itself: prevent text selection */
+.drag-handle {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+}
+
+/* Ghost: the placeholder left in the original position */
+.sortable-ghost {
+    opacity: 0.3 !important;
+    background-color: #fef3c7 !important; /* amber-100 */
+}
+
+/* Chosen: the row after clicking the handle (mouse held down) */
+.sortable-chosen {
+    background-color: #fef9c3 !important; /* yellow-100 */
+    cursor: grabbing !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+}
+
+/* Hide number input arrows */
+input[type=number]::-webkit-inner-spin-button, 
+input[type=number]::-webkit-outer-spin-button { 
+    -webkit-appearance: none; 
+    margin: 0; 
+}
+input[type=number] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+/* Sticky table headers for screen view */
+#facturas-table thead {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 20 !important;
+}
+#facturas-table thead tr:nth-child(1) th {
+    background-color: #ffffff !important;
+}
+#facturas-table thead tr:nth-child(2) th,
+#facturas-table thead tr:nth-child(3) th {
+    background-color: #D9D9D9 !important;
+}
+
+/* Custom Styles for Context Menu & Relationship Map Modal */
+.sao-context-menu {
+    position: fixed !important;
+    z-index: 9999 !important;
+    width: 250px !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    border: 1px solid #94a3b8 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15) !important;
+    overflow: hidden !important;
+    padding: 6px !important;
+    opacity: 1 !important;
+}
+
+.sao-context-menu-header {
+    padding: 8px 12px !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    background-color: #f8fafc !important;
+}
+
+.sao-context-menu-options {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 2px !important;
+    margin-top: 4px !important;
+}
+
+.sao-context-menu-item {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    width: 100% !important;
+    padding: 8px 12px !important;
+    text-align: left !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: #334155 !important;
+    border: none !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    border-radius: 6px !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+    text-decoration: none !important;
+    opacity: 1 !important;
+}
+
+.sao-context-menu-item:hover {
+    background: #f59e0b !important;
+    background-color: #f59e0b !important;
+    color: #ffffff !important;
+}
+
+.sao-context-menu-item:hover svg {
+    color: #ffffff !important;
+}
+
+/* Modal Overlay & Container */
+.sao-modal-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 999 !important;
+    background-color: rgba(15, 23, 42, 0.6) !important;
+    backdrop-filter: blur(4px) !important;
+    display: flex; /* NO !important so Alpine x-show inline style display: none; can hide it */
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 16px !important;
+}
+
+.sao-modal-container {
+    background-color: #ffffff !important;
+    border-radius: 16px !important;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+    border: 1px solid #cbd5e1 !important;
+    width: 100% !important;
+    max-width: 1100px !important;
+    max-height: 90vh !important;
+    display: flex; /* NO !important so Alpine x-show inline style display: none; can hide it */
+    flex-direction: column !important;
+    overflow: hidden !important;
+}
+
+.sao-modal-header {
+    padding: 16px 24px !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    background-color: #f8fafc !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+}
+
+.sao-modal-body {
+    padding: 24px !important;
+    overflow-y: auto !important;
+    background-color: #f8fafc !important;
+    flex: 1 !important;
+}
+
+.sao-modal-footer {
+    padding: 16px 24px !important;
+    border-top: 1px solid #e2e8f0 !important;
+    background-color: #f8fafc !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+}
+
+/* Relationship Map Layout (Horizontal with flex-wrap: nowrap) */
+.sao-rel-map-container {
+    display: flex; /* NO !important so Alpine x-show inline style display: none; can hide it */
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 24px !important;
+    width: 100% !important;
+}
+
+.sao-rel-map-flow {
+    display: flex; /* NO !important */
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: center !important;
+    justify-content: safe center !important; /* Center content, fallback to start scrolling on overflow */
+    width: 100% !important;
+    gap: 12px !important;
+    padding: 24px 10px !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+}
+
+/* Reworked SAP B1 Relationship Map Card Style */
+.sao-rel-node {
+    width: 170px !important; /* Resized card width for a better fit */
+    min-height: 165px !important; /* Uniform compact height */
+    background-color: #ffffff !important;
+    border-radius: 12px !important; /* More modern rounded corners */
+    border: 1.5px solid #cbd5e1 !important; /* Softer neutral gray border */
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05) !important;
+    display: flex; /* NO !important */
+    flex-direction: column !important;
+    overflow: hidden !important;
+    transition: all 0.2s ease-in-out !important;
+    flex-shrink: 0 !important;
+    position: relative !important;
+}
+
+.sao-rel-node:hover {
+    transform: translateY(-4px) !important;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1) !important;
+    border-color: #94a3b8 !important;
+}
+
+/* Node Header Colors based on document type */
+.sao-rel-node-header {
+    padding: 6px 10px !important; /* More compact header padding */
+    color: #ffffff !important;
+    font-size: 10.5px !important; /* Sized to fit text better */
+    font-weight: 800 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    display: flex; /* NO !important */
+    align-items: center !important;
+    justify-content: space-between !important;
+    min-height: 32px !important;
+}
+
+/* SAP colors for document headers with modern gradients */
+.sao-header-order {
+    background: linear-gradient(135deg, #1e3a8a, #3b82f6) !important; /* Blue gradient for Pedido */
+}
+.sao-header-delivery {
+    background: linear-gradient(135deg, #0f766e, #0d9488) !important; /* Teal gradient for Entrega */
+}
+.sao-header-invoice {
+    background: linear-gradient(135deg, #b45309, #d97706) !important; /* Amber gradient for Factura */
+}
+.sao-header-payment {
+    background: linear-gradient(135deg, #15803d, #16a34a) !important; /* Green gradient for Pago Recibido */
+}
+
+.sao-rel-node-body {
+    padding: 12px !important;
+    display: flex; /* NO !important */
+    flex-direction: column !important;
+    gap: 6px !important;
+    background-color: #ffffff !important;
+    flex-grow: 1 !important;
+}
+
+.sao-rel-node-title {
+    font-size: 15px !important;
+    font-weight: 800 !important;
+    color: #1e293b !important;
+    margin: 0 !important;
+}
+
+.sao-rel-node-date {
+    font-size: 11px !important;
+    color: #64748b !important;
+    margin: 0 !important;
+}
+
+.sao-rel-node-total {
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    color: #0f172a !important;
+    margin-top: 2px !important;
+}
+
+/* Active/Selected Node (The document that was clicked) */
+.sao-rel-node.active-node {
+    border: 2.5px solid #f59e0b !important; /* Gold border */
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.15), 0 12px 24px rgba(245, 158, 11, 0.2) !important;
+}
+
+.sao-rel-node-source-badge {
+    background-color: #fef08a !important;
+    color: #854d0e !important;
+    font-size: 9px !important;
+    font-weight: 800 !important;
+    padding: 2px 6px !important;
+    border-radius: 4px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    border: 1px solid #fef08a !important;
+}
+
+/* Stamp for Cerrado / Abierto / Cancelado - Modern Badge Pill */
+.sao-rel-stamp {
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    padding: 3px 8px !important;
+    border-radius: 9999px !important; /* Full rounded pill */
+    letter-spacing: 0.05em !important;
+    align-self: flex-start !important;
+    margin-top: 4px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+}
+.sao-stamp-closed {
+    color: #b91c1c !important; /* Red for Cerrado */
+    background-color: #fee2e2 !important;
+    border: 1px solid #fca5a5 !important;
+}
+.sao-stamp-open {
+    color: #1d4ed8 !important; /* Blue for Abierto */
+    background-color: #dbeafe !important;
+    border: 1px solid #93c5fd !important;
+}
+.sao-stamp-cancelled {
+    color: #475569 !important; /* Gray for Cancelado */
+    background-color: #f1f5f9 !important;
+    border: 1px solid #cbd5e1 !important;
+}
+.sao-stamp-applied {
+    color: #15803d !important; /* Green for Aplicado */
+    background-color: #dcfce7 !important;
+    border: 1px solid #86efac !important;
+}
+
+/* Color-coded Empty Nodes styling */
+.sao-rel-node-empty {
+    width: 170px !important; /* Sized to match standard node width */
+    height: 165px !important; /* Match uniform compact height */
+    border-radius: 12px !important;
+    display: flex; /* NO !important */
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 12px !important;
+    text-align: center !important;
+    flex-shrink: 0 !important;
+    transition: all 0.2s ease !important;
+}
+
+.sao-rel-node-empty-order {
+    border: 2px dashed #bfdbfe !important;
+    background-color: #f0f9ff !important;
+    color: #3b82f6 !important;
+}
+.sao-rel-node-empty-order:hover {
+    border-color: #3b82f6 !important;
+    background-color: #e0f2fe !important;
+}
+.sao-rel-node-empty-order .sao-rel-node-empty-title {
+    color: #1d4ed8 !important;
+}
+
+.sao-rel-node-empty-delivery {
+    border: 2px dashed #99f6e4 !important;
+    background-color: #f0fdfa !important;
+    color: #0d9488 !important;
+}
+.sao-rel-node-empty-delivery:hover {
+    border-color: #0d9488 !important;
+    background-color: #ccfbf1 !important;
+}
+.sao-rel-node-empty-delivery .sao-rel-node-empty-title {
+    color: #0f766e !important;
+}
+
+.sao-rel-node-empty-payment {
+    border: 2px dashed #bbf7d0 !important;
+    background-color: #f0fdf4 !important;
+    color: #16a34a !important;
+}
+.sao-rel-node-empty-payment:hover {
+    border-color: #16a34a !important;
+    background-color: #dcfce7 !important;
+}
+.sao-rel-node-empty-payment .sao-rel-node-empty-title {
+    color: #15803d !important;
+}
+
+.sao-rel-node-empty-title {
+    font-size: 12px !important;
+    font-weight: 700;
+    margin: 8px 0 0 0 !important;
+}
+
+/* Connector line connecting documents */
+.sao-rel-connector {
+    display: flex; /* NO !important */
+    align-items: center !important;
+    justify-content: center !important;
+    width: 30px !important; /* Narrower spacing between cards */
+    flex-shrink: 0 !important;
+    position: relative !important;
+}
+
+.sao-rel-connector::before {
+    content: '' !important;
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: 50% !important;
+    height: 2px !important;
+    background-color: #cbd5e1 !important;
+    z-index: 1 !important;
+}
+
+.sao-rel-connector-arrow {
+    z-index: 2 !important;
+    background-color: #f8fafc !important;
+    padding: 4px !important;
+    border-radius: 50% !important;
+    border: 1px solid #cbd5e1 !important;
+    display: flex; /* NO !important */
+    align-items: center !important;
+    justify-content: center !important;
+    color: #94a3b8 !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+}
+
+.sao-rel-connector-arrow svg {
+    width: 14px !important;
+    height: 14px !important;
+}
+
+@media (max-width: 768px) {
+    .sao-rel-map-flow {
+        flex-direction: column !important;
+        align-items: center !important;
+        gap: 16px !important;
+        justify-content: flex-start !important;
+    }
+    
+    .sao-rel-connector {
+        width: 2px !important;
+        height: 40px !important;
+    }
+    
+    .sao-rel-connector::before {
+        top: 0 !important;
+        bottom: 0 !important;
+        left: 50% !important;
+        width: 2px !important;
+        height: 100% !important;
+    }
+    
+    .sao-rel-connector-arrow {
+        transform: rotate(90deg) !important;
+    }
+}

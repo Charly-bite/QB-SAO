@@ -27,3 +27,7 @@ The architecture heavily leverages:
 - **Flask-WTF**: To provide robust CSRF protection across all form submissions.
 - **Flask-Limiter**: To protect the application from brute-force attacks and DoS attempts via rate limiting.
 
+
+
+---
+*Graph Context: Return to [[Home]] (Architecture)*

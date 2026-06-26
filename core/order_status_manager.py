@@ -343,7 +343,12 @@ class OrderStatusManager:
         self, sap_order: Dict[str, Any], imported_by: str = "system", save: bool = True
     ) -> Dict[str, Any]:
         """Import an order from SAP data without modifying SAP."""
-        self.reload_if_needed(force=True)
+        # Only force-reload when called individually (save=True).
+        # When called from bulk_import_from_sap (save=False), the caller
+        # already reloaded and will save after the loop — reloading here
+        # would overwrite in-memory changes from previous iterations.
+        if save:
+            self.reload_if_needed(force=True)
 
         order_id = str(sap_order.get("DocNum", sap_order.get("order_id", "")))
 

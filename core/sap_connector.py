@@ -893,9 +893,15 @@ class SAPHanaConnector:
             base_filter = f"T0.\"DocDate\" = '{date_str}'"
         else:
             base_filter = 'T0."DocDate" = CURRENT_DATE'
-        base_filter += """
+        base_filter += f"""
               AND (T1."TrnspName" NOT IN ('VENTA MOSTRADOR', 'VENTA DE MOSTRADOR', 'VENTAS MOSTRADOR') OR T1."TrnspName" IS NULL)
               AND T0."CardCode" != 'CL1662'
+              AND T0."CANCELED" != 'C'
+              AND NOT EXISTS (
+                  SELECT 1 FROM {self.schema}."NNM1" N1
+                  WHERE N1."Series" = T0."Series"
+                  AND N1."BeginStr" = 'FC'
+              )
         """
 
         if extra_invoice_numbers:
@@ -929,7 +935,7 @@ class SAPHanaConnector:
             sub_base = f"T0.\"DocDate\" = '{date_str}'"
         else:
             sub_base = 'T0."DocDate" = CURRENT_DATE'
-        sub_base += ' AND T0."CardCode" != \'CL1662\''
+        sub_base += f' AND T0."CardCode" != \'CL1662\' AND T0."CANCELED" != \'C\' AND NOT EXISTS (SELECT 1 FROM {self.schema}."NNM1" N1 WHERE N1."Series" = T0."Series" AND N1."BeginStr" = \'FC\')'
 
         subquery_filter = sub_base
         if extra_invoice_numbers:
