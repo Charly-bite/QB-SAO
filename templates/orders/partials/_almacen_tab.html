@@ -1,0 +1,171 @@
+<!-- Almacén y Logística Tab — Recibido & Entrega management -->
+<div x-show="activeTab === 'almacen'" x-cloak class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+
+    <!-- Action Bar -->
+    <div class="px-4 py-3 flex flex-wrap items-center gap-3 bg-gradient-to-r from-sky-50 to-white border-b border-slate-100">
+
+        <!-- No relación yet -->
+        <template x-if="!currentRelacion">
+            <p class="text-sm text-slate-400 italic">Genera una relación desde la pestaña de Facturas primero.</p>
+        </template>
+
+        <!-- Relación info -->
+        <template x-if="currentRelacion">
+            <div class="flex items-center gap-2">
+                <span class="text-sm font-bold text-slate-700">Relación:</span>
+                <span class="text-sm font-bold text-indigo-600" x-text="currentRelacion.folio"></span>
+            </div>
+        </template>
+
+        <div class="flex-1"></div>
+
+        <!-- Almacén progress -->
+        <template x-if="currentRelacion && currentRelacion.invoices && currentRelacion.invoices.length > 0">
+            <div class="flex items-center gap-3">
+                <!-- Recibido count -->
+                <div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold border"
+                    :class="currentRelacion.invoices.filter(i => i.recibido).length === currentRelacion.invoices.length 
+                        ? 'bg-blue-50 text-blue-700 border-blue-200' 
+                        : 'bg-slate-50 text-slate-600 border-slate-200'">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                    <span x-text="currentRelacion.invoices.filter(i => i.recibido).length + '/' + currentRelacion.invoices.length + ' Recibidos'"></span>
+                </div>
+                <!-- Entrega count -->
+                <div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold border"
+                    :class="currentRelacion.invoices.filter(i => i.entrega).length === currentRelacion.invoices.length 
+                        ? 'bg-green-50 text-green-700 border-green-200' 
+                        : 'bg-slate-50 text-slate-600 border-slate-200'">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    <span x-text="currentRelacion.invoices.filter(i => i.entrega).length + '/' + currentRelacion.invoices.length + ' Entregados'"></span>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <!-- Almacén Table -->
+    <template x-if="currentRelacion && currentRelacion.invoices && currentRelacion.invoices.length > 0">
+        <div class="overflow-x-auto">
+            <table class="w-full border-collapse text-sm">
+                <thead>
+                    <tr class="bg-slate-700 text-white">
+                        <th class="px-3 py-2 text-left font-bold text-xs">#</th>
+                        <th class="px-3 py-2 text-left font-bold text-xs">No. Factura</th>
+                        <th class="px-3 py-2 text-left font-bold text-xs">Cliente</th>
+                        <th class="px-3 py-2 text-right font-bold text-xs">Importe</th>
+                        <th class="px-3 py-2 text-center font-bold text-xs">Tipo de Envío</th>
+                        <th class="px-3 py-2 text-center font-bold text-xs">Crédito</th>
+                        <th class="px-3 py-2 text-center font-bold text-xs w-28">
+                            <div class="flex flex-col items-center gap-0.5">
+                                <span>Recibido</span>
+                            </div>
+                        </th>
+                        <th class="px-3 py-2 text-center font-bold text-xs w-28">
+                            <div class="flex flex-col items-center gap-0.5">
+                                <span>Entrega</span>
+                            </div>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="(inv, idx) in currentRelacion.invoices" :key="inv.invoice_number || idx">
+                        <tr class="border-b border-slate-100 transition-colors"
+                            :class="idx % 2 === 0 ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/50 hover:bg-slate-100/50'">
+                            <!-- # -->
+                            <td class="px-3 py-2.5 text-slate-500 text-xs font-medium" x-text="idx + 1"></td>
+                            <!-- No. Factura -->
+                            <td class="px-3 py-2.5 font-bold text-slate-800" x-text="inv.invoice_number || ''"></td>
+                            <!-- Cliente -->
+                            <td class="px-3 py-2.5 text-slate-700 text-xs" x-text="inv.customer_name || ''"></td>
+                            <!-- Importe -->
+                            <td class="px-3 py-2.5 text-right font-semibold text-slate-800 text-xs">
+                                <span x-text="'$' + Number(inv.total || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})"></span>
+                                <span class="text-slate-400 ml-1 text-[10px]" x-text="inv.currency || 'MXN'"></span>
+                            </td>
+                            <!-- Tipo de Envío -->
+                            <td class="px-3 py-2.5 text-center">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-600 border border-slate-200"
+                                    x-text="inv.observaciones || inv.nota || inv.shipping_type || 'LOCAL'">
+                                </span>
+                            </td>
+                            <!-- Autorización Crédito Status -->
+                            <td class="px-3 py-2.5 text-center">
+                                <template x-if="inv.credito_authorized">
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700 border border-green-200">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                        Autorizado
+                                    </span>
+                                </template>
+                                <template x-if="!inv.credito_authorized">
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-yellow-100 text-yellow-700 border border-yellow-200">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                        Pendiente
+                                    </span>
+                                </template>
+                            </td>
+                            <!-- Recibido -->
+                            <td class="px-3 py-2.5 text-center">
+                                <label class="inline-flex items-center gap-2 cursor-pointer select-none group">
+                                    <input type="checkbox" :checked="inv.recibido" 
+                                        @change="inv.recibido = $event.target.checked; toggleFactura(inv.invoice_number, 'recibido', inv.recibido)"
+                                        :disabled="!canEditFacturas"
+                                        class="w-5 h-5 rounded border-slate-300 text-sky-500 focus:ring-sky-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                                    <span class="text-xs font-medium transition-colors"
+                                        :class="inv.recibido ? 'text-sky-700' : 'text-slate-400'"
+                                        x-text="inv.recibido ? 'Sí' : 'No'"></span>
+                                </label>
+                            </td>
+                            <!-- Entrega -->
+                            <td class="px-3 py-2.5 text-center">
+                                <label class="inline-flex items-center gap-2 cursor-pointer select-none group">
+                                    <input type="checkbox" :checked="inv.entrega"
+                                        @change="inv.entrega = $event.target.checked; toggleFactura(inv.invoice_number, 'entrega', inv.entrega)"
+                                        :disabled="!canEditFacturas"
+                                        class="w-5 h-5 rounded border-slate-300 text-green-500 focus:ring-green-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                                    <span class="text-xs font-medium transition-colors"
+                                        :class="inv.entrega ? 'text-green-700' : 'text-slate-400'"
+                                        x-text="inv.entrega ? 'Sí' : 'No'"></span>
+                                </label>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+                <!-- Totals footer -->
+                <tfoot>
+                    <tr class="bg-slate-100 border-t-2 border-slate-300">
+                        <td colspan="3" class="px-3 py-2.5 text-right font-bold text-slate-700 text-xs uppercase">Total</td>
+                        <td class="px-3 py-2.5 text-right font-bold text-slate-800 text-sm"
+                            x-text="'$' + currentRelacion.invoices.reduce((s, i) => s + Number(i.total || 0), 0).toLocaleString('es-MX', {minimumFractionDigits: 2})">
+                        </td>
+                        <td></td>
+                        <td></td>
+                        <td class="px-3 py-2.5 text-center">
+                            <span class="text-xs font-bold" 
+                                :class="currentRelacion.invoices.filter(i => i.recibido).length === currentRelacion.invoices.length ? 'text-sky-600' : 'text-slate-400'"
+                                x-text="currentRelacion.invoices.filter(i => i.recibido).length + '/' + currentRelacion.invoices.length">
+                            </span>
+                        </td>
+                        <td class="px-3 py-2.5 text-center">
+                            <span class="text-xs font-bold"
+                                :class="currentRelacion.invoices.filter(i => i.entrega).length === currentRelacion.invoices.length ? 'text-green-600' : 'text-slate-400'"
+                                x-text="currentRelacion.invoices.filter(i => i.entrega).length + '/' + currentRelacion.invoices.length">
+                            </span>
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </template>
+
+    <!-- Empty state -->
+    <template x-if="!currentRelacion || !currentRelacion.invoices || currentRelacion.invoices.length === 0">
+        <div class="px-6 py-16 text-center">
+            <div class="flex flex-col items-center gap-3">
+                <svg class="w-12 h-12 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                </svg>
+                <p class="text-slate-500 font-medium">No hay facturas para gestionar</p>
+                <p class="text-sm text-slate-400">Genera una relación desde la pestaña de Facturas primero</p>
+            </div>
+        </div>
+    </template>
+</div>
