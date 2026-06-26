@@ -27,10 +27,8 @@
                 </tr>
                 <!-- Fila de Fecha -->
                 <tr class="bg-white">
-                    <th colspan="4" class="px-3 py-1 text-right text-xs font-bold text-slate-800 border border-slate-400 bg-[#D9D9D9]">Fecha:</th>
-                    <th colspan="6" class="px-3 py-1 text-center text-xs font-bold text-slate-800 border border-slate-400 bg-[#D9D9D9]" x-text="selectedDate.split('-').reverse().join('/')"></th>
-                    <th colspan="2" class="px-3 py-1 text-center text-[10px] font-bold text-slate-800 border border-slate-400 bg-[#D9D9D9]">Crédito y Cobranza</th>
-                    <th colspan="1" class="px-3 py-1 text-center text-[10px] font-bold text-slate-800 border border-slate-400 bg-[#D9D9D9]">Almacén y Logística</th>
+                    <th colspan="10" class="px-3 py-1 text-right text-xs font-bold text-slate-800 border border-slate-400 bg-[#D9D9D9]">Fecha:</th>
+                    <th colspan="4" class="px-3 py-1 text-center text-xs font-bold text-slate-800 border border-slate-400 bg-[#D9D9D9]" x-text="selectedDate.split('-').reverse().join('/')"></th>
                     <th class="border border-slate-400 hidden print:table-cell bg-[#D9D9D9]"></th>
                 </tr>
                 <!-- Encabezados de Columna -->
@@ -53,18 +51,6 @@
                     <th class="px-2 py-1.5 border border-slate-400 align-middle text-left">Cliente</th>
                     <th class="px-2 py-1.5 cursor-pointer hover:text-slate-600 border border-slate-400 align-middle text-center" @click="sortBy('total')">Importe</th>
                     <th class="px-2 py-1.5 border border-slate-400 align-middle w-56 text-left">Observación</th>
-                    <th class="px-1 py-1.5 border border-slate-400 align-middle">Crédito</th>
-                    <th class="px-1 py-1.5 border border-slate-400 align-middle">Contado</th>
-                    <th class="px-1 py-1.5 border border-slate-400 align-middle" title="Marcar/Desmarcar todas las entregas">
-                        <div class="flex flex-col items-center gap-0">
-                            <input type="checkbox" 
-                                :checked="invoices.filter(i => i.status !== 'Cancelada').every(i => i.entrega)"
-                                @change="batchToggleEntrega($event.target.checked)"
-                                :disabled="!canEditFacturas"
-                                class="w-3.5 h-3.5 text-amber-500 rounded focus:ring-amber-500 border-slate-400 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
-                            <span class="text-[9px] leading-none">Entrega</span>
-                        </div>
-                    </th>
                     <th class="px-2 py-1.5 hidden print:table-cell w-32 border border-slate-400 align-middle">Firma</th>
                 </tr>
             </thead>
@@ -230,23 +216,6 @@
                                 <div class="text-[10px] text-slate-400 mt-0.5 text-right font-normal" x-show="inv.warehouse" x-text="'📦 ' + formatWarehouse(inv.warehouse)"></div>
                             </td>
                             
-                            <!-- Crédito -->
-                            <td class="px-2 py-1.5 text-center font-bold border border-slate-400">
-                                <template x-if="inv.payment_terms && inv.payment_terms.toUpperCase() !== 'CONTADO'">
-                                    <span class="text-slate-800">X</span>
-                                </template>
-                            </td>
-                            <!-- Contado -->
-                            <td class="px-2 py-1.5 text-center border border-slate-400">
-                                <template x-if="inv.payment_terms && inv.payment_terms.toUpperCase() === 'CONTADO'">
-                                    <span class="font-bold text-slate-800">X</span>
-                                </template>
-                            </td>
-                            <!-- Entrega -->
-                            <td class="px-2 py-1.5 text-center border border-slate-400 relative">
-                                <input type="checkbox" x-model="inv.entrega" @change="toggleFactura(inv.invoice_number, 'entrega', inv.entrega)" :disabled="!canEditFacturas"
-                                    class="w-4 h-4 rounded border-slate-400 text-amber-500 focus:ring-amber-500 print:w-4 print:h-4 print:border-black print:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-all">
-                            </td>
                             <!-- Firma -->
                             <td class="px-3 py-1.5 hidden print:table-cell border border-slate-400"></td>
                         </tr>

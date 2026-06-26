@@ -97,3 +97,8 @@ class User(UserMixin):
     def can_sign_almacen(self):
         """Almacén (Warehouse) department boss — operator role or admin."""
         return self.role in [UserRole.ADMIN, UserRole.OPERATOR]
+
+    def can_authorize_credito(self):
+        """Crédito y Cobranza per-invoice authorization — who can approve shipments."""
+        return self.role in [UserRole.ADMIN, UserRole.BILLING]
+

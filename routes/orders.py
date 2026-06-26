@@ -3586,6 +3586,65 @@ def api_update_signature(folio):  # pragma: no cover
         return jsonify({"error": str(e)}), 500
 
 
+@orders_bp.route("/api/relaciones/<folio>/authorize", methods=["POST"])
+@login_required
+def api_authorize_invoice(folio):  # pragma: no cover
+    """Authorize or revoke authorization for a specific invoice in a relación.
+
+    The Crédito y Cobranza department must authorize each invoice before
+    it can be shipped. This is a per-invoice gate in the Relación de Envíos.
+    """
+    if not current_user.can_authorize_credito():
+        return jsonify({"error": "Solo Crédito y Cobranza puede autorizar envíos."}), 403
+
+    data = request.get_json() or {}
+    invoice_number = data.get("invoice_number")
+    authorized = data.get("authorized", True)
+
+    if not invoice_number:
+        return jsonify({"error": "Se requiere 'invoice_number'"}), 400
+
+    mgr = getattr(current_app, "relacion_mgr", None)
+    if not mgr:
+        return jsonify({"error": "Relacion manager not available"}), 500
+
+    try:
+        full_name = current_user.full_name or current_user.username
+        result = mgr.authorize_invoice(
+            folio, str(invoice_number), authorized, current_user.username, full_name
+        )
+
+        action_type = "CREDITO_AUTHORIZE" if authorized else "CREDITO_REVOKE"
+        _publish_event({
+            "type": "relacion_credito_changed",
+            "folio": folio,
+            "invoice_number": str(invoice_number),
+            "authorized": authorized,
+            "authorized_by": current_user.username,
+            "authorized_name": full_name,
+            "summary": result.get("summary", {}),
+        })
+
+        if hasattr(current_app, "audit_mgr"):
+            current_app.audit_mgr.log_action(
+                username=current_user.username if current_user.is_authenticated else "system",
+                action_type=action_type,
+                entity_id=f"{folio}/{invoice_number}",
+                details={
+                    "folio": folio,
+                    "invoice_number": str(invoice_number),
+                    "authorized": authorized,
+                }
+            )
+
+        return jsonify({"success": True, **result})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logging.error(f"Error authorizing invoice: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @orders_bp.route("/api/facturas/<int:invoice_number>/toggle", methods=["POST"])
 @login_required
 def toggle_factura_status(invoice_number):  # pragma: no cover

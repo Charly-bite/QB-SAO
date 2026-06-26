@@ -169,6 +169,7 @@
         canSignFacturacion: {{ 'true' if current_user.can_sign_facturacion() else 'false' }},
         canSignCredito: {{ 'true' if current_user.can_sign_credito() else 'false' }},
         canSignAlmacen: {{ 'true' if current_user.can_sign_almacen() else 'false' }},
+        canAuthorizarCredito: {{ 'true' if current_user.can_authorize_credito() else 'false' }},
         apiFacturasUrl: "{{ url_for('orders.api_facturas') }}",
         apiFacturasExportUrl: "{{ url_for('orders.api_facturas_export_custom') }}",
         ordersIndexUrl: "{{ url_for('orders.index') }}"
