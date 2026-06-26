@@ -47,6 +47,7 @@ function facturasApp() {
         canSignFacturacion: cfg.canSignFacturacion,
         canSignCredito: cfg.canSignCredito,
         canSignAlmacen: cfg.canSignAlmacen,
+        canAuthorizarCredito: cfg.canAuthorizarCredito || false,
         clientId: Math.random().toString(36).substring(2) + Date.now().toString(36),
         _suppressRelacionHighlight: false,
 
@@ -1895,6 +1896,85 @@ function facturasApp() {
 
         allSigned() {
             return !!this.signatures.facturacion && !!this.signatures.credito && !!this.signatures.almacen;
+        },
+
+        // ── Crédito y Cobranza Per-Invoice Authorization ──────────────────
+
+        isCredito(inv) {
+            return (inv.payment_terms || '').toUpperCase() !== 'CONTADO';
+        },
+
+        isContado(inv) {
+            return (inv.payment_terms || '').toUpperCase() === 'CONTADO';
+        },
+
+        getAuthCellClass(inv, type) {
+            const isApplicable = type === 'credito' ? this.isCredito(inv) : this.isContado(inv);
+            if (!isApplicable) return 'auth-cell-na';
+            if (inv.credito_authorized) return 'auth-cell-approved';
+            return 'auth-cell-pending';
+        },
+
+        getAuthTooltip(inv) {
+            if (!inv.credito_authorized) return 'Pendiente de autorización';
+            const name = inv.credito_authorized_name || inv.credito_authorized_by || '';
+            const at = inv.credito_authorized_at || '';
+            let dateStr = '';
+            if (at) {
+                try {
+                    const d = new Date(at);
+                    dateStr = d.toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
+                } catch(_) { dateStr = at; }
+            }
+            return `Autorizado por ${name}${dateStr ? ' el ' + dateStr : ''}`;
+        },
+
+        authorizationSummary() {
+            if (!this.currentRelacion || !this.currentRelacion.invoices) return { total: 0, authorized: 0, pending: 0 };
+            const invoices = this.currentRelacion.invoices;
+            const total = invoices.length;
+            const authorized = invoices.filter(i => i.credito_authorized).length;
+            return { total, authorized, pending: total - authorized };
+        },
+
+        async authorizeInvoice(inv, type) {
+            if (!this.currentRelacion || !this.currentRelacion.folio) return;
+            // Only the applicable column can be clicked
+            const isApplicable = type === 'credito' ? this.isCredito(inv) : this.isContado(inv);
+            if (!isApplicable) return;
+
+            if (!this.canAuthorizarCredito) {
+                alert('Solo el departamento de Crédito y Cobranza puede autorizar envíos.');
+                return;
+            }
+
+            const newValue = !inv.credito_authorized;
+
+            try {
+                const res = await fetch(`/orders/api/relaciones/${this.currentRelacion.folio}/authorize`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        invoice_number: inv.invoice_number,
+                        authorized: newValue,
+                    }),
+                });
+                const data = await res.json();
+                if (data.success && data.invoice) {
+                    // Update the local invoice data
+                    Object.assign(inv, data.invoice);
+                } else {
+                    alert(data.error || 'Error al autorizar factura');
+                }
+            } catch (e) {
+                console.error('Error authorizing invoice:', e);
+                // Optimistic update
+                inv.credito_authorized = newValue;
+                if (newValue) {
+                    inv.credito_authorized_name = this.currentUserFullName;
+                    inv.credito_authorized_at = new Date().toISOString();
+                }
+            }
         },
 
         async reprintRelacion(folio) {

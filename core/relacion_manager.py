@@ -395,6 +395,133 @@ class RelacionManager:
         rel = self.local_relaciones.get(folio, {})
         return rel.get("signatures", {})
 
+    # ── Per-Invoice Authorization (Crédito y Cobranza) ────────────────────
+
+    def authorize_invoice(
+        self,
+        folio: str,
+        invoice_number: str,
+        authorized: bool,
+        username: str,
+        full_name: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Authorize or revoke authorization for a specific invoice in a relación.
+
+        The Crédito y Cobranza department uses this to approve individual
+        invoices for shipping.  Each invoice gets an audit trail recording
+        who authorized it and when.
+
+        Args:
+            folio: The relación folio (e.g. RE-170626)
+            invoice_number: The invoice number to authorize
+            authorized: True to authorize, False to revoke
+            username: The username performing the action
+            full_name: Display name for the audit trail
+
+        Returns:
+            Dict with updated invoice and authorization summary
+        """
+        invoice_number = str(invoice_number)
+
+        # Get current relación
+        relacion = None
+        for rel_folio, rel_data in self.local_relaciones.items():
+            if rel_folio == folio:
+                relacion = rel_data
+                break
+
+        # Try SQL if not in local cache
+        if relacion is None and self.db_client.engine:
+            try:
+                with self.db_client.engine.connect() as conn:
+                    row = conn.exec_driver_sql(
+                        "SELECT invoices_json FROM seguimiento_relacion_envios WHERE folio = ?",
+                        [folio],
+                    ).fetchone()
+                    if row and row[0]:
+                        invoices = json.loads(row[0])
+                        relacion = {"invoices": invoices, "folio": folio}
+            except Exception as e:
+                logger.error(f"Error fetching relacion {folio} for auth: {e}")
+
+        if relacion is None:
+            raise ValueError(f"Relación {folio} no encontrada.")
+
+        invoices = relacion.get("invoices", [])
+        now = datetime.datetime.now().isoformat()
+        updated_invoice = None
+
+        for inv in invoices:
+            if str(inv.get("invoice_number")) == invoice_number:
+                if authorized:
+                    inv["credito_authorized"] = True
+                    inv["credito_authorized_by"] = username
+                    inv["credito_authorized_name"] = full_name or username
+                    inv["credito_authorized_at"] = now
+                else:
+                    inv["credito_authorized"] = False
+                    inv.pop("credito_authorized_by", None)
+                    inv.pop("credito_authorized_name", None)
+                    inv.pop("credito_authorized_at", None)
+                updated_invoice = inv
+                break
+
+        if updated_invoice is None:
+            raise ValueError(f"Factura {invoice_number} no encontrada en {folio}.")
+
+        # Persist updated invoices
+        invoices_json = json.dumps(invoices, ensure_ascii=False, default=str)
+
+        if self.db_client.engine:
+            try:
+                with self.db_client.engine.begin() as conn:
+                    conn.exec_driver_sql(
+                        """
+                        UPDATE seguimiento_relacion_envios
+                        SET invoices_json = ?, updated_at = GETDATE()
+                        WHERE folio = ?
+                        """,
+                        [invoices_json, folio],
+                    )
+            except Exception as e:  # pragma: no cover
+                logger.error(f"Error saving authorization for {folio}: {e}")
+
+        # Update local cache
+        if folio in self.local_relaciones:
+            self.local_relaciones[folio]["invoices"] = invoices
+            self._save_fallback()
+
+        action = "authorized" if authorized else "revoked"
+        logger.info(
+            f"Crédito {action}: invoice {invoice_number} on {folio} by {username}"
+        )
+
+        return {
+            "invoice": updated_invoice,
+            "summary": self.get_authorization_summary(folio),
+        }
+
+    def get_authorization_summary(self, folio: str) -> Dict[str, Any]:
+        """
+        Get authorization summary for a relación.
+
+        Returns:
+            Dict with total, authorized, and pending counts.
+        """
+        relacion = self.local_relaciones.get(folio)
+        if not relacion:
+            return {"total": 0, "authorized": 0, "pending": 0}
+
+        invoices = relacion.get("invoices", [])
+        total = len(invoices)
+        authorized = sum(1 for inv in invoices if inv.get("credito_authorized"))
+
+        return {
+            "total": total,
+            "authorized": authorized,
+            "pending": total - authorized,
+        }
 
     def get_used_invoice_numbers(self, date_str: str) -> Set[str]:
         """

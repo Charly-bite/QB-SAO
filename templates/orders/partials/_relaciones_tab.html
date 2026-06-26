@@ -29,6 +29,14 @@
         <!-- Spacer -->
         <div class="flex-1"></div>
 
+        <!-- Authorization progress badge -->
+        <template x-if="currentRelacion && currentRelacion.invoices && currentRelacion.invoices.length > 0">
+            <div class="auth-progress-badge" :class="authorizationSummary().pending === 0 ? 'complete' : 'incomplete'">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span x-text="authorizationSummary().authorized + '/' + authorizationSummary().total + ' Autorizados'"></span>
+            </div>
+        </template>
+
         <!-- Status badge -->
         <template x-if="currentRelacion">
             <div class="flex items-center gap-2">
@@ -140,9 +148,19 @@
                                 <td style="border: 1px solid #999; text-align: center; font-size: 12px; font-weight: bold; padding: 2px 5px;"
                                     x-text="inv.observaciones || inv.nota || inv.shipping_type || 'LOCAL'"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 12px; padding: 2px 5px;"
-                                    x-text="(() => { const pt = (inv.payment_terms || '').toUpperCase(); return pt !== 'CONTADO' ? 'X' : ''; })()"></td>
+                                    :class="getAuthCellClass(inv, 'credito')"
+                                    @click="authorizeInvoice(inv, 'credito')"
+                                    :title="isCredito(inv) ? getAuthTooltip(inv) : ''"
+                                    :style="{ cursor: canAuthorizarCredito && isCredito(inv) ? 'pointer' : (isCredito(inv) ? 'help' : 'default') }">
+                                    <span x-show="inv.credito_authorized && isCredito(inv)" class="auth-check">✓</span>
+                                </td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 12px; padding: 2px 5px;"
-                                    x-text="(() => { const pt = (inv.payment_terms || '').toUpperCase(); return pt === 'CONTADO' ? 'X' : ''; })()"></td>
+                                    :class="getAuthCellClass(inv, 'contado')"
+                                    @click="authorizeInvoice(inv, 'contado')"
+                                    :title="isContado(inv) ? getAuthTooltip(inv) : ''"
+                                    :style="{ cursor: canAuthorizarCredito && isContado(inv) ? 'pointer' : (isContado(inv) ? 'help' : 'default') }">
+                                    <span x-show="inv.credito_authorized && isContado(inv)" class="auth-check">✓</span>
+                                </td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 12px; padding: 2px 5px;"
                                     x-text="inv.recibido ? 'X' : ''"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 12px; padding: 2px 5px;"
@@ -198,8 +216,8 @@
                                 <td style="border: 1px solid #999; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 5px;" x-text="inv.customer_name || ''"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 11px; padding: 2px 5px;" x-text="'$' + Number(inv.total || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 5px;" x-text="inv.observaciones || inv.nota || inv.shipping_type || 'LOCAL'"></td>
-                                <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="(() => { const pt = (inv.payment_terms || '').toUpperCase(); return pt !== 'CONTADO' ? 'X' : ''; })()"></td>
-                                <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="(() => { const pt = (inv.payment_terms || '').toUpperCase(); return pt === 'CONTADO' ? 'X' : ''; })()"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" :class="getAuthCellClass(inv, 'credito')" @click="authorizeInvoice(inv, 'credito')" :title="isCredito(inv) ? getAuthTooltip(inv) : ''" :style="{ cursor: canAuthorizarCredito && isCredito(inv) ? 'pointer' : (isCredito(inv) ? 'help' : 'default') }"><span x-show="inv.credito_authorized && isCredito(inv)" class="auth-check">✓</span></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" :class="getAuthCellClass(inv, 'contado')" @click="authorizeInvoice(inv, 'contado')" :title="isContado(inv) ? getAuthTooltip(inv) : ''" :style="{ cursor: canAuthorizarCredito && isContado(inv) ? 'pointer' : (isContado(inv) ? 'help' : 'default') }"><span x-show="inv.credito_authorized && isContado(inv)" class="auth-check">✓</span></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="inv.recibido ? 'X' : ''"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="inv.entrega ? 'X' : ''"></td>
                             </tr>
@@ -262,8 +280,8 @@
                                 <td style="border: 1px solid #999; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 5px;" x-text="inv.customer_name || ''"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 11px; padding: 2px 5px;" x-text="'$' + Number(inv.total || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 5px;" x-text="inv.observaciones || inv.nota || inv.shipping_type || 'LOCAL'"></td>
-                                <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="(() => { const pt = (inv.payment_terms || '').toUpperCase(); return pt !== 'CONTADO' ? 'X' : ''; })()"></td>
-                                <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="(() => { const pt = (inv.payment_terms || '').toUpperCase(); return pt === 'CONTADO' ? 'X' : ''; })()"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" :class="getAuthCellClass(inv, 'credito')" @click="authorizeInvoice(inv, 'credito')" :title="isCredito(inv) ? getAuthTooltip(inv) : ''" :style="{ cursor: canAuthorizarCredito && isCredito(inv) ? 'pointer' : (isCredito(inv) ? 'help' : 'default') }"><span x-show="inv.credito_authorized && isCredito(inv)" class="auth-check">✓</span></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" :class="getAuthCellClass(inv, 'contado')" @click="authorizeInvoice(inv, 'contado')" :title="isContado(inv) ? getAuthTooltip(inv) : ''" :style="{ cursor: canAuthorizarCredito && isContado(inv) ? 'pointer' : (isContado(inv) ? 'help' : 'default') }"><span x-show="inv.credito_authorized && isContado(inv)" class="auth-check">✓</span></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="inv.recibido ? 'X' : ''"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="inv.entrega ? 'X' : ''"></td>
                             </tr>
@@ -326,8 +344,8 @@
                                 <td style="border: 1px solid #999; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 5px;" x-text="inv.customer_name || ''"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 11px; padding: 2px 5px;" x-text="'$' + Number(inv.total || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 5px;" x-text="inv.observaciones || inv.nota || inv.shipping_type || 'LOCAL'"></td>
-                                <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="(() => { const pt = (inv.payment_terms || '').toUpperCase(); return pt !== 'CONTADO' ? 'X' : ''; })()"></td>
-                                <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="(() => { const pt = (inv.payment_terms || '').toUpperCase(); return pt === 'CONTADO' ? 'X' : ''; })()"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" :class="getAuthCellClass(inv, 'credito')" @click="authorizeInvoice(inv, 'credito')" :title="isCredito(inv) ? getAuthTooltip(inv) : ''" :style="{ cursor: canAuthorizarCredito && isCredito(inv) ? 'pointer' : (isCredito(inv) ? 'help' : 'default') }"><span x-show="inv.credito_authorized && isCredito(inv)" class="auth-check">✓</span></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" :class="getAuthCellClass(inv, 'contado')" @click="authorizeInvoice(inv, 'contado')" :title="isContado(inv) ? getAuthTooltip(inv) : ''" :style="{ cursor: canAuthorizarCredito && isContado(inv) ? 'pointer' : (isContado(inv) ? 'help' : 'default') }"><span x-show="inv.credito_authorized && isContado(inv)" class="auth-check">✓</span></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="inv.recibido ? 'X' : ''"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="inv.entrega ? 'X' : ''"></td>
                             </tr>
