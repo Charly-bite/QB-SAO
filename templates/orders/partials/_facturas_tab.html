@@ -19,7 +19,6 @@
                         FACTURAS DEL DÍA
                         <span x-show="currentRelacion && currentRelacion.folio" class="ml-2 text-indigo-600" x-text="currentRelacion ? currentRelacion.folio : ''"></span>
                     </th>
-                    <th colspan="2" class="px-3 py-1.5 border border-slate-400"></th>
                     <th colspan="2" class="px-3 py-1.5 text-center text-xs font-bold text-slate-800 border border-slate-400">
                         QB-IT-VE-01-F06
                     </th>
@@ -27,7 +26,7 @@
                 </tr>
                 <!-- Fila de Fecha -->
                 <tr class="bg-white">
-                    <th colspan="10" class="px-3 py-1 text-right text-xs font-bold text-slate-800 border border-slate-400 bg-[#D9D9D9]">Fecha:</th>
+                    <th colspan="8" class="px-3 py-1 text-right text-xs font-bold text-slate-800 border border-slate-400 bg-[#D9D9D9]">Fecha:</th>
                     <th colspan="4" class="px-3 py-1 text-center text-xs font-bold text-slate-800 border border-slate-400 bg-[#D9D9D9]" x-text="selectedDate.split('-').reverse().join('/')"></th>
                     <th class="border border-slate-400 hidden print:table-cell bg-[#D9D9D9]"></th>
                 </tr>
@@ -60,7 +59,7 @@
                 <tbody class="divide-y divide-slate-100" :data-category="group.category" x-init="initGroupSortable($el, group.category)" x-show="group.invoices.length > 0" :class="{'has-selected': group.invoices.some(i => i._selected)}">
                     <!-- Dark Gray Separator Row -->
                     <tr class="border border-slate-400 ignore-elements" :style="group.category.startsWith('ANEXO') ? 'background-color: #b91c1c; color: white;' : 'background-color: #475569; color: white;'">
-                        <td colspan="14" class="px-4 py-1.5 border border-slate-400">
+                        <td colspan="11" class="px-4 py-1.5 border border-slate-400">
                             <div class="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
                                 <template x-if="group.category.startsWith('ANEXO')">
                                     <span class="flex items-center gap-1.5 text-red-100 font-extrabold">
@@ -111,8 +110,8 @@
                                 </div>
                             </td>
                             <!-- Checkbox -->
-                            <td class="px-2 py-1.5 border border-slate-400 text-center align-middle">
-                                <input type="checkbox" x-model="inv._selected" @click="handleCheck($event, inv)" @change="saveSelection()" :disabled="!canEditFacturas" class="w-4 h-4 text-amber-500 rounded focus:ring-amber-500 border-slate-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                            <td class="px-2 py-1.5 border border-slate-400 text-center align-middle cursor-pointer" @click.stop="if(canEditFacturas) { inv._selected = !inv._selected; handleCheck($event, inv); saveSelection(); }">
+                                <input type="checkbox" :checked="inv._selected" :disabled="!canEditFacturas" class="w-4 h-4 text-amber-500 rounded focus:ring-amber-500 border-slate-300 pointer-events-none disabled:opacity-50">
                             </td>
                             <!-- Posición -->
                             <td class="px-2 py-1.5 border border-slate-400 text-center align-middle font-bold text-slate-700 text-sm group">
@@ -197,10 +196,10 @@
                                         <option value="FORANEO">FORANEO</option>
                                     </select>
                                     
-                                    <div class="mt-0.5" @dblclick="if(canEditFacturas) editObservacion(inv)" title="Doble clic para editar nota">
+                                    <div class="mt-0.5" @click="if(canEditFacturas) editObservacion(inv)" title="Clic para editar nota">
                                         <template x-if="!inv._editing">
                                             <div class="w-full min-h-[1.5rem] px-1 py-0.5 bg-yellow-50 border border-yellow-200 rounded text-[11px] cursor-pointer" :class="!inv.observaciones ? 'text-slate-400 italic bg-slate-50 border-transparent' : 'text-slate-800'">
-                                                <span x-text="inv.observaciones || 'Doble clic para añadir nota'"></span>
+                                                <span x-text="inv.observaciones || 'Clic para añadir nota'"></span>
                                             </div>
                                         </template>
                                         <template x-if="inv._editing">
@@ -224,7 +223,7 @@
                       <tbody class="divide-y divide-slate-100">
                 <!-- Empty state -->
                 <tr x-show="filteredInvoices.length === 0 && !loading" style="display: none;">
-                    <td colspan="13" class="px-6 py-16 text-center">
+                    <td colspan="11" class="px-6 py-16 text-center">
                         <div class="flex flex-col items-center gap-3">
                             <svg class="w-12 h-12 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
@@ -238,7 +237,7 @@
 
                 <!-- Loading state -->
                 <tr x-show="loading && invoices.length === 0" style="display: none;">
-                    <td colspan="13" class="px-6 py-16 text-center">
+                    <td colspan="11" class="px-6 py-16 text-center">
                         <div class="flex flex-col items-center gap-3">
                             <svg class="w-8 h-8 text-amber-500 animate-spin" fill="none" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
