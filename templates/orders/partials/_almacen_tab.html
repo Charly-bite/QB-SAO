@@ -22,14 +22,6 @@
         <!-- Almacén progress -->
         <template x-if="currentRelacion && currentRelacion.invoices && currentRelacion.invoices.length > 0">
             <div class="flex items-center gap-3">
-                <!-- Recibido count -->
-                <div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold border"
-                    :class="currentRelacion.invoices.filter(i => i.recibido).length === currentRelacion.invoices.length 
-                        ? 'bg-blue-50 text-blue-700 border-blue-200' 
-                        : 'bg-slate-50 text-slate-600 border-slate-200'">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
-                    <span x-text="currentRelacion.invoices.filter(i => i.recibido).length + '/' + currentRelacion.invoices.length + ' Recibidos'"></span>
-                </div>
                 <!-- Entrega count -->
                 <div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold border"
                     :class="currentRelacion.invoices.filter(i => i.entrega).length === currentRelacion.invoices.length 
@@ -54,11 +46,6 @@
                         <th class="px-3 py-2 text-right font-bold text-xs">Importe</th>
                         <th class="px-3 py-2 text-center font-bold text-xs">Tipo de Envío</th>
                         <th class="px-3 py-2 text-center font-bold text-xs">Crédito</th>
-                        <th class="px-3 py-2 text-center font-bold text-xs w-28">
-                            <div class="flex flex-col items-center gap-0.5">
-                                <span>Recibido</span>
-                            </div>
-                        </th>
                         <th class="px-3 py-2 text-center font-bold text-xs w-28">
                             <div class="flex flex-col items-center gap-0.5">
                                 <span>Entrega</span>
@@ -102,18 +89,6 @@
                                     </span>
                                 </template>
                             </td>
-                            <!-- Recibido -->
-                            <td class="px-3 py-2.5 text-center">
-                                <label class="inline-flex items-center gap-2 cursor-pointer select-none group">
-                                    <input type="checkbox" :checked="inv.recibido" 
-                                        @change="inv.recibido = $event.target.checked; toggleFactura(inv.invoice_number, 'recibido', inv.recibido)"
-                                        :disabled="!canEditFacturas"
-                                        class="w-5 h-5 rounded border-slate-300 text-sky-500 focus:ring-sky-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all">
-                                    <span class="text-xs font-medium transition-colors"
-                                        :class="inv.recibido ? 'text-sky-700' : 'text-slate-400'"
-                                        x-text="inv.recibido ? 'Sí' : 'No'"></span>
-                                </label>
-                            </td>
                             <!-- Entrega -->
                             <td class="px-3 py-2.5 text-center">
                                 <label class="inline-flex items-center gap-2 cursor-pointer select-none group">
@@ -138,12 +113,6 @@
                         </td>
                         <td></td>
                         <td></td>
-                        <td class="px-3 py-2.5 text-center">
-                            <span class="text-xs font-bold" 
-                                :class="currentRelacion.invoices.filter(i => i.recibido).length === currentRelacion.invoices.length ? 'text-sky-600' : 'text-slate-400'"
-                                x-text="currentRelacion.invoices.filter(i => i.recibido).length + '/' + currentRelacion.invoices.length">
-                            </span>
-                        </td>
                         <td class="px-3 py-2.5 text-center">
                             <span class="text-xs font-bold"
                                 :class="currentRelacion.invoices.filter(i => i.entrega).length === currentRelacion.invoices.length ? 'text-green-600' : 'text-slate-400'"
