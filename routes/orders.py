@@ -481,6 +481,8 @@ def stream_web():
     _SUBSCRIBERS.append(q)
 
     def event_stream(local_q):
+        # Flush headers and establish SSE connection immediately
+        yield ": ok\n\n"
         try:
             while True:
                 try:
@@ -519,6 +521,20 @@ _EXTRA_STATUSES = [OrderStatus.CANCELLED.value, OrderStatus.ON_HOLD.value]
 def dashboard():  # pragma: no cover
     """Render the KPI dashboard"""
     return render_template("orders/dashboard.html")
+
+
+@orders_bp.route("/tiempos-tv")
+@login_required
+def tiempos_tv():
+    """Render the Tiempos de Atencion TV Mode"""
+    return render_template("orders/tiempos_tv.html")
+
+
+@orders_bp.route("/tiempos-tv-test")
+@login_required
+def tiempos_tv_test():
+    """Render the Tiempos de Atencion TV Test Audio Control Panel"""
+    return render_template("orders/tiempos_tv_test.html")
 
 
 @orders_bp.route("/api/dashboard-stats")
@@ -832,10 +848,12 @@ def update_status(order_id):
 
     order_mgr = current_app.order_status_mgr
 
+    # Capture original order to determine if status changed
+    original_order = order_mgr.get_order(order_id)
+
     # ── Business rule: block "Relacion de envio" without a factura ────
     if status_enum == OrderStatus.READY:  # "Relacion de envio"
-        order = order_mgr.get_order(order_id)
-        if order and not order.get("factura_number"):
+        if original_order and not original_order.get("factura_number"):
             return jsonify({
                 "error": "No se puede avanzar a 'Relación de envío' sin número de factura asignado en SAP."
             }), 422
@@ -853,16 +871,24 @@ def update_status(order_id):
                 "order_id": str(order_id),
                 "order": updated_order,
             })
-            if order and order.get("status") != status_enum.value:  # pragma: no cover
+            if original_order and original_order.get("status") != status_enum.value:
                 _publish_event({
                     "type": "status_changed",
                     "order_id": str(order_id),
-                    "customer": order.get("customer_name", ""),
-                    "from": order.get("status", ""),
+                    "customer": original_order.get("customer_name", ""),
+                    "from": original_order.get("status", ""),
                     "to": status_enum.value
                 })
-        except Exception:  # pragma: no cover
-            pass  # pragma: no cover
+        except Exception as e:
+            current_app.logger.warning(f"Ignored exception: {e}")
+            logging.error(f"SSE Broadcast Error: {e}")
+        if hasattr(current_app, "audit_mgr"):
+            current_app.audit_mgr.log_action(
+                username=current_user.username if current_user.is_authenticated else "system",
+                action_type="UPDATE_ORDER_STATUS",
+                entity_id=str(order_id),
+                details={"new_status": status_enum.value, "notes": notes}
+            )
 
     if result:
         return jsonify({"success": True, "order": result})
@@ -886,7 +912,7 @@ def import_from_sap():
     try:
         sap = current_app.sap_connector
         if not sap or not sap.connected:  # pragma: no cover
-            from sap_connector import SAPHanaConnector  # pragma: no cover
+            from core.sap_connector import SAPHanaConnector  # pragma: no cover
 
             sap = SAPHanaConnector()  # pragma: no cover
             sap.connect()  # pragma: no cover
@@ -1141,7 +1167,7 @@ def load_recent_from_sap():
     try:
         sap = current_app.sap_connector
         if not sap or not sap.connected:  # pragma: no cover
-            from sap_connector import SAPHanaConnector  # pragma: no cover
+            from core.sap_connector import SAPHanaConnector  # pragma: no cover
 
             sap = SAPHanaConnector()  # pragma: no cover
             sap.connect()  # pragma: no cover
@@ -1193,9 +1219,9 @@ def load_recent_from_sap():
 
             # Check if already exists
             if order_id in order_mgr.orders:
-                # Sync shipping_type from SAP (may have been missing on initial import)
+                # Sync shipping_type from SAP (always update to keep Mostrador filter accurate)
                 new_ship = flattened_order.get("shipping_type")
-                if new_ship and new_ship != "LOCAL":
+                if new_ship:
                     order_mgr.orders[order_id]["shipping_type"] = new_ship
 
                 # Update delivery note number if not present
@@ -1280,7 +1306,7 @@ def sync_sap_status():
     try:
         sap = current_app.sap_connector
         if not sap or not sap.connected:  # pragma: no cover
-            from sap_connector import SAPHanaConnector  # pragma: no cover
+            from core.sap_connector import SAPHanaConnector  # pragma: no cover
 
             sap = SAPHanaConnector()  # pragma: no cover
             sap.connect()  # pragma: no cover
@@ -1399,6 +1425,13 @@ def delete_order(order_id):
     order_mgr = current_app.order_status_mgr
 
     if order_mgr.delete_order(order_id):
+        if hasattr(current_app, "audit_mgr"):
+            current_app.audit_mgr.log_action(
+                username=current_user.username if current_user.is_authenticated else "system",
+                action_type="DELETE_ORDER",
+                entity_id=str(order_id),
+                details={}
+            )
         return jsonify({"success": True})
 
     return jsonify({"error": "Pedido no encontrado"}), 404
@@ -1415,7 +1448,7 @@ def visor_sync():
     try:
         sap = current_app.sap_connector
         if not sap or not sap.connected:  # pragma: no cover
-            from sap_connector import SAPHanaConnector  # pragma: no cover
+            from core.sap_connector import SAPHanaConnector  # pragma: no cover
 
             sap = SAPHanaConnector()  # pragma: no cover
             sap.connect()  # pragma: no cover
@@ -1467,10 +1500,10 @@ def visor_sync():
             if order_id in order_mgr.orders:
                 needs_update = False
 
-                # Sync shipping_type from SAP (may have been missing on initial import)
+                # Sync shipping_type from SAP (always update to keep Mostrador filter accurate)
                 new_ship = flattened_order.get("shipping_type")
-                if new_ship and new_ship != "LOCAL":
-                    cur_ship = order_mgr.orders[order_id].get("shipping_type", "LOCAL")
+                if new_ship:
+                    cur_ship = order_mgr.orders[order_id].get("shipping_type")
                     if cur_ship != new_ship:
                         order_mgr.orders[order_id]["shipping_type"] = new_ship
                         needs_update = True
@@ -1632,6 +1665,8 @@ def api_active_orders():
 def monitor():
     """Seller tracking panel — login required for role-based filtering.
     Sellers see only their own orders; managers/admins see all."""
+    if current_user.username.lower() == 'mostrador':
+        return render_template("orders/monitor_mostrador.html", now=datetime.datetime.now())
     return render_template("orders/monitor.html", now=datetime.datetime.now())
 
 
@@ -1793,7 +1828,7 @@ def public_api_sync():
     try:
         sap = current_app.sap_connector
         if not sap or not sap.connected:  # pragma: no cover
-            from sap_connector import SAPHanaConnector  # pragma: no cover
+            from core.sap_connector import SAPHanaConnector  # pragma: no cover
 
             sap = SAPHanaConnector()  # pragma: no cover
             sap.connect()  # pragma: no cover
@@ -1844,10 +1879,10 @@ def public_api_sync():
             if order_id in order_mgr.orders:
                 needs_update = False
 
-                # Sync shipping_type from SAP (may have been missing on initial import)
+                # Sync shipping_type from SAP (always update to keep Mostrador filter accurate)
                 new_ship = flattened_order.get("shipping_type")
-                if new_ship and new_ship != "LOCAL":
-                    cur_ship = order_mgr.orders[order_id].get("shipping_type", "LOCAL")
+                if new_ship:
+                    cur_ship = order_mgr.orders[order_id].get("shipping_type")
                     if cur_ship != new_ship:
                         order_mgr.orders[order_id]["shipping_type"] = new_ship
                         needs_update = True
@@ -1991,10 +2026,10 @@ def api_refresh_orders():
 
                                 needs_update = False
 
-                                # Sync shipping_type from SAP (may have been missing on initial import)
+                                # Sync shipping_type from SAP (always update to keep Mostrador filter accurate)
                                 new_ship = flattened.get("shipping_type")
-                                if new_ship and new_ship != "LOCAL":
-                                    cur_ship = order_mgr.orders[oid].get("shipping_type", "LOCAL")
+                                if new_ship:
+                                    cur_ship = order_mgr.orders[oid].get("shipping_type")
                                     if cur_ship != new_ship:
                                         order_mgr.orders[oid]["shipping_type"] = new_ship
                                         needs_update = True
@@ -2244,7 +2279,7 @@ def api_facturas():
     try:
         sap = current_app.sap_connector
         if not sap or not sap.connected:  # pragma: no cover
-            from sap_connector import SAPHanaConnector  # pragma: no cover
+            from core.sap_connector import SAPHanaConnector  # pragma: no cover
 
             sap = SAPHanaConnector()  # pragma: no cover
             sap.connect()  # pragma: no cover
@@ -2354,8 +2389,16 @@ def api_update_factura_category(invoice_number):  # pragma: no cover
             _publish_event({
                 "type": "factura_category_changed",
                 "invoice_number": invoice_number,
-                "category": data["category"]
+                "category": data["category"],
+                "client_id": data.get("client_id")
             })
+            if hasattr(current_app, "audit_mgr"):
+                current_app.audit_mgr.log_action(
+                    username=current_user.username if current_user.is_authenticated else "system",
+                    action_type="UPDATE_FACTURA_CATEGORY",
+                    entity_id=str(invoice_number),
+                    details={"category": data["category"]}
+                )
             return jsonify({"success": True})
         else:
             return jsonify({"success": False, "error": "Database error"}), 500
@@ -2382,8 +2425,16 @@ def api_update_factura_color(invoice_number):  # pragma: no cover
             _publish_event({
                 "type": "factura_color_changed",
                 "invoice_number": invoice_number,
-                "color": data["color"]
+                "color": data["color"],
+                "client_id": data.get("client_id")
             })
+            if hasattr(current_app, "audit_mgr"):
+                current_app.audit_mgr.log_action(
+                    username=current_user.username if current_user.is_authenticated else "system",
+                    action_type="UPDATE_FACTURA_COLOR",
+                    entity_id=str(invoice_number),
+                    details={"color": data["color"]}
+                )
             return jsonify({"success": True})
         else:
             return jsonify({"success": False, "error": "Database error"}), 500
@@ -2410,8 +2461,16 @@ def api_update_factura_customer_name(invoice_number):  # pragma: no cover
             _publish_event({
                 "type": "factura_customer_name_changed",
                 "invoice_number": invoice_number,
-                "customer_name": data["customer_name"]
+                "customer_name": data["customer_name"],
+                "client_id": data.get("client_id")
             })
+            if hasattr(current_app, "audit_mgr"):
+                current_app.audit_mgr.log_action(
+                    username=current_user.username if current_user.is_authenticated else "system",
+                    action_type="UPDATE_FACTURA_CUSTOMER",
+                    entity_id=str(invoice_number),
+                    details={"customer_name": data["customer_name"]}
+                )
             return jsonify({"success": True})
         else:
             return jsonify({"success": False, "error": "Database error"}), 500
@@ -2438,8 +2497,16 @@ def api_update_factura_manual_order():  # pragma: no cover
             _publish_event({
                 "type": "factura_manual_order_changed",
                 "date": data["date"],
-                "manual_order": data["manual_order"]
+                "manual_order": data["manual_order"],
+                "client_id": data.get("client_id")
             })
+            if hasattr(current_app, "audit_mgr"):
+                current_app.audit_mgr.log_action(
+                    username=current_user.username if current_user.is_authenticated else "system",
+                    action_type="UPDATE_FACTURA_ORDER",
+                    entity_id=data["date"],
+                    details={"order_count": len(data["manual_order"])}
+                )
             return jsonify({"success": True})
         else:
             return jsonify({"success": False, "error": "Database error"}), 500
@@ -2466,7 +2533,8 @@ def api_update_factura_extras():  # pragma: no cover
             _publish_event({
                 "type": "factura_extras_changed",
                 "date": data["date"],
-                "extra_invoices": data["extra_invoices"]
+                "extra_invoices": data["extra_invoices"],
+                "client_id": data.get("client_id")
             })
             return jsonify({"success": True})
         else:
@@ -2540,7 +2608,7 @@ def api_facturas_export():  # pragma: no cover
             
             pay_term = inv.get('payment_terms', '').upper()
             inv['credito'] = "X" if pay_term != 'CONTADO' else ""
-            inv['pagado'] = "X" if float(inv.get('paid_to_date', 0)) >= float(inv.get('total', 0)) and float(inv.get('total', 0)) > 0 else ""
+            inv['pagado'] = "X" if pay_term == 'CONTADO' else ""
             
             inv['nota'] = order.get('observaciones', '') if order and order.get('observaciones') else (inv.get('shipping_type') or 'LOCAL')
 
@@ -2917,13 +2985,7 @@ def api_facturas_export_custom():  # pragma: no cover
                     
                 pay_term = inv.get('payment_terms', '').upper()
                 is_credito = "X" if pay_term != 'CONTADO' else ""
-                
-                try:
-                    paid = float(inv.get('paid_to_date') or 0)
-                    tot = float(inv.get('total') or 0)
-                    is_pagado = "X" if paid >= tot and tot > 0 else ""
-                except ValueError:
-                    is_pagado = ""
+                is_pagado = "X" if pay_term == 'CONTADO' else ""
 
                 data = [
                     inv.get('order_number', ''),
@@ -3002,14 +3064,19 @@ def api_create_or_update_relacion():  # pragma: no cover
     invoices = data.get("invoices", [])
     notes = data.get("notes", "")
 
-    if not invoices:
-        return jsonify({"error": "No se proporcionaron facturas"}), 400
+    # Allow empty invoices (user might uncheck all of them)
+    # if not invoices:
+    #     return jsonify({"error": "No se proporcionaron facturas"}), 400
 
     mgr = getattr(current_app, "relacion_mgr", None)
     if not mgr:
         return jsonify({"error": "Relacion manager not available"}), 500
 
     try:
+        old_relacion = mgr.get_relacion(date_str)
+        old_invoices_set = set(str(i.get("invoice_number")) for i in old_relacion.get("invoices", [])) if old_relacion else set()
+        new_invoices_set = set(str(i.get("invoice_number", i.get("id"))) for i in invoices)
+
         relacion = mgr.create_or_update_relacion(
             date_str, invoices, current_user.username, notes=notes
         )
@@ -3017,12 +3084,93 @@ def api_create_or_update_relacion():  # pragma: no cover
             "type": "relacion_updated",
             "folio": relacion["folio"],
             "date": date_str,
+            "username": current_user.username if current_user.is_authenticated else "system",
+            "client_id": data.get("client_id"),
         })
+        if hasattr(current_app, "audit_mgr"):
+            added = list(new_invoices_set - old_invoices_set)
+            removed = list(old_invoices_set - new_invoices_set)
+            
+            # Solo registrar si hubo cambios reales en las facturas
+            if added or removed or not old_relacion:
+                current_app.audit_mgr.log_action(
+                    username=current_user.username if current_user.is_authenticated else "system",
+                    action_type="UPDATE_RELACION",
+                    entity_id=relacion["folio"],
+                    details={
+                        "date": date_str, 
+                        "invoice_count": len(invoices),
+                        "added": added,
+                        "removed": removed
+                    }
+                )
         return jsonify({"success": True, "relacion": relacion})
     except ValueError as e:
         return jsonify({"error": str(e)}), 409
     except Exception as e:
         logging.error(f"Error creating relacion: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@orders_bp.route("/api/relaciones/toggle", methods=["POST"])
+@login_required
+def api_toggle_relacion_invoice():  # pragma: no cover
+    """Toggle a single invoice in the relación for a date (add or remove)."""
+    if not current_user.can_edit_facturas():
+        return jsonify({"error": "Sin permisos"}), 403
+
+    data = request.get_json() or {}
+    date_str = data.get("date")
+    invoice_number = data.get("invoice_number") or data.get("invoice_numbers")
+    selected = data.get("selected")
+    invoice_data = data.get("invoice_data")
+    manual_order = data.get("manual_order")
+
+    if not date_str or (invoice_number is None and manual_order is None):
+        return jsonify({"error": "Faltan parámetros requeridos (date)"}), 400
+
+    if invoice_number is None:
+        invoice_number = []
+
+    mgr = getattr(current_app, "relacion_mgr", None)
+    if not mgr:
+        return jsonify({"error": "Relacion manager not available"}), 500
+
+    try:
+        relacion = mgr.toggle_invoice_in_relacion(
+            date_str=date_str,
+            invoice_numbers=invoice_number,
+            selected=bool(selected),
+            invoice_data=invoice_data,
+            username=current_user.username,
+            manual_order=manual_order
+        )
+
+        _publish_event({
+            "type": "relacion_updated",
+            "folio": relacion["folio"],
+            "date": date_str,
+            "username": current_user.username if current_user.is_authenticated else "system",
+            "client_id": data.get("client_id"),
+        })
+
+        if hasattr(current_app, "audit_mgr"):
+            action_desc = "ADD_TO_RELACION" if selected else "REMOVE_FROM_RELACION"
+            current_app.audit_mgr.log_action(
+                username=current_user.username if current_user.is_authenticated else "system",
+                action_type=action_desc,
+                entity_id=relacion["folio"],
+                details={
+                    "date": date_str,
+                    "invoice_number": invoice_number,
+                }
+            )
+
+        return jsonify({"success": True, "relacion": relacion})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 409
+    except Exception as e:
+        logging.error(f"Error toggling invoice in relacion: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -3078,6 +3226,14 @@ def api_export_relacion(folio):  # pragma: no cover
     invoices = relacion.get("invoices", [])
     if not invoices:
         return jsonify({"error": "La relación no tiene facturas"}), 400
+
+    # Sort invoices by manual order if available to preserve visual row position
+    metadata_mgr = getattr(current_app, "factura_metadata_mgr", None)
+    if metadata_mgr:
+        manual_order = metadata_mgr.get_daily_order(date_str)
+        if manual_order:
+            order_map = {str(num): idx for idx, num in enumerate(manual_order)}
+            invoices = sorted(invoices, key=lambda inv: order_map.get(str(inv.get("invoice_number")), 999999))
 
     try:
         display_date = d.strftime("%d/%m/%Y")
@@ -3230,7 +3386,7 @@ def api_export_relacion(folio):  # pragma: no cover
                 pay_term = inv.get('payment_terms', '').upper()
                 credito = "X" if pay_term != 'CONTADO' else ""
                 total = float(inv.get('total', 0))
-                pagado = "X" if float(inv.get('paid_to_date', 0)) >= total and total > 0 else ""
+                pagado = "X" if pay_term == 'CONTADO' else ""
                 recibido = "X" if inv.get('recibido') else ""
                 entrega = "X" if inv.get('entrega') else ""
                 nota = inv.get('observaciones', '') or inv.get('nota', '') or (inv.get('shipping_type') or 'LOCAL')
@@ -3357,6 +3513,13 @@ def api_cerrar_dia():  # pragma: no cover
             "next_day": result.get("next_business_day"),
             "rolled": result.get("rolled_invoices", 0),
         })
+        if hasattr(current_app, "audit_mgr"):
+            current_app.audit_mgr.log_action(
+                username=current_user.username if current_user.is_authenticated else "system",
+                action_type="CERRAR_DIA",
+                entity_id=folio,
+                details={"date": date_str, "rolled": result.get("rolled_invoices", 0)}
+            )
         return jsonify({"success": True, **result})
     except Exception as e:
         logging.error(f"Error cerrando día: {e}")
@@ -3403,6 +3566,18 @@ def api_update_signature(folio):  # pragma: no cover
         signatures = mgr.save_signatures(
             folio, area, action, current_user.username, full_name
         )
+        _publish_event({
+            "type": "relacion_signature_changed",
+            "folio": folio,
+            "signatures": signatures
+        })
+        if hasattr(current_app, "audit_mgr"):
+            current_app.audit_mgr.log_action(
+                username=current_user.username if current_user.is_authenticated else "system",
+                action_type=f"SIGNATURE_{action.upper()}",
+                entity_id=folio,
+                details={"area": area}
+            )
         return jsonify({"success": True, "signatures": signatures})
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -3448,6 +3623,19 @@ def toggle_factura_status(invoice_number):  # pragma: no cover
     elif field == 'observaciones':
         related_order['observaciones'] = str(value)
         order_mgr.save_database()
+        _publish_event({
+            "type": "factura_observaciones_changed",
+            "invoice_number": invoice_number,
+            "observaciones": str(value),
+            "client_id": data.get("client_id"),
+        })
+        if hasattr(current_app, "audit_mgr"):
+            current_app.audit_mgr.log_action(
+                username=current_user.username if current_user.is_authenticated else "system",
+                action_type="UPDATE_FACTURA_OBSERVACIONES",
+                entity_id=str(invoice_number),
+                details={"observaciones": str(value)}
+            )
         return jsonify({"success": True})
 
     success = order_mgr.update_status(
@@ -3461,6 +3649,7 @@ def toggle_factura_status(invoice_number):  # pragma: no cover
                 "type": "order_updated",
                 "order_id": str(order_id),
                 "order": updated_order,
+                "client_id": data.get("client_id"),
             })
             if current_status != new_status:
                 _publish_event({
@@ -3472,6 +3661,15 @@ def toggle_factura_status(invoice_number):  # pragma: no cover
                 })
         except Exception as e:
             current_app.logger.warning(f"Ignored exception: {e}")
+            
+        if hasattr(current_app, "audit_mgr"):
+            current_app.audit_mgr.log_action(
+                username=current_user.username if current_user.is_authenticated else "system",
+                action_type=f"TOGGLE_FACTURA_{field.upper()}",
+                entity_id=str(invoice_number),
+                details={"value": value, "new_status": new_status}
+            )
+            
         return jsonify({"success": True, "new_status": new_status})
     
     return jsonify({"error": "Error al actualizar estado"}), 500
@@ -3585,4 +3783,27 @@ def api_invoice_relationship_map(invoice_number):
             }
         }
     })
+
+@orders_bp.route("/auditoria")
+@login_required
+def render_auditoria():
+    from core.user_manager import UserRole
+    if not current_user.has_role(UserRole.ADMIN):
+        return render_template("errors/403.html"), 403
+    return render_template("orders/auditoria.html", user=current_user)
+
+@orders_bp.route("/api/audit-logs")
+@login_required
+def api_audit_logs():
+    from core.user_manager import UserRole
+    if not current_user.has_role(UserRole.ADMIN):
+        return jsonify({"error": "No autorizado"}), 403
+    
+    limit = request.args.get("limit", 1000, type=int)
+    
+    if hasattr(current_app, "audit_mgr"):
+        logs = current_app.audit_mgr.get_logs(limit=limit)
+        return jsonify({"success": True, "logs": logs})
+        
+    return jsonify({"error": "Módulo de auditoría no disponible"}), 500
 

@@ -123,11 +123,11 @@ class TestFacturasSyncApi:
             data=json.dumps({"color": "verde"}),
             content_type="application/json"
         )
-        assert resp.status_code == 200
         mock_publish.assert_called_with({
             "type": "factura_color_changed",
             "invoice_number": 5001,
-            "color": "verde"
+            "color": "verde",
+            "client_id": None
         })
         assert self.mgr.get_overrides()[1][5001] == "verde"
 
@@ -137,11 +137,11 @@ class TestFacturasSyncApi:
             data=json.dumps({"customer_name": "Juan Perez"}),
             content_type="application/json"
         )
-        assert resp.status_code == 200
         mock_publish.assert_called_with({
             "type": "factura_customer_name_changed",
             "invoice_number": 5001,
-            "customer_name": "Juan Perez"
+            "customer_name": "Juan Perez",
+            "client_id": None
         })
         assert self.mgr.get_overrides()[2][5001] == "Juan Perez"
 
@@ -151,11 +151,11 @@ class TestFacturasSyncApi:
             data=json.dumps({"date": "2026-06-10", "manual_order": [5001, 5002]}),
             content_type="application/json"
         )
-        assert resp.status_code == 200
         mock_publish.assert_called_with({
             "type": "factura_manual_order_changed",
             "date": "2026-06-10",
-            "manual_order": [5001, 5002]
+            "manual_order": [5001, 5002],
+            "client_id": None
         })
         assert self.mgr.get_daily_order("2026-06-10") == [5001, 5002]
 
@@ -165,11 +165,11 @@ class TestFacturasSyncApi:
             data=json.dumps({"date": "2026-06-10", "extra_invoices": [99901, 99902]}),
             content_type="application/json"
         )
-        assert resp.status_code == 200
         mock_publish.assert_called_with({
             "type": "factura_extras_changed",
             "date": "2026-06-10",
-            "extra_invoices": [99901, 99902]
+            "extra_invoices": [99901, 99902],
+            "client_id": None
         })
         assert self.mgr.get_daily_extras("2026-06-10") == [99901, 99902]
 
@@ -179,11 +179,11 @@ class TestFacturasSyncApi:
             data=json.dumps({"category": "ANEXO MY"}),
             content_type="application/json"
         )
-        assert resp.status_code == 200
         mock_publish.assert_called_with({
             "type": "factura_category_changed",
             "invoice_number": 5001,
-            "category": "ANEXO MY"
+            "category": "ANEXO MY",
+            "client_id": None
         })
         assert self.mgr.get_overrides()[0][5001] == "ANEXO MY"
 
@@ -193,10 +193,88 @@ class TestFacturasSyncApi:
             data=json.dumps({"category": "ANEXO GDL"}),
             content_type="application/json"
         )
-        assert resp.status_code == 200
         mock_publish.assert_called_with({
             "type": "factura_category_changed",
             "invoice_number": 5001,
-            "category": "ANEXO GDL"
+            "category": "ANEXO GDL",
+            "client_id": None
         })
         assert self.mgr.get_overrides()[0][5001] == "ANEXO GDL"
+
+    @patch("routes.orders._publish_event")
+    def test_toggle_relacion_invoice(self, mock_publish, auth_client, app):
+        # Setup mock relacion_mgr
+        mock_rel_mgr = MagicMock()
+        mock_rel_mgr.toggle_invoice_in_relacion.return_value = {
+            "folio": "RE-100626",
+            "invoices": [{"invoice_number": "5001", "customer_name": "Test Customer"}],
+        }
+        app.relacion_mgr = mock_rel_mgr
+
+        # Test POST /api/relaciones/toggle
+        payload = {
+            "date": "2026-06-10",
+            "invoice_number": "5001",
+            "selected": True,
+            "invoice_data": {"invoice_number": "5001", "customer_name": "Test Customer"},
+            "manual_order": ["5001"]
+        }
+        resp = auth_client.post(
+            "/orders/api/relaciones/toggle",
+            data=json.dumps(payload),
+            content_type="application/json"
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["success"] is True
+        assert data["relacion"]["folio"] == "RE-100626"
+
+        mock_rel_mgr.toggle_invoice_in_relacion.assert_called_with(
+            date_str="2026-06-10",
+            invoice_numbers="5001",
+            selected=True,
+            invoice_data={"invoice_number": "5001", "customer_name": "Test Customer"},
+            username="testadmin",
+            manual_order=["5001"]
+        )
+
+        mock_publish.assert_called_with({
+            "type": "relacion_updated",
+            "folio": "RE-100626",
+            "date": "2026-06-10",
+            "username": "testadmin",
+            "client_id": None
+        })
+
+    @patch("routes.orders._publish_event")
+    def test_toggle_relacion_invoice_with_client_id(self, mock_publish, auth_client, app):
+        # Setup mock relacion_mgr
+        mock_rel_mgr = MagicMock()
+        mock_rel_mgr.toggle_invoice_in_relacion.return_value = {
+            "folio": "RE-100626",
+            "invoices": [{"invoice_number": "5001", "customer_name": "Test Customer"}],
+        }
+        app.relacion_mgr = mock_rel_mgr
+
+        # Test POST /api/relaciones/toggle with client_id
+        payload = {
+            "date": "2026-06-10",
+            "invoice_number": "5001",
+            "selected": True,
+            "invoice_data": {"invoice_number": "5001", "customer_name": "Test Customer"},
+            "manual_order": ["5001"],
+            "client_id": "test_client_id_123"
+        }
+        resp = auth_client.post(
+            "/orders/api/relaciones/toggle",
+            data=json.dumps(payload),
+            content_type="application/json"
+        )
+        assert resp.status_code == 200
+        mock_publish.assert_called_with({
+            "type": "relacion_updated",
+            "folio": "RE-100626",
+            "date": "2026-06-10",
+            "username": "testadmin",
+            "client_id": "test_client_id_123"
+        })

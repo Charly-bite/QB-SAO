@@ -1,0 +1,45 @@
+<!-- Context Menu Partial — Right-click menu for invoice rows -->
+<div x-show="contextMenuShow" 
+     class="sao-context-menu"
+     :style="`left: ${contextMenuX}px; top: ${contextMenuY}px;`"
+     @click.away="contextMenuShow = false"
+     x-cloak>
+    
+    <!-- Header info -->
+    <div class="sao-context-menu-header">
+        <p style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">Factura Seleccionada</p>
+        <p style="font-size: 14px; font-weight: 800; color: #334155; margin: 2px 0 0 0;" x-text="selectedInvoiceForMenu ? 'Factura #' + selectedInvoiceForMenu.invoice_number : ''"></p>
+    </div>
+
+    <!-- Menu Options -->
+    <div class="sao-context-menu-options">
+        <!-- Ver Mapa de Relaciones -->
+        <button @click="openRelationshipMap(selectedInvoiceForMenu.invoice_number)"
+                class="sao-context-menu-item">
+            <svg style="width: 16px; height: 16px; color: #64748b;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 01.553-.894L9 2m0 18l6-3m-6 3V2m6 15l5.447 2.724A1 1 0 0021 18.82V8.058a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 2"/>
+            </svg>
+            <span>Mapa de Relaciones (SAP)</span>
+        </button>
+
+        <!-- Ver Pedido Relacionado -->
+        <template x-if="selectedInvoiceForMenu && selectedInvoiceForMenu.order_number">
+            <a :href="`/orders/` + selectedInvoiceForMenu.order_number"
+               class="sao-context-menu-item">
+                <svg style="width: 16px; height: 16px; color: #64748b;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                </svg>
+                <span>Ver Pedido Local <span x-text="'#' + selectedInvoiceForMenu.order_number"></span></span>
+            </a>
+        </template>
+
+        <!-- Copiar No. de Factura -->
+        <button @click="navigator.clipboard.writeText(selectedInvoiceForMenu.invoice_number); contextMenuShow = false;"
+                class="sao-context-menu-item">
+            <svg style="width: 16px; height: 16px; color: #64748b;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/>
+            </svg>
+            <span>Copiar No. de Factura</span>
+        </button>
+    </div>
+</div>

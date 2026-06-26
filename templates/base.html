@@ -451,6 +451,16 @@
                                 </svg>
                                 Usuarios
                             </a>
+                            <a
+                                href="{{ url_for('orders.render_auditoria') }}"
+                                class="qb-nav-link {% if request.endpoint == 'orders.render_auditoria' %}active-amber{% endif %}"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                Auditoría
+                            </a>
                             {% endif %}
                             {% endif %}
                         </div>
@@ -605,6 +615,30 @@
             })();
         </script>
         
+        {% if current_user.is_authenticated and current_user.username|lower == 'mostrador' %}
+        <!-- Global keyboard shortcuts (e.g. CTRL+C to sign out) -->
+        <script>
+            (function() {
+                window.addEventListener('keydown', function(e) {
+                    if (e.altKey && e.key.toLowerCase() === 'c') {
+                        // Avoid triggering if copying text in an input or textarea
+                        const activeEl = document.activeElement;
+                        const isInput = activeEl && (
+                            activeEl.tagName === 'INPUT' || 
+                            activeEl.tagName === 'TEXTAREA' || 
+                            activeEl.isContentEditable
+                        );
+                        if (!isInput) {
+                            e.preventDefault();
+                            console.log("🔒 Sign out triggered via Ctrl+C shortcut.");
+                            window.location.href = "{{ url_for('auth.logout') }}";
+                        }
+                    }
+                });
+            })();
+        </script>
+        {% endif %}
+        
         <!-- Global Notifications App -->
         <div class="qb-toast-container" id="qbGlobalToastContainer">        </div>
 
@@ -621,6 +655,8 @@
                 loadingMessage: 'CARGANDO...',
                 _audioCtx: null,
                 _soundEnabled: true,
+                isMostrador: {{ 'true' if current_user.is_authenticated and current_user.username|lower == 'mostrador' else 'false' }},
+                isTiemposTv: {{ 'true' if request.endpoint in ['orders.tiempos_tv', 'orders.tiempos_tv_test'] or 'tiempos-tv' in request.path else 'false' }},
                 sapOnline: {{ 'true' if sap_available else 'false' }},
                 sgaOnline: {{ 'true' if sga_available else 'false' }},
                 theme: localStorage.getItem('theme') || 'light',
@@ -630,6 +666,10 @@
                 },
                 
                 init() {
+                    if (this.isTiemposTv) {
+                        console.log("📺 On waiting times TV screen: disabling global SSE notifications and sound.");
+                        return;
+                    }
                     this.setupGlobalSSE();
                     setInterval(() => this.checkSystemsHealth(), 30000);
 
@@ -670,7 +710,7 @@
                         // Emit raw SSE data so child pages don't need their own SSE connection
                         window.dispatchEvent(new CustomEvent('sse-message', { detail: data }));
                         
-                        if (data.type === 'sync_completed' || data.type === 'order_updated') {
+                        if (data.type === 'sync_completed') {
                             // Tell current page to refresh its data
                             window.dispatchEvent(new CustomEvent('refresh-data'));
                         }
@@ -690,13 +730,8 @@
                 },
                 
                 _playNotificationSound() {
-                    if (!this._soundEnabled) return;
-                    try {
-                        const audio = new Audio("{{ url_for('static', filename='nokia.wav') }}");
-                        audio.play().catch(e => console.warn('Could not play notification sound:', e));
-                    } catch (e) {
-                        console.warn('Could not play notification sound:', e);
-                    }
+                    // Nokia notification sound disabled globally by user request
+                    return;
                 },
                 
                 _showStatusToast(change) {

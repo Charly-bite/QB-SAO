@@ -1,0 +1,1666 @@
+{% extends "base.html" %}
+
+{% block title %}QB-SAO — Monitor{% endblock %}
+{% block page_title %}Monitor de estado en tiempo real{% endblock %}
+
+{% block extra_head %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/design_tokens.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/monitor.css') }}">
+    
+    <style>
+        /* Hide everything except the cards container */
+        .qb-nav,
+        .qb-breadcrumbs,
+        .qb-page-title,
+        .monitor-controls-bar,
+        .kpi-bar,
+        .search-bar,
+        .pagination-bar,
+        .qb-toast-container,
+        .qb-flash,
+        .qb-loading-overlay,
+        div[x-show="!sapOnline || !sgaOnline"] {
+            display: none !important;
+        }
+
+        /* Expand body and content container to use all screen space */
+        @keyframes mostrador-gradient {
+            0%   { background-position: 0%   50%; }
+            25%  { background-position: 100% 50%; }
+            50%  { background-position: 100% 0%;  }
+            75%  { background-position: 0%   100%; }
+            100% { background-position: 0%   50%; }
+        }
+        /* Override --bg-body so inline style resolves to "none" */
+        :root {
+            --bg-body: none !important;
+        }
+        body {
+            background-color: #1e3a8a !important;
+            background-image: linear-gradient(135deg, #1e3a8a, #1d4ed8, #2563eb, #3b82f6, #1d4ed8, #1e3a8a) !important;
+            background-size: 400% 400% !important;
+            animation: mostrador-gradient 18s ease infinite !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            overflow: hidden !important;
+            height: 100vh !important;
+            font-family: var(--font-sans) !important;
+        }
+        main.max-w-7xl {
+            max-width: 100% !important;
+            padding: var(--spacing-4) !important;
+            margin: 0 !important;
+            height: 100vh !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+            background: transparent !important;
+            display: flex !important;
+            flex-direction: column !important;
+        }
+        .orders-container {
+            max-width: 100% !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            flex: 1 !important;
+            min-height: 0 !important;
+            display: flex !important;
+            flex-direction: column !important;
+        }
+
+        /* Order Cards Grid adjustments */
+        .orders-grid {
+            display: grid !important;
+            gap: var(--spacing-4) !important;
+            width: 100% !important;
+            flex: 1 !important;
+            min-height: 0 !important;
+            box-sizing: border-box !important;
+        }
+
+        /* Order Card Scaling - glassmorphism on gradient */
+        .order-card {
+            padding: var(--spacing-6) !important;
+            border-radius: var(--radius-xl) !important;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35),
+                        0 0 0 1px rgba(255, 255, 255, 0.12) !important;
+            background: rgba(255, 255, 255, 0.12) !important;
+            backdrop-filter: blur(16px) !important;
+            -webkit-backdrop-filter: blur(16px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.25) !important;
+            height: 100% !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: center !important;
+            align-items: center !important;
+            transition: var(--transition-normal) !important;
+        }
+        .order-card:hover {
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4),
+                        0 0 0 1px rgba(255, 255, 255, 0.2),
+                        0 0 24px rgba(59, 130, 246, 0.3) !important;
+            background: rgba(255, 255, 255, 0.18) !important;
+            transform: translateY(-3px) !important;
+        }
+
+        /* ── Bank Ticket Styles ── */
+        .bank-ticket-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-evenly;
+            padding: var(--spacing-3) !important;
+            text-align: center;
+            height: 100% !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+        }
+        .bank-ticket-number {
+            font-size: clamp(36px, 7.5vh, 100px) !important;
+            font-weight: var(--font-weight-bold) !important;
+            line-height: 1 !important;
+            color: #ffffff !important;
+            font-family: var(--font-sans) !important;
+            letter-spacing: -2px !important;
+            margin: 0 !important;
+            text-shadow: 0 2px 16px rgba(0, 0, 0, 0.4) !important;
+        }
+        .bank-ticket-hash {
+            color: rgba(255, 255, 255, 0.55) !important;
+            font-size: clamp(24px, 5vh, 60px) !important;
+            margin-right: 2px !important;
+        }
+        .bank-ticket-status {
+            font-size: clamp(14px, 2.6vh, 32px) !important;
+            font-weight: var(--font-weight-bold) !important;
+            text-transform: uppercase !important;
+            padding: clamp(8px, 1.2vh, 18px) clamp(20px, 3vw, 44px) !important;
+            border-radius: var(--radius-full) !important;
+            letter-spacing: 0.05em !important;
+            margin: 0 !important;
+            box-shadow: var(--shadow-sm) !important;
+        }
+        
+        /* ── Semantic Status Colors ── */
+        .bank-ticket-status.status-ready { background: var(--color-success); color: var(--text-inverse); border: none; }
+        .bank-ticket-status.status-process { background: var(--color-primary-500); color: var(--text-inverse); border: none; }
+        .bank-ticket-status.status-prep { background: var(--color-warning); color: var(--text-inverse); border: none; }
+        .bank-ticket-status.status-pending { background: var(--color-error); color: var(--text-inverse); border: none; }
+        .bank-ticket-status.status-wait { background: var(--color-warning); color: var(--text-inverse); border: none; }
+        .bank-ticket-status.status-other { background: var(--bg-surface-hover); color: var(--text-secondary); border: 1px solid var(--border-strong); }
+
+        /* ── History Panel (Glassmorphism on gradient) ── */
+        .history-panel {
+            width: 240px !important;
+            flex-shrink: 0 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            gap: var(--spacing-2) !important;
+            background: rgba(255, 255, 255, 0.08) !important;
+            backdrop-filter: blur(20px) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
+            padding: var(--spacing-3) !important;
+            border-radius: var(--radius-xl) !important;
+            border: 1px solid rgba(255, 255, 255, 0.18) !important;
+            height: 100% !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+        }
+        .history-title {
+            font-size: var(--text-xs) !important;
+            font-weight: var(--font-weight-bold) !important;
+            color: rgba(255, 255, 255, 0.85) !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.08em !important;
+            text-align: center !important;
+            margin-bottom: var(--spacing-1) !important;
+            flex-shrink: 0 !important;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.3) !important;
+        }
+        .history-list {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: var(--spacing-1) !important;
+            overflow: hidden !important;
+            height: 100% !important;
+        }
+        .history-card {
+            flex: 0 0 calc((100% - 12 * var(--spacing-1)) / 13) !important;
+            height: calc((100% - 12 * var(--spacing-1)) / 13) !important;
+            min-height: 0 !important;
+            opacity: 0.95 !important;
+            padding: 0 !important;
+            border-radius: var(--radius-lg) !important;
+            cursor: default !important;
+            transform: none !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12) !important;
+            background: #ffffff !important;
+            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        }
+        .history-card:hover {
+            transform: none !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12) !important;
+        }
+        .history-card .bank-ticket-number {
+            font-size: 20px !important;
+            color: #1e293b !important;
+            font-weight: 800 !important;
+            line-height: 1 !important;
+            text-shadow: none !important;
+        }
+        .history-card .bank-ticket-hash {
+            color: #94a3b8 !important;
+            font-size: 20px !important;
+        }
+
+        @keyframes pulseFlash {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.05); }
+        }
+
+        /* ── Monitor Wrapper adjustments for full width ── */
+        .monitor-wrapper {
+            display: flex !important;
+            flex-direction: column !important;
+            width: 100% !important;
+            height: 100vh !important;
+            padding: 0 !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+        }
+    </style>
+    
+{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="qb-breadcrumbs" aria-label="Breadcrumb">
+    <a href="{{ url_for('orders.index') }}">QB-SAO</a>
+    <span class="bc-sep">›</span>
+    <span class="bc-current">Monitor</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+
+<script>
+    // Override body inline style set by base.html (background: var(--bg-body) !important)
+    document.body.style.removeProperty('background');
+    document.body.style.setProperty('background-color', '#1e3a8a', 'important');
+    document.body.style.setProperty('background-image', 'linear-gradient(135deg, #1e3a8a, #1d4ed8, #2563eb, #3b82f6, #1d4ed8, #1e3a8a)', 'important');
+    document.body.style.setProperty('background-size', '400% 400%', 'important');
+    document.body.style.setProperty('animation', 'mostrador-gradient 18s ease infinite', 'important');
+</script>
+
+<div x-data="monitorApp()" class="monitor-wrapper"
+     @keydown.window.alt.h.prevent="showHelp = !showHelp"
+     @keydown.window.alt.t.prevent="showTimer = !showTimer"
+     @keydown.window.alt.v.prevent="showRoleBadge = !showRoleBadge"
+     @keydown.window.alt.p.prevent="toggleSpeech()"
+     @keydown.window.alt.d.prevent="downloadKioskScript()"
+     @keydown.window.alt.o.prevent="showTvOverlay = !showTvOverlay">
+
+    <!-- Help Modal -->
+    <div x-show="showHelp" x-cloak style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+        <div style="background: var(--bg-surface); padding: var(--spacing-6); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); max-width: 400px; width: 100%; border: 1px solid var(--border-subtle);">
+            <h3 style="margin-top: 0; font-family: var(--font-sans); color: var(--text-primary);">Atajos de Teclado</h3>
+            <ul style="list-style: none; padding: 0; margin: var(--spacing-4) 0; color: var(--text-secondary); font-family: var(--font-sans); line-height: 1.6;">
+                <li><strong>ALT + H</strong>: Mostrar/Ocultar Ayuda</li>
+                <li><strong>ALT + T</strong>: Mostrar/Ocultar Temporizador</li>
+                <li><strong>ALT + V</strong>: Mostrar/Ocultar Rol</li>
+                <li><strong>ALT + P</strong>: Probar / Pausar Audio de Anuncio</li>
+                <li><strong>ALT + O</strong>: Mostrar / Ocultar Pantalla TV (Tiempos)</li>
+            </ul>
+            <div style="text-align: right;">
+                <button @click="showHelp = false" style="background: var(--color-primary-500); color: white; border: none; padding: 8px 16px; border-radius: var(--radius-md); cursor: pointer; font-family: var(--font-sans);">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ═══════ HEADER / CONTROLS ═══════ -->
+    <div class="monitor-controls-bar" style="display: flex; justify-content: flex-end; align-items: center; padding: 12px 24px; gap: 12px; background: #ffffff; border-bottom: 1px solid #e2e8f0; margin: -24px -24px 24px -24px;">
+        <!-- Seller filter (only for managers/admins) -->
+        <template x-if="canSeeAll">
+            <div class="filter-wrapper" style="position: relative;">
+                <select x-model="selectedSeller" @change="fetchOrders()" class="filter-select" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 13px;">
+                    <option value="">Todos los vendedores</option>
+                    <template x-for="s in sellers" :key="s">
+                        <option :value="s" x-text="s"></option>
+                    </template>
+                </select>
+            </div>
+        </template>
+
+        <!-- Test Audio Button (Exclusivo Mostrador) -->
+        
+        <button type="button" 
+            style="background: #e0e7ff; color: #4338ca; border: 1px solid #c7d2fe; padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;"
+            @click="window.location.href = '{{ url_for('orders.tiempos_tv') }}'">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072M17.657 6.343a8 8 0 010 11.314M12 11h-2a1 1 0 00-1 1v2a1 1 0 001 1h2l4 4V7l-4 4z"/></svg>
+            Probar Anuncio
+        </button>
+        
+
+        <!-- Notification bell -->
+        <button type="button" id="btn-notifications"
+            class="notif-bell-btn"
+            style="background: transparent; border: none; cursor: pointer; color: #64748b; padding: 6px; position: relative;"
+            :style="notificationsEnabled ? 'color: #4a7dff;' : ''"
+            @click="toggleNotifications()"
+            :title="notificationsEnabled ? 'Notificaciones activas' : 'Activar notificaciones'">
+            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+            <span x-show="notificationsEnabled" x-cloak style="position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; background: #ef4444; border-radius: 50%;"></span>
+        </button>
+
+        <!-- Refresh indicator -->
+        <div class="refresh-badge" style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: #f8fafc; border-radius: 20px; border: 1px solid #e2e8f0;">
+            <span class="refresh-dot" :style="sseState === 1 ? (loading ? 'background: #f59e0b;' : 'background: #22c55e;') : 'background: #ef4444;'" style="width: 8px; height: 8px; border-radius: 50%;"></span>
+            <span class="refresh-text" style="font-size: 11px; font-weight: 600; color: #64748b;" x-text="sseState === 1 ? (loading ? 'Sincronizando...' : 'Tiempo Real') : 'Desconectado'"></span>
+        </div>
+    </div>
+
+    <!-- ═══════ KPI CARDS ═══════ -->
+    <section class="kpi-bar">
+        <div class="kpi-inner">
+            <button type="button" class="kpi-card"
+                :class="activeTopFilter === 'all' ? 'is-active' : ''"
+                @click="toggleTopFilter('all')"
+                title="Mostrar todos">
+                <div class="kpi-value" x-text="activeStats.total_active || 0">0</div>
+                <div class="kpi-label">Total Activos</div>
+            </button>
+            <button type="button" class="kpi-card kpi-pending"
+                :class="activeTopFilter === 'pending' ? 'is-active' : ''"
+                @click="toggleTopFilter('pending')"
+                title="Filtrar pendientes">
+                <div class="kpi-value" x-text="activeStats.pending || 0">0</div>
+                <div class="kpi-label">Pendientes</div>
+            </button>
+            <button type="button" class="kpi-card kpi-process"
+                :class="activeTopFilter === 'process' ? 'is-active' : ''"
+                @click="toggleTopFilter('process')"
+                title="Filtrar en proceso">
+                <div class="kpi-value" x-text="activeStats.in_progress || 0">0</div>
+                <div class="kpi-label">En Proceso</div>
+            </button>
+            <button type="button" class="kpi-card kpi-picking"
+                :class="activeTopFilter === 'picking' ? 'is-active' : ''"
+                @click="toggleTopFilter('picking')"
+                title="Filtrar surtidos">
+                <div class="kpi-value" x-text="activeStats.picking || 0">0</div>
+                <div class="kpi-label">Surtidos</div>
+            </button>
+            <button type="button" class="kpi-card kpi-invoice"
+                :class="activeTopFilter === 'invoice' ? 'is-active' : ''"
+                @click="toggleTopFilter('invoice')"
+                title="Filtrar facturados">
+                <div class="kpi-value"
+                    x-text="activeStats.invoicing || 0">0</div>
+                <div class="kpi-label">Facturado</div>
+            </button>
+            <button type="button" class="kpi-card kpi-relation"
+                :class="activeTopFilter === 'relation' ? 'is-active' : ''"
+                @click="toggleTopFilter('relation')"
+                title="Filtrar relación">
+                <div class="kpi-value"
+                    x-text="activeStats.ready || 0">0</div>
+                <div class="kpi-label">Relación</div>
+            </button>
+            <button type="button" class="kpi-card kpi-shipped"
+                :class="activeTopFilter === 'shipped' ? 'is-active' : ''"
+                @click="toggleTopFilter('shipped')"
+                title="Filtrar enviados">
+                <div class="kpi-value" x-text="activeStats.shipped || 0">0</div>
+                <div class="kpi-label">Enviados</div>
+            </button>
+            <button type="button" class="kpi-card kpi-waiting"
+                :class="activeTopFilter === 'waiting' ? 'is-active' : ''"
+                @click="toggleTopFilter('waiting')"
+                title="Filtrar en espera">
+                <div class="kpi-value" x-text="activeStats.waiting || 0">0</div>
+                <div class="kpi-label">En Espera</div>
+            </button>
+            <button type="button" class="kpi-card kpi-cancelled"
+                :class="activeTopFilter === 'cancelled' ? 'is-active' : ''"
+                @click="toggleTopFilter('cancelled')"
+                title="Filtrar cancelados">
+                <div class="kpi-value" x-text="activeStats.cancelled || 0">0</div>
+                <div class="kpi-label">Cancelados</div>
+            </button>
+        </div>
+    </section>
+
+    <!-- ═══════ SEARCH & FILTERS BAR ═══════ -->
+    <section class="search-bar">
+        <div class="search-inner">
+            <div class="search-field">
+                <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input type="text" x-model="searchQuery" @input="currentPage = 1" :placeholder="isMostrador ? 'Buscar por #pedido...' : 'Buscar por #pedido, cliente o código...'"
+                    class="search-input">
+                <button class="search-clear"
+                    x-show="searchQuery.length > 0"
+                    x-cloak
+                    @click="searchQuery = ''; currentPage = 1"
+                    title="Limpiar búsqueda">&times;</button>
+            </div>
+
+            <!-- Date & Number filters row -->
+            <div class="filters-row">
+                <!-- Date range -->
+                <div class="filter-group">
+                    <label class="filter-label">
+                        <svg class="filter-label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        Desde
+                    </label>
+                    <input type="date" x-model="dateFrom" @change="currentPage = 1" class="filter-date-input" id="filter-date-from">
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">
+                        <svg class="filter-label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        Hasta
+                    </label>
+                    <input type="date" x-model="dateTo" @change="currentPage = 1" class="filter-date-input" id="filter-date-to">
+                </div>
+
+                <!-- Number of orders -->
+                <div class="filter-group">
+                    <label class="filter-label">
+                        <svg class="filter-label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                        </svg>
+                        Mostrar
+                    </label>
+                    <select x-model="maxOrders" @change="currentPage = 1" class="filter-select-sm" id="filter-max-orders">
+                        <option value="0">Todos</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                    </select>
+                </div>
+
+                <!-- Clear all filters -->
+                <button class="filter-clear-btn"
+                    x-show="dateFrom !== new Date().toISOString().split('T')[0] || dateTo !== new Date().toISOString().split('T')[0] || maxOrders !== '0' || selectedSeller" x-cloak
+                    @click="dateFrom = new Date().toISOString().split('T')[0]; dateTo = new Date().toISOString().split('T')[0]; maxOrders = '0'; selectedSeller = ''; currentPage = 1"
+                    title="Limpiar filtros">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    Limpiar
+                </button>
+            </div>
+
+            <div class="order-count">
+                <span x-text="filteredOrders.length"></span> pedidos
+                <template x-if="activeTopFilter !== 'all'">
+                    <span class="filter-chip" @click="toggleTopFilter(activeTopFilter)">
+                        <span x-text="getTopFilterLabel()"></span>
+                        <span class="filter-chip-x">x</span>
+                    </span>
+                </template>
+                <template x-if="dateFrom || dateTo">
+                    <span class="filter-chip" @click="dateFrom = ''; dateTo = ''; currentPage = 1">
+                        <span x-text="(dateFrom ? formatDate(dateFrom) : '...') + ' → ' + (dateTo ? formatDate(dateTo) : '...')"></span>
+                        <span class="filter-chip-x">x</span>
+                    </span>
+                </template>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════ ORDER CARDS ═══════ -->
+    <div class="orders-layout" style="display: flex; gap: 16px; flex: 1; min-height: 0; box-sizing: border-box; width: 100%;">
+        <main class="orders-container" style="flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0;">
+
+        <!-- Loading skeleton -->
+        <template x-if="firstLoad">
+            <div class="orders-grid">
+                <template x-for="i in 6" :key="'skel-'+i">
+                    <div class="order-card skeleton-card">
+                        <div class="skel skel-title"></div>
+                        <div class="skel skel-subtitle"></div>
+                        <div class="skel skel-progress"></div>
+                        <div class="skel skel-meta"></div>
+                    </div>
+                </template>
+            </div>
+        </template>
+
+        <!-- Empty state -->
+        <div x-show="!firstLoad && filteredOrders.length === 0" class="empty-state">
+            <svg class="empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p class="empty-title">Sin pedidos activos</p>
+            <p class="empty-text">No se encontraron pedidos que coincidan con tu búsqueda.</p>
+        </div>
+
+        <!-- Order cards grid -->
+        <div x-show="!firstLoad && filteredOrders.length > 0" class="orders-grid" :style="getGridStyle()">
+            <template x-for="(order, idx) in paginatedOrders" :key="order.order_id">
+                <div class="order-card" :class="getCardAccentClass(order.status)"
+                    :style="'animation-delay:' + (idx * 0.03) + 's'"
+                    @click="toggleExpand(order.order_id, $event)">
+
+                    <!-- Bank Mode View -->
+                    <div class="bank-ticket-container">
+                            <div class="bank-ticket-number">
+                                <span class="bank-ticket-hash">#</span><span x-text="order.order_id"></span>
+                            </div>
+                            <div class="bank-ticket-status" :class="getBankStatusClass(order.status)">
+                                <span x-text="formatStatus(order.status)"></span>
+                            </div>
+                        </div>
+
+                </div>
+            </template>
+        </div>
+
+        <!-- ═══════ PAGINATION ═══════ -->
+        <div x-show="!firstLoad && totalPages > 1" class="pagination-bar">
+            <div class="pagination-info">
+                Mostrando <span x-text="((currentPage - 1) * pageSize) + 1"></span>–<span x-text="Math.min(currentPage * pageSize, filteredOrders.length)"></span>
+                de <span x-text="filteredOrders.length"></span> pedidos
+            </div>
+            <div class="pagination-controls">
+                <button class="page-btn" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+
+                <template x-for="p in pageNumbers" :key="'page-' + p">
+                    <button class="page-btn"
+                        :class="p === currentPage ? 'page-btn-active' : (p === '...' ? 'page-btn-dots' : '')"
+                        :disabled="p === '...'"
+                        @click="p !== '...' && goToPage(p)"
+                        x-text="p"></button>
+                </template>
+
+                <button class="page-btn" :disabled="currentPage >= totalPages" @click="goToPage(currentPage + 1)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+            </div>
+        </div>
+        </main>
+
+        <!-- ═══════ HISTORY PANEL ═══════ -->
+            <aside class="history-panel">
+                <div class="history-title">
+                    Historial Reciente
+                </div>
+                <div class="history-list">
+                    <template x-if="historyOrders.length === 0">
+                        <div style="color: rgba(255,255,255,0.5); font-size: 11px; text-align: center; padding: 20px 0;">Sin pedidos recientes</div>
+                    </template>
+                    <template x-for="order in historyOrders" :key="'hist-' + order.order_id">
+                        <div class="order-card history-card" :class="getCardAccentClass(order.status)">
+                            <!-- Bank Mode View -->
+                            <div class="bank-ticket-container" style="display: flex !important; flex-direction: row !important; align-items: center !important; justify-content: space-between !important; padding: 0 10px !important; width: 100% !important; height: 100% !important;">
+                                    <div class="bank-ticket-number">
+                                        <span class="bank-ticket-hash">#</span><span x-text="order.order_id"></span>
+                                    </div>
+                                    <div class="bank-ticket-status" :class="getBankStatusClass(order.status)" style="font-size: 9px !important; padding: 3px 8px !important; margin: 0 !important; border-radius: var(--radius-full) !important;">
+                                        <span x-text="formatStatus(order.status)"></span>
+                                    </div>
+                                </div>
+                            <!-- Normal Mode View -->
+                            
+                        </div>
+                    </template>
+                </div>
+            </aside>
+    </div>
+
+    <!-- Audio Role Badge -->
+    <div style="position: fixed; bottom: 20px; left: 20px; background: rgba(0,0,0,0.7); color: white; padding: 8px 16px; border-radius: 8px; font-size: 12px; font-family: monospace; z-index: 50;" x-show="isMostrador && showRoleBadge" x-transition>
+        Rol Actual: <strong x-text="isMostrador ? 'Mostrador (Voz Activada)' : 'Operador (Sin Voz)'"></strong>
+    </div>
+
+    
+
+    <!-- Floating Next Announcement Timer -->
+    <div style="position: fixed; bottom: 20px; right: 20px; background: rgba(15, 23, 42, 0.9); color: #f8fafc; padding: 8px 16px; border-radius: 100px; font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: bold; border: 2px solid #334155; backdrop-filter: blur(8px); z-index: 50; display: flex; align-items: center; gap: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);" x-show="showTimer" x-transition>
+        <svg width="18" height="18" fill="none" stroke="#3b82f6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span>Anuncio en <span x-text="Math.floor(timeUntilNextAnnounce / 60) + ':' + (timeUntilNextAnnounce % 60).toString().padStart(2, '0')" style="color: #60a5fa;"></span></span>
+    </div>
+    
+
+    <!-- ═══════ TOAST ═══════ -->
+    <div x-show="toast.visible" x-cloak x-transition
+        class="toast" :class="toast.type === 'error' ? 'toast-error' : 'toast-info'">
+        <div class="toast-content">
+            <strong x-text="toast.title"></strong>
+            <span x-text="toast.message"></span>
+        </div>
+    </div>
+
+    <!-- Chime notification sound (extracted from Jocelyn recording) -->
+    <audio id="chime-audio" preload="auto" src="{{ url_for('static', filename='audio/chime.mp3') }}" style="display:none"></audio>
+    <!-- Recorded announcement (HTML5 Audio fallback) -->
+    <audio id="announcement-audio" preload="auto" src="{{ url_for('static', filename='audio/announcement_jocelyn.wav') }}" style="display:none"></audio>
+
+    <!-- Full-screen Tiempos TV Overlay for Mostrador rotation -->
+    <template x-if="showTvOverlay">
+        <div style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #f1f5f9; z-index: 999998; border: none; overflow: hidden;">
+            <iframe id="tv-iframe" src="{{ url_for('orders.tiempos_tv') }}" allow="autoplay" style="width: 100%; height: 100%; border: none; overflow: hidden;" @load="onTvIframeLoad()"></iframe>
+        </div>
+    </template>
+
+    <!-- ═══════ ALPINE APP ═══════ -->
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('monitorApp', () => ({
+                isMostrador: true,
+                activePanelView: 'times',
+                panelRotationTimer: null,
+                timeUntilNextAnnounce: 600, // 10 minutes in seconds
+                flashTimer: null,
+                newOrderNumber: '',
+                speechPlaying: false,
+                _announcementAudio: null,
+                _audioCtx: null,           // Web Audio API context
+                _audioBuffer: null,        // Pre-decoded audio buffer
+                _chimeBuffer: null,        // Pre-decoded chime buffer
+                _activeSource: null,       // Currently playing buffer source
+                _audioReady: false,        // Buffer decoded and ready
+                sseState: 0, // 0 = connecting, 1 = open, 2 = closed/error
+                _lastAnnouncedKey: '',
+                showTvOverlay: false,
+                currentTime: Date.now(),
+                _timeUpdater: null,
+                showTimer: true,
+                showRoleBadge: true,
+                showHelp: false,
+                testOrder: null,
+                _testOrderInterval: null,
+
+                getGridStyle() {
+                    if (!this.isMostrador) return '';
+                    const N = this.paginatedOrders.length;
+                    if (N === 0) return '';
+
+                    let cols = 3;
+                    let rows = 2;
+
+                    if (N === 1) { cols = 1; rows = 1; }
+                    else if (N === 2) { cols = 2; rows = 1; }
+                    else if (N === 3) { cols = 3; rows = 1; }
+                    else if (N === 4) { cols = 2; rows = 2; }
+                    else if (N <= 6) { cols = 3; rows = 2; }
+                    else if (N <= 8) { cols = 4; rows = 2; }
+                    else if (N <= 9) { cols = 3; rows = 3; }
+                    else if (N <= 12) { cols = 4; rows = 3; }
+                    else {
+                        cols = Math.ceil(Math.sqrt(N));
+                        rows = Math.ceil(N / cols);
+                    }
+
+                    return `grid-template-columns: repeat(${cols}, 1fr) !important; grid-template-rows: repeat(${rows}, 1fr) !important;`;
+                },
+
+                startPanelRotation() {
+                    if (this.panelRotationTimer) clearInterval(this.panelRotationTimer);
+                    
+                    const savedEpoch = localStorage.getItem('sao_next_announce_epoch');
+                    const now = Date.now();
+                    
+                    if (savedEpoch && parseInt(savedEpoch) > now) {
+                        this.timeUntilNextAnnounce = Math.ceil((parseInt(savedEpoch) - now) / 1000);
+                    } else {
+                        this.timeUntilNextAnnounce = 600; // Reset to 10 minutes
+                        localStorage.setItem('sao_next_announce_epoch', (now + 600000).toString());
+                    }
+                    
+                    this.panelRotationTimer = setInterval(() => {
+                        this.timeUntilNextAnnounce--;
+                        
+                        if (this.timeUntilNextAnnounce <= 0) {
+                            // Clear it so it starts a fresh 10 min cycle when returning
+                            localStorage.removeItem('sao_next_announce_epoch');
+                            
+                            if (this.isMostrador) {
+                                this.showTvOverlay = true;
+                                if (this.panelRotationTimer) clearInterval(this.panelRotationTimer);
+                            } else {
+                                this.activePanelView = this.activePanelView === 'times' ? 'audio' : 'times';
+                                this.timeUntilNextAnnounce = 600; // Reset for next rotation
+                                localStorage.setItem('sao_next_announce_epoch', (Date.now() + 600000).toString());
+                            }
+                        }
+                    }, 1000);
+                },
+
+                downloadKioskScript() {
+                    if (!this.isMostrador) return;
+                    const a = document.createElement('a');
+                    a.href = "{{ url_for('static', filename='downloads/launch_kiosk.bat') }}";
+                    a.download = "launch_kiosk.bat";
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    this.showToast('🚀 Descarga iniciada', 'El script para el Kiosco se está descargando', 'info');
+                },
+
+                triggerAudioPanel(orderId) {
+                    if (!this.isMostrador) return;
+                    this.newOrderNumber = orderId || '';
+                    this.activePanelView = 'flash';
+                    
+                    if (this.panelRotationTimer) clearInterval(this.panelRotationTimer);
+                    if (this.flashTimer) clearTimeout(this.flashTimer);
+                    
+                    // Show flash for 10 seconds, then switch to audio view for 2 minutes, then resume rotation
+                    this.flashTimer = setTimeout(() => {
+                        this.activePanelView = 'audio';
+                        
+                        setTimeout(() => {
+                            this.activePanelView = 'times';
+                            this.startPanelRotation(); // Resume 10-min rotation starting from times
+                        }, 120000); // Wait 2 mins on audio
+                    }, 10000); // 10 seconds flash
+                    
+                    // Attempt to autoplay recorded audio
+                    if (!this.speechPlaying) {
+                        try {
+                            this.playRecordedAnnouncement();
+                        } catch(e) { console.warn("Autoplay blocked", e); }
+                    }
+                },
+
+                toggleSpeech() {
+                    if (this.speechPlaying) {
+                        this.stopRecordedAnnouncement();
+                        return;
+                    }
+                    this.playRecordedAnnouncement();
+                },
+
+                // ── Robust Audio Engine ──
+                // Layer 1: Web Audio API (best autoplay support)
+                // Layer 2: HTML5 Audio element (fallback)
+                // Layer 3: Retry with delay
+
+                async _initAudioEngine() {
+                    try {
+                        // Create AudioContext (browsers allow creation anytime)
+                        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                        if (!AudioCtx) {
+                            console.warn('Web Audio API not supported, will use HTML5 Audio only');
+                            return;
+                        }
+                        this._audioCtx = new AudioCtx();
+                        console.log('🔊 AudioContext created (state: ' + this._audioCtx.state + ')');
+
+                        // DON'T await resume() here — it hangs before user interaction
+                        // due to Chrome's autoplay policy. Instead, fire-and-forget.
+                        if (this._audioCtx.state === 'suspended') {
+                            this._audioCtx.resume().catch(() => {});
+                        }
+
+                        // Set up a one-time listener to resume AudioContext on first
+                        // user interaction (click/touch/keydown). This is the standard
+                        // pattern recommended by Chrome for autoplay compliance.
+                        const resumeOnGesture = () => {
+                            if (this._audioCtx && this._audioCtx.state === 'suspended') {
+                                this._audioCtx.resume().then(() => {
+                                    console.log('🔊 AudioContext resumed via user gesture');
+                                }).catch(() => {});
+                            }
+                            // Remove all listeners after first interaction
+                            ['click', 'touchstart', 'keydown'].forEach(evt =>
+                                document.removeEventListener(evt, resumeOnGesture, { capture: true })
+                            );
+                        };
+                        ['click', 'touchstart', 'keydown'].forEach(evt =>
+                            document.addEventListener(evt, resumeOnGesture, { once: true, capture: true })
+                        );
+
+                        // Pre-fetch and decode audio buffers REGARDLESS of context state.
+                        // decodeAudioData works even when the context is suspended.
+
+                        // 1. Pre-fetch and decode the chime sound (small, loads fast)
+                        try {
+                            const chimeUrl = '{{ url_for("static", filename="audio/chime.mp3") }}';
+                            const chimeResponse = await fetch(chimeUrl);
+                            const chimeArrayBuffer = await chimeResponse.arrayBuffer();
+                            this._chimeBuffer = await this._audioCtx.decodeAudioData(chimeArrayBuffer);
+                            console.log('🔔 Chime buffer pre-decoded (' + 
+                                Math.round(this._chimeBuffer.duration * 1000) + 'ms)');
+                        } catch(ce) {
+                            console.warn('Chime buffer decode failed:', ce);
+                        }
+
+                        // 2. Pre-fetch and decode the announcement WAV file (larger)
+                        try {
+                            const audioUrl = '{{ url_for("static", filename="audio/announcement_jocelyn.wav") }}';
+                            const response = await fetch(audioUrl);
+                            const arrayBuffer = await response.arrayBuffer();
+                            this._audioBuffer = await this._audioCtx.decodeAudioData(arrayBuffer);
+                            this._audioReady = true;
+                            console.log('🔊 Announcement buffer pre-decoded (' + 
+                                Math.round(this._audioBuffer.duration) + 's, ' + 
+                                this._audioBuffer.numberOfChannels + 'ch)');
+                        } catch(ae) {
+                            console.warn('Announcement buffer decode failed:', ae);
+                        }
+                    } catch(e) {
+                        console.warn('Web Audio API init failed, will fallback to HTML5 Audio:', e);
+                    }
+                },
+
+                _playViaWebAudio() {
+                    return new Promise((resolve, reject) => {
+                        if (!this._audioCtx || !this._audioBuffer) {
+                            return reject(new Error('Web Audio not initialized'));
+                        }
+
+                        // Resume context if suspended
+                        if (this._audioCtx.state === 'suspended') {
+                            this._audioCtx.resume().catch(() => {});
+                        }
+
+                        // Stop any previous source
+                        if (this._activeSource) {
+                            try { this._activeSource.stop(); } catch(e) {}
+                        }
+
+                        const source = this._audioCtx.createBufferSource();
+                        source.buffer = this._audioBuffer;
+                        source.connect(this._audioCtx.destination);
+                        this._activeSource = source;
+
+                        source.onended = () => {
+                            console.log('🔊 [WebAudio] Recording finished');
+                            this._activeSource = null;
+                            this.speechPlaying = false;
+                            const iframe = document.getElementById('tv-iframe');
+                            if (iframe && iframe.contentWindow) {
+                                iframe.contentWindow.postMessage('audio_ended', '*');
+                            }
+                        };
+
+                        try {
+                            source.start(0);
+                            console.log('🔊 [WebAudio] Recording playing via Web Audio API');
+                            this.speechPlaying = true;
+                            const iframe = document.getElementById('tv-iframe');
+                            if (iframe && iframe.contentWindow) {
+                                iframe.contentWindow.postMessage('audio_started', '*');
+                            }
+                            resolve();
+                        } catch(e) {
+                            reject(e);
+                        }
+                    });
+                },
+
+                _playViaHtml5Audio() {
+                    return new Promise((resolve, reject) => {
+                        const audioEl = document.getElementById('announcement-audio');
+                        if (!audioEl) return reject(new Error('Audio element not found'));
+
+                        this._announcementAudio = audioEl;
+                        audioEl.currentTime = 0;
+
+                        audioEl.onplay = () => {
+                            console.log('🔊 [HTML5] Recording started playing');
+                            this.speechPlaying = true;
+                            const iframe = document.getElementById('tv-iframe');
+                            if (iframe && iframe.contentWindow) {
+                                iframe.contentWindow.postMessage('audio_started', '*');
+                            }
+                        };
+
+                        audioEl.onended = () => {
+                            console.log('🔊 [HTML5] Recording finished');
+                            this.speechPlaying = false;
+                            const iframe = document.getElementById('tv-iframe');
+                            if (iframe && iframe.contentWindow) {
+                                iframe.contentWindow.postMessage('audio_ended', '*');
+                            }
+                        };
+
+                        audioEl.onerror = (e) => {
+                            console.error('[HTML5] Audio error:', e);
+                            this.speechPlaying = false;
+                            reject(e);
+                        };
+
+                        const p = audioEl.play();
+                        if (p !== undefined) {
+                            p.then(resolve).catch(reject);
+                        } else {
+                            resolve();
+                        }
+                    });
+                },
+
+                async playRecordedAnnouncement(retryCount = 0) {
+                    const MAX_RETRIES = 5;
+                    const RETRY_DELAY_MS = 1000;
+
+                    // Stop any current playback
+                    this.stopRecordedAnnouncement();
+
+                    // Layer 1: Try Web Audio API first (best autoplay support)
+                    try {
+                        await this._playViaWebAudio();
+                        console.log('✅ Playing via Web Audio API (Layer 1)');
+                        return;
+                    } catch(e) {
+                        console.warn('⚠️ Web Audio API failed:', e.message);
+                    }
+
+                    // Layer 2: Fallback to HTML5 Audio element
+                    try {
+                        await this._playViaHtml5Audio();
+                        console.log('✅ Playing via HTML5 Audio (Layer 2)');
+                        return;
+                    } catch(e) {
+                        console.warn('⚠️ HTML5 Audio failed:', e.message);
+                    }
+
+                    // Layer 3: Retry with delay
+                    if (retryCount < MAX_RETRIES) {
+                        console.log(`🔄 Retry ${retryCount + 1}/${MAX_RETRIES} in ${RETRY_DELAY_MS}ms...`);
+                        // Try to resume AudioContext before retrying
+                        if (this._audioCtx && this._audioCtx.state === 'suspended') {
+                            try { await this._audioCtx.resume(); } catch(e) {}
+                        }
+                        setTimeout(() => {
+                            this.playRecordedAnnouncement(retryCount + 1);
+                        }, RETRY_DELAY_MS);
+                    } else {
+                        console.error('❌ All audio playback methods failed after ' + MAX_RETRIES + ' retries');
+                        this.speechPlaying = false;
+                        const iframe = document.getElementById('tv-iframe');
+                        if (iframe && iframe.contentWindow) {
+                            iframe.contentWindow.postMessage('audio_failed', '*');
+                        }
+                    }
+                },
+
+                stopRecordedAnnouncement() {
+                    // Stop Web Audio source
+                    if (this._activeSource) {
+                        try { this._activeSource.stop(); } catch(e) {}
+                        this._activeSource = null;
+                    }
+                    // Stop HTML5 Audio
+                    const audioEl = this._announcementAudio || document.getElementById('announcement-audio');
+                    if (audioEl) {
+                        try {
+                            audioEl.pause();
+                            audioEl.currentTime = 0;
+                        } catch(e) {}
+                    }
+                    this.speechPlaying = false;
+                },
+
+                onTvIframeLoad() {
+                    console.log("📺 TV iframe loaded. Starting recorded announcement.");
+                    this.speechPlaying = false;
+                    this.playRecordedAnnouncement();
+                },
+                orders: [],
+                stats: {},
+                sellers: [],
+                canSeeAll: false,
+                currentSeller: '',
+                selectedSeller: '',
+                searchQuery: '',
+                dateFrom: new Date().toISOString().split('T')[0],
+                dateTo: new Date().toISOString().split('T')[0],
+                maxOrders: '0',
+                activeTopFilter: 'all',
+                currentPage: 1,
+                pageSize: 200,
+                loading: false,
+                firstLoad: true,
+                _interval: null,
+                expandedOrder: null,
+                notificationsEnabled: false,
+                _sseReconnectTimer: null,
+
+                toast: { visible: false, title: '', message: '', type: 'info', _timer: null },
+
+                // ── Status pipeline (order matters) ──
+                statusSteps: [
+                    { key: 'Pendiente', short: 'Pend' },
+                    { key: 'En Proceso', short: 'Proc' },
+                    { key: 'Facturacion', short: 'Fact' },
+                ],
+
+                get statusIndex() {
+                    return {
+                        'Pendiente': 0,
+                        'En Proceso': 1,
+                        'Entregado': 1,
+                        'Preparando': 1,
+                        'Facturacion': 2,
+                        'Relacion de envio': 3,
+                        'Recibido por almacen': 3,
+                        'Enviado al cliente': 4,
+                    };
+                },
+
+                // Base filtered: date + search only (no KPI top filter, no max cap)
+                // Used to compute KPI stats that react to the date range
+                get baseFilteredOrders() {
+                    const q = (this.searchQuery || '').toLowerCase().trim();
+                    const from = this.dateFrom || '';
+                    const to = this.dateTo || '';
+
+                    return this.orders.filter(o => {
+                        // Date range filter (compare against order_date)
+                        if (from || to) {
+                            const rawDate = o.order_date || o.delivery_date || '';
+                            if (!rawDate) return false;
+                            const oDate = rawDate.split('T')[0].split(' ')[0]; // YYYY-MM-DD
+                            if (from && oDate < from) return false;
+                            if (to && oDate > to) return false;
+                        }
+
+                        // Remove Cancelado and Facturacion after 3 minutes if not searching (only for Mostrador)
+                        if (this.isMostrador && !q && (o.status === 'Cancelado' || o.status === 'Facturacion')) {
+                            const lastUpdated = o.last_updated || o.created_at || o.order_date;
+                            if (lastUpdated) {
+                                const lastUpdatedMs = new Date(lastUpdated.replace('T', ' ').replace('Z', '')).getTime();
+                                if (!isNaN(lastUpdatedMs)) {
+                                    const elapsedMs = this.currentTime - lastUpdatedMs;
+                                    if (elapsedMs > 3 * 60 * 1000) {
+                                        return false;
+                                    }
+                                }
+                            }
+                        }
+
+                        // Text search
+                        if (!q) return true;
+                        if (this.isMostrador) {
+                            return String(o.order_id).includes(q) ||
+                                (o.factura_number && String(o.factura_number).includes(q)) ||
+                                (o.delivery_number && String(o.delivery_number).includes(q));
+                        }
+                        return String(o.order_id).includes(q) ||
+                            (o.customer_name || '').toLowerCase().includes(q) ||
+                            (o.customer_code || '').toLowerCase().includes(q) ||
+                            (o.factura_number && String(o.factura_number).includes(q)) ||
+                            (o.delivery_number && String(o.delivery_number).includes(q));
+                    });
+                },
+
+                get historyOrders() {
+                    const q = (this.searchQuery || '').toLowerCase().trim();
+                    if (q) return []; // Hide history while searching
+
+                    const todayDate = new Date();
+                    const todayStr = todayDate.getFullYear() + '-' + String(todayDate.getMonth() + 1).padStart(2, '0') + '-' + String(todayDate.getDate()).padStart(2, '0');
+
+                    let hist = this.orders.filter(o => {
+                        if (o.status === 'Cancelado' || o.status === 'Facturacion') {
+                            const rawDate = o.order_date || o.created_at || o.delivery_date || '';
+                            const oDate = rawDate.split('T')[0].split(' ')[0];
+                            if (oDate !== todayStr) return false;
+
+                            const lastUpdated = o.last_updated || o.created_at || o.order_date;
+                            if (lastUpdated) {
+                                const lastUpdatedMs = new Date(lastUpdated.replace('T', ' ').replace('Z', '')).getTime();
+                                if (!isNaN(lastUpdatedMs)) {
+                                    const elapsedMs = this.currentTime - lastUpdatedMs;
+                                    if (elapsedMs > 3 * 60 * 1000) {
+                                        return true; // Older than 3 minutes -> History Panel
+                                    }
+                                }
+                            }
+                        }
+                        return false;
+                    });
+
+                    // Sort descending by order ID (newest first in history)
+                    return hist.sort((a, b) => {
+                        const idA = parseInt(a.order_id) || 0;
+                        const idB = parseInt(b.order_id) || 0;
+                        return idB - idA;
+                    }).slice(0, 13); // Show latest 13 orders in history
+                },
+
+                // Reactive stats computed from the date/search-filtered orders
+                get activeStats() {
+                    const counts = { total_active: 0, pending: 0, in_progress: 0, picking: 0, invoicing: 0, ready: 0, shipped: 0, waiting: 0, cancelled: 0 };
+                    for (const o of this.baseFilteredOrders) {
+                        counts.total_active += 1;
+                        const s = o.status;
+                        if (s === 'Pendiente') counts.pending += 1;
+                        if (s === 'En Proceso') counts.in_progress += 1;
+                        if (s === 'Entregado' || s === 'Preparando') counts.picking += 1;
+                        if (s === 'Facturacion') counts.invoicing += 1;
+                        if (s === 'Relacion de envio' || s === 'Recibido por almacen') counts.ready += 1;
+                        if (s === 'Enviado al cliente') counts.shipped += 1;
+                        if (s === 'En Espera') counts.waiting += 1;
+                        if (s === 'Cancelado') counts.cancelled += 1;
+                    }
+                    return counts;
+                },
+
+                get filteredOrders() {
+                    const max = parseInt(this.maxOrders) || 0;
+
+                    // Apply KPI top filter on top of the base
+                    let result = this.baseFilteredOrders.filter(o => this.orderMatchesTopFilter(o));
+
+                    // Cap to max orders
+                    if (max > 0 && result.length > max) {
+                        result = result.slice(0, max);
+                    }
+
+                    return result;
+                },
+
+                get paginatedOrders() {
+                    const start = (this.currentPage - 1) * this.pageSize;
+                    return this.filteredOrders.slice(start, start + this.pageSize);
+                },
+
+                get totalPages() {
+                    return Math.max(1, Math.ceil(this.filteredOrders.length / this.pageSize));
+                },
+
+                get pageNumbers() {
+                    const total = this.totalPages;
+                    const cur = this.currentPage;
+                    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+                    const pages = [];
+                    pages.push(1);
+                    if (cur > 3) pages.push('...');
+                    for (let i = Math.max(2, cur - 1); i <= Math.min(total - 1, cur + 1); i++) {
+                        pages.push(i);
+                    }
+                    if (cur < total - 2) pages.push('...');
+                    pages.push(total);
+                    return pages;
+                },
+
+                goToPage(page) {
+                    if (page < 1 || page > this.totalPages) return;
+                    this.currentPage = page;
+                    this.expandedOrder = null;
+                    // Scroll to top of orders
+                    document.querySelector('.orders-container')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                },
+
+                orderMatchesTopFilter(order) {
+                    const status = order?.status;
+                    if (this.activeTopFilter === 'all') return true;
+                    if (this.activeTopFilter === 'pending') return status === 'Pendiente';
+                    if (this.activeTopFilter === 'process') return status === 'En Proceso';
+                    if (this.activeTopFilter === 'picking') return status === 'Entregado' || status === 'Preparando';
+                    if (this.activeTopFilter === 'invoice') return status === 'Facturacion';
+                    if (this.activeTopFilter === 'relation') return status === 'Relacion de envio' || status === 'Recibido por almacen';
+                    if (this.activeTopFilter === 'shipped') return status === 'Enviado al cliente';
+                    if (this.activeTopFilter === 'waiting') return status === 'En Espera';
+                    if (this.activeTopFilter === 'cancelled') return status === 'Cancelado';
+                    return true;
+                },
+
+                toggleTopFilter(filterKey) {
+                    this.activeTopFilter = this.activeTopFilter === filterKey ? 'all' : filterKey;
+                    this.currentPage = 1;
+                    this.expandedOrder = null;
+                },
+
+                getTopFilterLabel() {
+                    const labels = {
+                        pending: 'Pendientes',
+                        process: 'En Proceso',
+                        picking: 'Surtidos',
+                        invoice: 'Facturados',
+                        relation: 'Relación',
+                        shipped: 'Enviados',
+                        waiting: 'En Espera',
+                        cancelled: 'Cancelados'
+                    };
+                    return labels[this.activeTopFilter] || 'Todos';
+                },
+
+                // ── Progress timeline helpers ──
+                getStepIndex(status) {
+                    return this.statusIndex[status] ?? -1;
+                },
+
+                isStepCompleted(orderStatus, stepKey) {
+                    return this.getStepIndex(orderStatus) > this.getStepIndex(stepKey);
+                },
+
+                isStepCurrent(orderStatus, stepKey) {
+                    return orderStatus === stepKey;
+                },
+
+                getStepClass(orderStatus, stepKey) {
+                    if (this.isStepCurrent(orderStatus, stepKey)) return 'step-current';
+                    if (this.isStepCompleted(orderStatus, stepKey)) return 'step-done';
+                    return 'step-future';
+                },
+
+                // ── Card accent ──
+                getCardAccentClass(status) {
+                    const map = {
+                        'Pendiente': 'accent-amber',
+                        'En Proceso': 'accent-violet',
+                        'Entregado': 'accent-sky',
+                        'Facturacion': 'accent-pink',
+                        'Relacion de envio': 'accent-emerald',
+                        'Enviado al cliente': 'accent-teal',
+                        'En Espera': 'accent-orange',
+                        'Cancelado': 'accent-red',
+                    };
+                    return map[status] || 'accent-slate';
+                },
+
+                // ── Aging ──
+                getAgingHours(order) {
+                    const ref = order.order_date || order.created_at || order.delivery_date;
+                    if (!ref) return 0;
+                    const d = new Date(ref);
+                    if (isNaN(d)) return 0;
+                    return Math.max(0, Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60)));
+                },
+                getAgingText(order) {
+                    const h = this.getAgingHours(order);
+                    if (h < 1) return '< 1h';
+                    if (h < 24) return h + 'h';
+                    const d = Math.floor(h / 24);
+                    return d + 'd ' + (h % 24) + 'h';
+                },
+                getAgingClass(order) {
+                    const h = this.getAgingHours(order);
+                    if (h < 24) return 'aging-ok';
+                    if (h < 72) return 'aging-warn';
+                    return 'aging-danger';
+                },
+
+                // ── Overdue ──
+                isOverdue(order) {
+                    if (!order.delivery_date) return false;
+                    const d = new Date(order.delivery_date);
+                    if (isNaN(d)) return false;
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    return d < today;
+                },
+
+                // ── SAP status ──
+                getSapClass(status) {
+                    if (status === 'Abierto') return 'sap-open';
+                    if (status === 'Cerrado') return 'sap-closed';
+                    if (status === 'Cancelado') return 'sap-cancelled';
+                    return '';
+                },
+
+                // ── Format helpers ──
+                getBankStatusClass(status) {
+                    if (status === 'Relacion de envio' || status === 'Facturacion') return 'status-ready';
+                    if (status === 'En Proceso' || status === 'Preparando' || status === 'Entregado') return 'status-prep';
+                    if (status === 'Pendiente') return 'status-pending';
+                    if (status === 'En Espera') return 'status-wait';
+                    return 'status-other';
+                },
+                formatStatus(status) {
+                    if (status === 'Facturacion') return 'FINALIZADO';
+                    if (status === 'En Proceso' || status === 'Preparando' || status === 'Entregado') return 'EN PREPARACION';
+                    return status;
+                },
+                formatDate(str) {
+                    if (!str) return '-';
+                    const clean = str.split('T')[0].split(' ')[0];
+                    if (clean.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                        const [y, m, d] = clean.split('-');
+                        return `${d}/${m}/${y}`;
+                    }
+                    return clean;
+                },
+                formatDateTime(str) {
+                    if (!str) return '-';
+                    const raw = str.substring(0, 16).replace('T', ' ');
+                    const parts = raw.split(' ');
+                    if (parts.length === 2 && parts[0].match(/^\d{4}-\d{2}-\d{2}$/)) {
+                        const [y, m, d] = parts[0].split('-');
+                        return `${d}/${m}/${y} ${parts[1]}`;
+                    }
+                    return raw;
+                },
+                formatItemQty(item) {
+                    const qty = Number(item.quantity ?? item.Quantity ?? 0);
+                    const rawUnit = item.unit || item.Unit || item.uom || '';
+                    let unit = String(rawUnit).trim().toUpperCase();
+                    if (unit === 'KGM' || unit === 'KG') unit = 'KG';
+                    else if (unit === 'LTR' || unit === 'LT' || unit === 'L') unit = 'LT';
+                    else if (unit === 'PZA' || unit === 'PZ' || unit === 'PIEZA') unit = 'PZ';
+                    else unit = unit || 'PZ';
+                    return `${qty} ${unit}`;
+                },
+
+                toggleExpand(id, event) {
+                    // Don't toggle when clicking inside the detail panel
+                    if (event && event.target.closest('.card-detail')) return;
+                    this.expandedOrder = this.expandedOrder === id ? null : id;
+                },
+
+                // ── Notification helpers ──
+                async playNotificationSound() {
+                    // Play chime via Web Audio API (primary) or HTML5 Audio (fallback)
+                    if (this._audioCtx && this._chimeBuffer) {
+                        try {
+                            // Ensure context is running (may still be suspended)
+                            if (this._audioCtx.state === 'suspended') {
+                                await this._audioCtx.resume();
+                            }
+                            const source = this._audioCtx.createBufferSource();
+                            source.buffer = this._chimeBuffer;
+                            source.connect(this._audioCtx.destination);
+                            source.start(0);
+                            console.log('🔔 Chime played via Web Audio API');
+                            return;
+                        } catch(e) {
+                            console.warn('Web Audio chime failed:', e);
+                        }
+                    }
+                    // Fallback: HTML5 Audio
+                    try {
+                        const audio = document.getElementById('chime-audio');
+                        if (audio) {
+                            audio.currentTime = 0;
+                            await audio.play();
+                            console.log('🔔 Chime played via HTML5 Audio fallback');
+                        }
+                    } catch(e) {
+                        console.warn('HTML5 Audio chime failed:', e);
+                    }
+                },
+
+                async toggleNotifications() {
+                    if (this.notificationsEnabled) {
+                        this.notificationsEnabled = false;
+                        localStorage.setItem('sao_notif', '0');
+                        return;
+                    }
+                    // Request browser notification permission
+                    if ('Notification' in window && Notification.permission === 'default') {
+                        await Notification.requestPermission();
+                    }
+                    this.notificationsEnabled = true;
+                    localStorage.setItem('sao_notif', '1');
+                    // Play a test sound so user knows it works
+                    this.playNotificationSound();
+                    this.showToast('🔔 Notificaciones', 'Notificaciones de cambio de estado activadas', 'info');
+                },
+
+                sendNotification(order_id, fromStatus, toStatus, customerName) {
+                    if (!this.notificationsEnabled) return;
+                    // Play chime sound for all users
+                    this.playNotificationSound();
+                    // Toast
+                    this.showToast(
+                        `📦 Pedido #${order_id}`,
+                        `${this.isMostrador ? '' : (customerName ? customerName + ' · ' : '')}${this.formatStatus(fromStatus)} → ${this.formatStatus(toStatus)}`,
+                        'info'
+                    );
+                    // Browser notification (if permitted)
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                        try {
+                            new Notification(`QB-SAO · Pedido #${order_id}`, {
+                                body: `${this.isMostrador ? '' : (customerName ? customerName + '\n' : '')}${this.formatStatus(fromStatus)} → ${this.formatStatus(toStatus)}`,
+                                icon: '/static/images/logo_new.png',
+                                tag: `order-${order_id}`,  // collapse duplicates
+                                renotify: true,
+                            });
+                        } catch(e) {}
+                    }
+                },
+
+                // ── Chime Notification on Status Change (Mostrador) ──
+                queueOrderAnnouncement(order_id, toStatus) {
+                    if (!this.isMostrador) return;
+                    if (this.showTvOverlay) return;
+                    
+                    const key = `${order_id}-${toStatus}`;
+                    if (this._lastAnnouncedKey === key) return;
+                    this._lastAnnouncedKey = key;
+
+                    console.log(`🔔 Chime for order #${order_id} → ${toStatus}`);
+                    this.playNotificationSound();
+                },
+
+                // ── Data fetching ──
+                async fetchOrders() {
+                    this.loading = true;
+                    try {
+                        let url = '/orders/api/seller/orders?_=' + Date.now();
+                        if (this.selectedSeller) url += '&seller=' + encodeURIComponent(this.selectedSeller);
+
+                        const res = await fetch(url, { cache: 'no-store' });
+                        if (!res.ok) throw new Error('HTTP ' + res.status);
+                        const data = await res.json();
+
+                        // Sort by status pipeline priority
+                        const pri = {};
+                        this.statusSteps.forEach((s, i) => pri[s.key] = i);
+                        const sorted = (data.orders || []).sort((a, b) => {
+                            const pDiff = (pri[a.status] ?? 99) - (pri[b.status] ?? 99);
+                            if (pDiff !== 0) return pDiff;
+                            // Within same status, newest order first
+                            const idA = parseInt(a.order_id) || 0;
+                            const idB = parseInt(b.order_id) || 0;
+                            return idB - idA;
+                        });
+
+                        this.orders = sorted;
+                        this.injectTestOrder();
+                        this.stats = data.stats || {};
+                        this.sellers = data.sellers || [];
+                        this.canSeeAll = data.can_see_all || false;
+                        this.currentSeller = data.current_seller || '';
+                        this.firstLoad = false;
+                    } catch (e) {
+                        console.error('Fetch failed:', e);
+                        this.showToast('Error', 'No se pudieron cargar los pedidos', 'error');
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                showToast(title, message, type = 'info') {
+                    if (this.toast._timer) clearTimeout(this.toast._timer);
+                    this.toast = { visible: true, title, message, type, _timer: null };
+                    this.toast._timer = setTimeout(() => { this.toast.visible = false; }, 4000);
+                },
+
+                injectTestOrder() {
+                    if (!this.testOrder) {
+                        this.orders = this.orders.filter(o => o.order_id !== 'PRUEBA');
+                        return;
+                    }
+                    const idx = this.orders.findIndex(o => o.order_id === 'PRUEBA');
+                    if (idx >= 0) {
+                        this.orders[idx] = { ...this.testOrder };
+                    } else {
+                        this.orders.push({ ...this.testOrder });
+                    }
+                    const pri = {};
+                    this.statusSteps.forEach((s, i) => pri[s.key] = i);
+                    this.orders.sort((a, b) => {
+                        const pDiff = (pri[a.status] ?? 99) - (pri[b.status] ?? 99);
+                        if (pDiff !== 0) return pDiff;
+                        const idA = a.order_id === 'PRUEBA' ? 0 : (parseInt(a.order_id) || 0);
+                        const idB = b.order_id === 'PRUEBA' ? 0 : (parseInt(b.order_id) || 0);
+                        return idB - idA;
+                    });
+                },
+
+                startTestOrderSimulation() {
+                    console.log("🧪 Iniciando simulación de pedido de prueba...");
+                    this.showToast('🧪 Simulación Iniciada', 'Pedido PRUEBA avanzará cada 5s', 'info');
+                    if (this._testOrderInterval) {
+                        clearInterval(this._testOrderInterval);
+                    }
+                    const statuses = this.statusSteps.map(s => s.key);
+                    let currentStatusIdx = 0;
+                    
+                    const updateTestOrder = () => {
+                        const nowStr = new Date().toISOString();
+                        const status = statuses[currentStatusIdx];
+                        
+                        this.testOrder = {
+                            order_id: 'PRUEBA',
+                            customer_name: 'CLIENTE DE PRUEBA',
+                            customer_code: 'TEST01',
+                            status: status,
+                            sap_status: 'Abierto',
+                            delivery_date: nowStr,
+                            order_date: nowStr,
+                            last_updated: nowStr,
+                            items: [
+                                { item_code: 'TEST-01', description: 'Producto de Prueba 1', quantity: 1 },
+                                { item_code: 'TEST-02', description: 'Producto de Prueba 2', quantity: 2 }
+                            ]
+                        };
+                        
+                        if (this.isMostrador) {
+                            const oldStatus = currentStatusIdx > 0 ? statuses[currentStatusIdx - 1] : null;
+                            if (oldStatus !== status) {
+                                this.queueOrderAnnouncement('PRUEBA', status);
+                            }
+                        }
+                        
+                        this.injectTestOrder();
+                        console.log(`🧪 Pedido de prueba: ${status}`);
+                        
+                        currentStatusIdx++;
+                        if (currentStatusIdx >= statuses.length) {
+                            clearInterval(this._testOrderInterval);
+                            this._testOrderInterval = null;
+                            setTimeout(() => {
+                                this.testOrder = null;
+                                this.injectTestOrder();
+                                this.showToast('🧪 Simulación Terminada', 'Pedido PRUEBA eliminado', 'info');
+                            }, 15000);
+                        }
+                    };
+                    
+                    updateTestOrder();
+                    this._testOrderInterval = setInterval(updateTestOrder, 5000);
+                },
+
+                init() {
+                    // ── Initialize robust audio engine for chime + announcements ──
+                    this._initAudioEngine();
+
+                    // Key shortcut ALT + Ñ to start simulation
+                    window.addEventListener('keydown', (e) => {
+                        if (e.altKey && (e.key === 'ñ' || e.key === 'Ñ')) {
+                            e.preventDefault();
+                            this.startTestOrderSimulation();
+                        }
+                    });
+
+                    // Listen for message from times TV iframe
+                    window.addEventListener('message', (event) => {
+                        if (event.data === 'announcement_done') {
+                            console.log("📺 TV announcement completed. Hiding TV overlay.");
+                            this.stopRecordedAnnouncement();
+                            this.showTvOverlay = false;
+                            this.timeUntilNextAnnounce = 600;
+                            localStorage.setItem('sao_next_announce_epoch', (Date.now() + 600000).toString());
+                            this.startPanelRotation();
+                        }
+                    });
+
+                    // Restore notification preference
+                    this.notificationsEnabled = localStorage.getItem('sao_notif') === '1';
+
+                    this.fetchOrders();
+
+                    // Polling fallback every 30s
+                    this._interval = setInterval(() => this.fetchOrders(), 30000);
+
+                    // Update current time every 10 seconds for reactive filters
+                    this._timeUpdater = setInterval(() => {
+                        this.currentTime = Date.now();
+                    }, 10000);
+
+                    // SSE real-time stream
+                    this._connectSSE();
+
+                    if (this.isMostrador) {
+                        this.startPanelRotation();
+                    }
+                },
+
+                _connectSSE() {
+                    if (!window.EventSource) return;
+                    // Guard: don't open a second connection if already alive
+                    if (this._es && this._es.readyState === 1) return;
+
+                    try {
+                        if (this._es) { try { this._es.close(); } catch(e) {} }
+                        this._es = new EventSource('/orders/stream_web');
+
+                        this._es.onopen = () => {
+                            console.log("🟢 Conexión SSE establecida con éxito.");
+                            this.sseState = 1;
+                        };
+
+                        this._es.onmessage = (evt) => {
+                            try {
+                                const payload = JSON.parse(evt.data);
+                                if (!payload) return;
+                                console.log("📥 SSE Recibido:", payload);
+
+                                if (payload.type === 'order_updated') {
+                                    const o = payload.order;
+                                    const id = String(payload.order_id);
+                                    if (this.isMostrador && o) {
+                                        const idx = this.orders.findIndex(x => String(x.order_id) === id);
+                                        const oldStatus = idx >= 0 ? this.orders[idx].status : null;
+                                        if (oldStatus !== o.status) {
+                                            this.queueOrderAnnouncement(id, o.status);
+                                        }
+                                    }
+                                    this.fetchOrders();
+                                }
+
+                                if (payload.type === 'status_changed') {
+                                    const { order_id, customer, from: fromStatus, to: toStatus } = payload;
+                                    this.sendNotification(order_id, fromStatus, toStatus, customer);
+                                    if (this.isMostrador) {
+                                        this.queueOrderAnnouncement(order_id, toStatus);
+                                    }
+                                    this.fetchOrders();
+                                }
+
+                                if (payload.type === 'sync_completed') {
+                                    console.log("🔄 Background sync completed, refreshing data.");
+                                    this.fetchOrders();
+                                }
+                            } catch (e) {
+                                console.error('SSE parse error', e);
+                            }
+                        };
+
+                        this._es.onerror = () => {
+                            console.warn('SSE disconnected — reconnecting in 5s...');
+                            this.sseState = 0;
+                            if (this._es) { try { this._es.close(); } catch(e) {} }
+                            if (this._sseReconnectTimer) clearTimeout(this._sseReconnectTimer);
+                            this._sseReconnectTimer = setTimeout(() => this._connectSSE(), 5000);
+                        };
+                    } catch (e) {
+                        console.warn('SSE not supported', e);
+                    }
+                },
+
+                _recomputeStats() {
+                    const counts = { total_active: 0, pending: 0, in_progress: 0, picking: 0, invoicing: 0, ready: 0, shipped: 0 };
+                    for (const o of (this.orders || [])) {
+                        counts.total_active += 1;
+                        const s = o.status;
+                        if (s === 'Pendiente') counts.pending += 1;
+                        if (s === 'En Proceso') counts.in_progress += 1;
+                        if (s === 'Entregado') counts.picking += 1;
+                        if (s === 'Facturacion') counts.invoicing += 1;
+                        if (s === 'Relacion de envio') counts.ready += 1;
+                        if (s === 'Enviado al cliente') counts.shipped += 1;
+                    }
+                    this.stats = counts;
+                },
+
+                destroy() {
+                    if (this._interval) clearInterval(this._interval);
+                    if (this._timeUpdater) clearInterval(this._timeUpdater);
+                    if (this._sseReconnectTimer) clearTimeout(this._sseReconnectTimer);
+                    if (this.panelRotationTimer) clearInterval(this.panelRotationTimer);
+                    if (this._es) { try { this._es.close(); } catch(e) {} }
+                    this.stopRecordedAnnouncement();
+                    if (this._audioCtx) { try { this._audioCtx.close(); } catch(e) {} }
+                }
+            }));
+        });
+    </script>
+</div>
+{% endblock %}

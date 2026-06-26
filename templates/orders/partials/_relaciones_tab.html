@@ -1,14 +1,7 @@
 <!-- Action Bar -->
 <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden print-hide">
-    <div class="px-6 py-4 flex flex-wrap items-center gap-3 bg-gradient-to-r from-indigo-50 to-white">
-        <!-- Actualizar: re-save from current facturas data -->
-        <template x-if="currentRelacion && !currentRelacion.is_closed">
-            <button @click="updateRelacionFromFacturas()" :disabled="relacionLoading"
-                class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-0.5 active:scale-95">
-                <svg class="w-5 h-5" :class="relacionLoading && 'animate-spin'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                Actualizar
-            </button>
-        </template>
+    <div class="px-4 py-2 flex flex-wrap items-center gap-2 bg-gradient-to-r from-indigo-50 to-white">
+
 
         <!-- Reimprimir: download Excel -->
         <template x-if="currentRelacion">
@@ -64,7 +57,7 @@
 <template x-if="currentRelacion && currentRelacion.invoices && currentRelacion.invoices.length > 0">
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div class="overflow-x-auto">
-            <table class="w-full border-collapse" style="min-width: 800px; font-family: 'Calibri', 'Segoe UI', sans-serif; font-size: 13px; border: 1px solid #999;">
+            <table id="relaciones-table" class="w-full border-collapse" style="min-width: 800px; font-family: 'Calibri', 'Segoe UI', sans-serif; font-size: 13px; border: 1px solid #999;">
 
                 <thead>
                     <!-- Row 1: Title -->
@@ -112,7 +105,7 @@
 
                 <!-- Data Rows grouped by category -->
                 <template x-for="(group, gIdx) in relacionInvoiceGroups" :key="group.category">
-                    <tbody>
+                    <tbody x-show="!['ANEXADAS MTY', 'ANEXADAS GDL', 'ANEXADAS IRP'].includes(group.category)">
                         <!-- Empty separator row between groups (not for first group) -->
                         <template x-if="gIdx > 0">
                             <tr style="height: 16px;">
@@ -137,7 +130,7 @@
                         </tr>
                         <!-- Invoice data rows -->
                         <template x-for="(inv, idx) in group.invoices" :key="inv.invoice_number || idx">
-                            <tr style="height: 26px;">
+                            <tr :data-id="inv.invoice_number" style="height: 26px;" :class="inv._highlighted ? 'invoice-row-highlighted-relacion transition-colors-custom' : 'bg-white transition-colors-custom'">
                                 <td style="border: 1px solid #999; text-align: center; font-size: 12px; font-weight: bold; padding: 2px 5px;"
                                     x-text="(inv.order_number ? inv.order_number + '/' : '') + (inv.invoice_number || '')"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 12px; font-weight: bold; padding: 2px 5px;"
@@ -149,7 +142,7 @@
                                 <td style="border: 1px solid #999; text-align: center; font-size: 12px; padding: 2px 5px;"
                                     x-text="(() => { const pt = (inv.payment_terms || '').toUpperCase(); return pt !== 'CONTADO' ? 'X' : ''; })()"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 12px; padding: 2px 5px;"
-                                    x-text="(() => { const total = Number(inv.total || 0); const paid = Number(inv.paid_to_date || 0); return (paid >= total && total > 0) ? 'X' : ''; })()"></td>
+                                    x-text="(() => { const pt = (inv.payment_terms || '').toUpperCase(); return pt === 'CONTADO' ? 'X' : ''; })()"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 12px; padding: 2px 5px;"
                                     x-text="inv.recibido ? 'X' : ''"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 12px; padding: 2px 5px;"
@@ -197,17 +190,33 @@
                         <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Recibido</td>
                         <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Entrega</td>
                     </tr>
-                    <!-- GDL Empty data row -->
-                    <tr style="height: 22px;">
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                    </tr>
+                    <!-- GDL data rows -->
+                    <template x-if="relacionInvoiceGroups.find(g => g.category === 'ANEXADAS GDL')">
+                        <template x-for="(inv, idx) in relacionInvoiceGroups.find(g => g.category === 'ANEXADAS GDL').invoices" :key="inv.invoice_number || idx">
+                            <tr :data-id="inv.invoice_number" style="height: 22px;" :class="inv._highlighted ? 'invoice-row-highlighted-relacion transition-colors-custom' : 'bg-white transition-colors-custom'">
+                                <td style="border: 1px solid #999; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 5px;" x-text="(inv.order_number ? inv.order_number + '/' : '') + (inv.invoice_number || '')"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 5px;" x-text="inv.customer_name || ''"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 11px; padding: 2px 5px;" x-text="'$' + Number(inv.total || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 5px;" x-text="inv.observaciones || inv.nota || inv.shipping_type || 'LOCAL'"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="(() => { const pt = (inv.payment_terms || '').toUpperCase(); return pt !== 'CONTADO' ? 'X' : ''; })()"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="(() => { const pt = (inv.payment_terms || '').toUpperCase(); return pt === 'CONTADO' ? 'X' : ''; })()"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="inv.recibido ? 'X' : ''"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="inv.entrega ? 'X' : ''"></td>
+                            </tr>
+                        </template>
+                    </template>
+                    <template x-if="!relacionInvoiceGroups.find(g => g.category === 'ANEXADAS GDL')">
+                        <tr style="height: 22px;">
+                            <td style="border: 1px solid #999;" class="bg-white"></td>
+                            <td style="border: 1px solid #999;" class="bg-white"></td>
+                            <td style="border: 1px solid #999;" class="bg-white"></td>
+                            <td style="border: 1px solid #999;" class="bg-white"></td>
+                            <td style="border: 1px solid #999;" class="bg-white"></td>
+                            <td style="border: 1px solid #999;" class="bg-white"></td>
+                            <td style="border: 1px solid #999;" class="bg-white"></td>
+                            <td style="border: 1px solid #999;" class="bg-white"></td>
+                        </tr>
+                    </template>
 
                     <!-- ═══ SPACER ═══ -->
                     <tr style="height: 30px;"><td colspan="8" class="bg-white" style="border: none;"></td></tr>
@@ -245,17 +254,33 @@
                         <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Recibido</td>
                         <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Entrega</td>
                     </tr>
-                    <!-- MTY Empty data row -->
-                    <tr style="height: 22px;">
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                    </tr>
+                    <!-- MTY data rows -->
+                    <template x-if="relacionInvoiceGroups.find(g => g.category === 'ANEXADAS MTY')">
+                        <template x-for="(inv, idx) in relacionInvoiceGroups.find(g => g.category === 'ANEXADAS MTY').invoices" :key="inv.invoice_number || idx">
+                            <tr :data-id="inv.invoice_number" style="height: 22px;" :class="inv._highlighted ? 'invoice-row-highlighted-relacion transition-colors-custom' : 'bg-white transition-colors-custom'">
+                                <td style="border: 1px solid #999; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 5px;" x-text="(inv.order_number ? inv.order_number + '/' : '') + (inv.invoice_number || '')"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 5px;" x-text="inv.customer_name || ''"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 11px; padding: 2px 5px;" x-text="'$' + Number(inv.total || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 5px;" x-text="inv.observaciones || inv.nota || inv.shipping_type || 'LOCAL'"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="(() => { const pt = (inv.payment_terms || '').toUpperCase(); return pt !== 'CONTADO' ? 'X' : ''; })()"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="(() => { const pt = (inv.payment_terms || '').toUpperCase(); return pt === 'CONTADO' ? 'X' : ''; })()"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="inv.recibido ? 'X' : ''"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="inv.entrega ? 'X' : ''"></td>
+                            </tr>
+                        </template>
+                    </template>
+                    <template x-if="!relacionInvoiceGroups.find(g => g.category === 'ANEXADAS MTY')">
+                        <tr style="height: 22px;">
+                            <td style="border: 1px solid #999;" class="bg-white"></td>
+                            <td style="border: 1px solid #999;" class="bg-white"></td>
+                            <td style="border: 1px solid #999;" class="bg-white"></td>
+                            <td style="border: 1px solid #999;" class="bg-white"></td>
+                            <td style="border: 1px solid #999;" class="bg-white"></td>
+                            <td style="border: 1px solid #999;" class="bg-white"></td>
+                            <td style="border: 1px solid #999;" class="bg-white"></td>
+                            <td style="border: 1px solid #999;" class="bg-white"></td>
+                        </tr>
+                    </template>
 
                     <!-- ═══ SPACER ═══ -->
                     <tr style="height: 30px;"><td colspan="8" class="bg-white" style="border: none;"></td></tr>
@@ -293,17 +318,33 @@
                         <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Recibido</td>
                         <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Entrega</td>
                     </tr>
-                    <!-- IRP Empty data row -->
-                    <tr style="height: 22px;">
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                    </tr>
+                    <!-- IRP data rows -->
+                    <template x-if="relacionInvoiceGroups.find(g => g.category === 'ANEXADAS IRP')">
+                        <template x-for="(inv, idx) in relacionInvoiceGroups.find(g => g.category === 'ANEXADAS IRP').invoices" :key="inv.invoice_number || idx">
+                            <tr :data-id="inv.invoice_number" style="height: 22px;" :class="inv._highlighted ? 'invoice-row-highlighted-relacion transition-colors-custom' : 'bg-white transition-colors-custom'">
+                                <td style="border: 1px solid #999; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 5px;" x-text="(inv.order_number ? inv.order_number + '/' : '') + (inv.invoice_number || '')"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 5px;" x-text="inv.customer_name || ''"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 11px; padding: 2px 5px;" x-text="'$' + Number(inv.total || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 5px;" x-text="inv.observaciones || inv.nota || inv.shipping_type || 'LOCAL'"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="(() => { const pt = (inv.payment_terms || '').toUpperCase(); return pt !== 'CONTADO' ? 'X' : ''; })()"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="(() => { const pt = (inv.payment_terms || '').toUpperCase(); return pt === 'CONTADO' ? 'X' : ''; })()"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="inv.recibido ? 'X' : ''"></td>
+                                <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="inv.entrega ? 'X' : ''"></td>
+                            </tr>
+                        </template>
+                    </template>
+                    <template x-if="!relacionInvoiceGroups.find(g => g.category === 'ANEXADAS IRP')">
+                        <tr style="height: 22px;">
+                            <td style="border: 1px solid #999;" class="bg-white"></td>
+                            <td style="border: 1px solid #999;" class="bg-white"></td>
+                            <td style="border: 1px solid #999;" class="bg-white"></td>
+                            <td style="border: 1px solid #999;" class="bg-white"></td>
+                            <td style="border: 1px solid #999;" class="bg-white"></td>
+                            <td style="border: 1px solid #999;" class="bg-white"></td>
+                            <td style="border: 1px solid #999;" class="bg-white"></td>
+                            <td style="border: 1px solid #999;" class="bg-white"></td>
+                        </tr>
+                    </template>
 
                     <!-- ═══ SINGLE SIGNATURE BLOCK (at the very end) ═══ -->
                     <tr style="height: 20px;"><td colspan="8" class="bg-white" style="border: none;"></td></tr>

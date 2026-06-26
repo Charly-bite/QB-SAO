@@ -184,11 +184,16 @@ class RelacionManager:
         invoices: List[Dict[str, Any]],
         username: str,
         notes: str = "",
+        manual_order: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         Create a new relación for the date, or update the existing one.
         Returns the relación dict with folio.
         """
+        if manual_order:
+            order_map = {str(num): idx for idx, num in enumerate(manual_order)}
+            invoices = sorted(invoices, key=lambda inv: order_map.get(str(inv.get("invoice_number", inv.get("id"))), 999999))
+
         folio = self.generate_folio(date_str)
         existing = self.get_relacion(date_str)
         invoice_numbers = [str(inv.get("invoice_number", "")) for inv in invoices]
@@ -257,6 +262,53 @@ class RelacionManager:
             f"Relación {folio} {action} by {username} with {len(invoices)} invoices"
         )
         return relacion
+
+    def toggle_invoice_in_relacion(
+        self,
+        date_str: str,
+        invoice_numbers: Any,
+        selected: bool,
+        invoice_data: Any,
+        username: str,
+        manual_order: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Add or remove one or more invoices in the shipping relation for a date."""
+        folio = self.generate_folio(date_str)
+        existing = self.get_relacion(date_str)
+
+        if existing and existing.get("is_closed"):
+            raise ValueError(f"La relación {folio} ya fue cerrada. No se puede modificar.")
+
+        invoices = existing.get("invoices", []) if existing else []
+
+        # Normalize invoice_numbers to a set of strings
+        if isinstance(invoice_numbers, (list, set, tuple)):
+            target_numbers = {str(num) for num in invoice_numbers}
+        else:
+            target_numbers = {str(invoice_numbers)}
+
+        # Filter out existing invoices that are being toggled
+        invoices = [inv for inv in invoices if str(inv.get("invoice_number")) not in target_numbers]
+
+        if selected:
+            # If selected=True, append the new invoice data
+            if isinstance(invoice_data, list):
+                for item in invoice_data:
+                    if item:
+                        invoices.append(item)
+            elif invoice_data:
+                invoices.append(invoice_data)
+            else:
+                for num in target_numbers:
+                    invoices.append({"invoice_number": num})
+
+        return self.create_or_update_relacion(
+            date_str=date_str,
+            invoices=invoices,
+            username=username,
+            notes=existing.get("notes", "") if existing else "",
+            manual_order=manual_order
+        )
 
     # ── Signature Management ─────────────────────────────────────────────
 
