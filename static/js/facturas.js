@@ -1442,10 +1442,6 @@ function facturasApp() {
         },
 
         editObservacion(inv) {
-            if (!inv.related_order_id) {
-                alert('Esta factura no tiene un pedido local vinculado. No se puede agregar nota.');
-                return;
-            }
             inv._temp_observaciones = inv.observaciones || '';
             inv._editing = true;
         },
