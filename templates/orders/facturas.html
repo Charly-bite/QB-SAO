@@ -34,6 +34,17 @@
                         </span>
                     </template>
                 </button>
+                <button @click="activeTab = 'pendientes'" 
+                    class="px-3 py-1.5 rounded-md text-xs font-bold transition-all duration-200 flex items-center gap-1"
+                    :class="activeTab === 'pendientes' ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'">
+                    ⏰ Pendientes
+                    <template x-if="pendingInvoices.length > 0">
+                        <span class="ml-0.5 text-[9px] px-1 py-0.5 rounded font-bold"
+                            :class="activeTab === 'pendientes' ? 'bg-white text-orange-700' : 'bg-orange-100 text-orange-600'"
+                            x-text="pendingInvoices.length">
+                        </span>
+                    </template>
+                </button>
                 <button @click="activeTab = 'relaciones'; fetchRelaciones()" 
                     class="px-3 py-1.5 rounded-md text-xs font-bold transition-all duration-200 flex items-center gap-1"
                     :class="activeTab === 'relaciones' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'">
@@ -162,6 +173,9 @@
 
     <!-- ═══════ CRÉDITO Y COBRANZA TAB ═══════ -->
     {% include 'orders/partials/_credito_tab.html' %}
+
+    <!-- ═══════ PENDIENTES TAB ═══════ -->
+    {% include 'orders/partials/_pendientes_tab.html' %}
 
     <!-- ═══════ RELACIONES DE ENVÍO TAB ═══════ -->
     <!-- Relaciones Tab -->

@@ -1,0 +1,114 @@
+<!-- Pendientes Tab — Invoices paid but not in the Relación de Envío -->
+<div x-show="activeTab === 'pendientes'" x-cloak class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+
+    <!-- Action Bar -->
+    <div class="px-4 py-3 flex flex-wrap items-center gap-3 bg-gradient-to-r from-orange-50 to-white border-b border-slate-100">
+
+        <div class="flex items-center gap-2">
+            <span class="text-sm font-bold text-slate-700">Facturas no incluidas en la Relación de Envío</span>
+        </div>
+
+        <div class="flex-1"></div>
+
+        <!-- Count badge -->
+        <div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold border"
+            :class="pendingInvoices.length === 0 
+                ? 'bg-green-50 text-green-700 border-green-200' 
+                : 'bg-orange-50 text-orange-700 border-orange-200'">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span x-text="pendingInvoices.length === 0 ? 'Todo incluido' : pendingInvoices.length + ' pendiente' + (pendingInvoices.length !== 1 ? 's' : '')"></span>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <template x-if="pendingInvoices.length > 0">
+        <div class="overflow-x-auto">
+            <table class="w-full border-collapse text-sm">
+                <thead>
+                    <tr class="bg-slate-700 text-white">
+                        <th class="px-3 py-2 text-left font-bold text-xs">#</th>
+                        <th class="px-3 py-2 text-left font-bold text-xs">No. Factura</th>
+                        <th class="px-3 py-2 text-left font-bold text-xs">No. Pedido</th>
+                        <th class="px-3 py-2 text-left font-bold text-xs">Cliente</th>
+                        <th class="px-3 py-2 text-right font-bold text-xs">Importe</th>
+                        <th class="px-3 py-2 text-center font-bold text-xs">Condición</th>
+                        <th class="px-3 py-2 text-center font-bold text-xs">Tipo de Envío</th>
+                        <th class="px-3 py-2 text-center font-bold text-xs">Observación</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="(inv, idx) in pendingInvoices" :key="inv.invoice_number || idx">
+                        <tr class="border-b border-slate-100 transition-colors"
+                            :class="idx % 2 === 0 ? 'bg-white hover:bg-orange-50/50' : 'bg-slate-50/50 hover:bg-orange-50/50'">
+                            <!-- # -->
+                            <td class="px-3 py-2.5 text-slate-500 text-xs font-medium" x-text="idx + 1"></td>
+                            <!-- No. Factura -->
+                            <td class="px-3 py-2.5 font-bold text-slate-800" x-text="inv.invoice_number || ''"></td>
+                            <!-- No. Pedido -->
+                            <td class="px-3 py-2.5 text-slate-600 text-xs" x-text="inv.order_number || '—'"></td>
+                            <!-- Cliente -->
+                            <td class="px-3 py-2.5 text-slate-700 text-xs" x-text="inv.customer_name || ''"></td>
+                            <!-- Importe -->
+                            <td class="px-3 py-2.5 text-right font-semibold text-slate-800 text-xs">
+                                <span x-text="'$' + Number(inv.total || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})"></span>
+                                <span class="text-slate-400 ml-1 text-[10px]" x-text="inv.currency || 'MXN'"></span>
+                            </td>
+                            <!-- Condición de pago -->
+                            <td class="px-3 py-2.5 text-center">
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase"
+                                    :class="isCredito(inv) 
+                                        ? 'bg-blue-100 text-blue-700 border border-blue-200' 
+                                        : 'bg-amber-100 text-amber-700 border border-amber-200'"
+                                    x-text="isCredito(inv) ? 'CRÉDITO' : 'CONTADO'">
+                                </span>
+                            </td>
+                            <!-- Tipo de Envío -->
+                            <td class="px-3 py-2.5 text-center">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-600 border border-slate-200"
+                                    x-text="inv.shipping_type || 'LOCAL'">
+                                </span>
+                            </td>
+                            <!-- Observación -->
+                            <td class="px-3 py-2.5 text-center text-xs text-slate-600" x-text="inv.observaciones || '—'"></td>
+                        </tr>
+                    </template>
+                </tbody>
+                <!-- Totals footer -->
+                <tfoot>
+                    <tr class="bg-slate-100 border-t-2 border-slate-300">
+                        <td colspan="4" class="px-3 py-2.5 text-right font-bold text-slate-700 text-xs uppercase">Total Pendiente</td>
+                        <td class="px-3 py-2.5 text-right font-bold text-slate-800 text-sm"
+                            x-text="'$' + pendingInvoices.reduce((s, i) => s + Number(i.total || 0), 0).toLocaleString('es-MX', {minimumFractionDigits: 2})">
+                        </td>
+                        <td colspan="3"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </template>
+
+    <!-- Empty state — all invoices in relación -->
+    <template x-if="pendingInvoices.length === 0 && invoices.length > 0">
+        <div class="px-6 py-16 text-center">
+            <div class="flex flex-col items-center gap-3">
+                <svg class="w-12 h-12 text-green-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <p class="text-green-600 font-medium">Todas las facturas están incluidas en la Relación</p>
+                <p class="text-sm text-slate-400">No hay facturas pendientes por incluir</p>
+            </div>
+        </div>
+    </template>
+
+    <!-- Empty state — no invoices at all -->
+    <template x-if="invoices.length === 0">
+        <div class="px-6 py-16 text-center">
+            <div class="flex flex-col items-center gap-3">
+                <svg class="w-12 h-12 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                <p class="text-slate-500 font-medium">No hay facturas para esta fecha</p>
+            </div>
+        </div>
+    </template>
+</div>
