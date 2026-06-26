@@ -34,11 +34,6 @@
                         </span>
                     </template>
                 </button>
-                <button @click="activeTab = 'almacen'; fetchRelaciones()" 
-                    class="px-3 py-1.5 rounded-md text-xs font-bold transition-all duration-200 flex items-center gap-1"
-                    :class="activeTab === 'almacen' ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'">
-                    🚚 Almacén
-                </button>
                 <button @click="activeTab = 'relaciones'; fetchRelaciones()" 
                     class="px-3 py-1.5 rounded-md text-xs font-bold transition-all duration-200 flex items-center gap-1"
                     :class="activeTab === 'relaciones' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'">
@@ -48,6 +43,11 @@
                             :class="activeTab === 'relaciones' ? 'bg-white text-indigo-700' : 'bg-indigo-100 text-indigo-600'" 
                             x-text="currentRelacion.folio"></span>
                     </template>
+                </button>
+                <button @click="activeTab = 'almacen'; fetchRelaciones()" 
+                    class="px-3 py-1.5 rounded-md text-xs font-bold transition-all duration-200 flex items-center gap-1"
+                    :class="activeTab === 'almacen' ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'">
+                    🚚 Almacén
                 </button>
             </div>
 
@@ -163,15 +163,15 @@
     <!-- ═══════ CRÉDITO Y COBRANZA TAB ═══════ -->
     {% include 'orders/partials/_credito_tab.html' %}
 
-    <!-- ═══════ ALMACÉN Y LOGÍSTICA TAB ═══════ -->
-    {% include 'orders/partials/_almacen_tab.html' %}
-
     <!-- ═══════ RELACIONES DE ENVÍO TAB ═══════ -->
     <!-- Relaciones Tab -->
     <div x-show="activeTab === 'relaciones'" x-cloak class="space-y-6">
         {% include 'orders/partials/_relaciones_tab.html' %}
         {% include 'orders/partials/_relaciones_history.html' %}
     </div>
+
+    <!-- ═══════ ALMACÉN Y LOGÍSTICA TAB ═══════ -->
+    {% include 'orders/partials/_almacen_tab.html' %}
 
     <!-- Context Menu -->
     {% include 'orders/partials/_context_menu.html' %}
