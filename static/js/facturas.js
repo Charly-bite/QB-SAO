@@ -985,9 +985,9 @@ function facturasApp() {
             Sortable.create(el, {
                 group: 'shared',
                 animation: 150,
-                // No handle — entire row is draggable
-                filter: 'input, select, button, textarea, a, .ignore-elements, template',
-                preventOnFilter: true,
+                handle: '.drag-handle',
+                filter: '.ignore-elements, template',
+                preventOnFilter: false,
                 ghostClass: 'sortable-ghost',
                 chosenClass: 'sortable-chosen',
                 delay: 100,
