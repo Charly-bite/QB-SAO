@@ -432,6 +432,37 @@ function facturasApp() {
             return this.invoices.filter(i => !i._selected && i.status !== 'Cancelada');
         },
 
+        get pendingInvoicesByDate() {
+            const groups = {};
+            const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+            const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+            this.pendingInvoices.forEach(inv => {
+                // Normalize: take only the YYYY-MM-DD portion
+                const raw = String(inv.invoice_date || '').trim();
+                const dateKey = raw.length >= 10 ? raw.substring(0, 10) : (raw || 'Sin Fecha');
+
+                if (!groups[dateKey]) {
+                    let label = dateKey;
+                    if (dateKey !== 'Sin Fecha' && dateKey.includes('-')) {
+                        try {
+                            const [year, month, day] = dateKey.split('-').map(Number);
+                            if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+                                const d = new Date(year, month - 1, day);
+                                label = dayNames[d.getDay()] + ', ' + day + ' de ' + monthNames[month - 1] + ' de ' + year;
+                            }
+                        } catch(e) { /* keep raw key */ }
+                    }
+                    groups[dateKey] = { dateKey, label, invoices: [], total: 0 };
+                }
+                groups[dateKey].invoices.push(inv);
+                groups[dateKey].total += Number(inv.total || 0);
+            });
+
+            return Object.values(groups).sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+        },
+
+
         sortInvoicesArray(arr) {
             const col = this.sortColumn;
             
