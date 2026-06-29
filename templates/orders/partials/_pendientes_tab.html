@@ -2,83 +2,117 @@
 <div x-show="activeTab === 'pendientes'" x-cloak class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
 
     <!-- Action Bar -->
-    <div class="px-4 py-3 flex flex-wrap items-center gap-3 bg-gradient-to-r from-orange-50 to-white border-b border-slate-100">
+    <div class="pendientes-action-bar flex flex-wrap items-center gap-3">
 
-        <div class="flex items-center gap-2">
-            <span class="text-sm font-bold text-slate-700">Facturas no incluidas en la Relación de Envío</span>
+        <div class="flex items-center gap-2.5">
+            <div class="flex items-center justify-center w-8 h-8 rounded-lg" style="background-color: #fed7aa;">
+                <svg class="w-4 h-4" style="color: #c2410c;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <div>
+                <span class="text-sm font-extrabold" style="color: #1e293b;">Facturas no incluidas en la Relación de Envío</span>
+                <p class="text-[10px] font-medium" style="color: #94a3b8;">Facturas facturadas que aún no se han agregado a ninguna relación</p>
+            </div>
         </div>
 
         <div class="flex-1"></div>
 
         <!-- Count badge -->
-        <div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold border"
+        <div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border"
             :class="pendingInvoices.length === 0 
                 ? 'bg-green-50 text-green-700 border-green-200' 
-                : 'bg-orange-50 text-orange-700 border-orange-200'">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                : ''"
+            :style="pendingInvoices.length > 0 ? 'background-color: #fff7ed; color: #c2410c; border-color: #fdba74;' : ''">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
             <span x-text="pendingInvoices.length === 0 ? 'Todo incluido' : pendingInvoices.length + ' pendiente' + (pendingInvoices.length !== 1 ? 's' : '')"></span>
         </div>
     </div>
 
-    <!-- Table -->
+    <!-- Table grouped by date -->
     <template x-if="pendingInvoices.length > 0">
         <div class="overflow-x-auto">
-            <table class="w-full border-collapse text-sm">
-                <thead>
-                    <tr class="bg-slate-700 text-white">
-                        <th class="px-3 py-2 text-left font-bold text-xs">#</th>
-                        <th class="px-3 py-2 text-left font-bold text-xs">No. Factura</th>
-                        <th class="px-3 py-2 text-left font-bold text-xs">No. Pedido</th>
-                        <th class="px-3 py-2 text-left font-bold text-xs">Cliente</th>
-                        <th class="px-3 py-2 text-right font-bold text-xs">Importe</th>
-                        <th class="px-3 py-2 text-center font-bold text-xs">Condición</th>
-                        <th class="px-3 py-2 text-center font-bold text-xs">Tipo de Envío</th>
-                        <th class="px-3 py-2 text-center font-bold text-xs">Observación</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <template x-for="(inv, idx) in pendingInvoices" :key="inv.invoice_number || idx">
-                        <tr class="border-b border-slate-100 transition-colors"
-                            :class="idx % 2 === 0 ? 'bg-white hover:bg-orange-50/50' : 'bg-slate-50/50 hover:bg-orange-50/50'">
-                            <!-- # -->
-                            <td class="px-3 py-2.5 text-slate-500 text-xs font-medium" x-text="idx + 1"></td>
-                            <!-- No. Factura -->
-                            <td class="px-3 py-2.5 font-bold text-slate-800" x-text="inv.invoice_number || ''"></td>
-                            <!-- No. Pedido -->
-                            <td class="px-3 py-2.5 text-slate-600 text-xs" x-text="inv.order_number || '—'"></td>
-                            <!-- Cliente -->
-                            <td class="px-3 py-2.5 text-slate-700 text-xs" x-text="inv.customer_name || ''"></td>
-                            <!-- Importe -->
-                            <td class="px-3 py-2.5 text-right font-semibold text-slate-800 text-xs">
-                                <span x-text="'$' + Number(inv.total || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})"></span>
-                                <span class="text-slate-400 ml-1 text-[10px]" x-text="inv.currency || 'MXN'"></span>
-                            </td>
-                            <!-- Condición de pago -->
-                            <td class="px-3 py-2.5 text-center">
-                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase"
-                                    :class="isCredito(inv) 
-                                        ? 'bg-blue-100 text-blue-700 border border-blue-200' 
-                                        : 'bg-amber-100 text-amber-700 border border-amber-200'"
-                                    x-text="isCredito(inv) ? 'CRÉDITO' : 'CONTADO'">
-                                </span>
-                            </td>
-                            <!-- Tipo de Envío -->
-                            <td class="px-3 py-2.5 text-center">
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-600 border border-slate-200"
-                                    x-text="inv.shipping_type || 'LOCAL'">
-                                </span>
-                            </td>
-                            <!-- Observación -->
-                            <td class="px-3 py-2.5 text-center text-xs text-slate-600" x-text="inv.observaciones || '—'"></td>
-                        </tr>
-                    </template>
-                </tbody>
-                <!-- Totals footer -->
+            <template x-for="(group, gIdx) in pendingInvoicesByDate" :key="group.dateKey">
+                <div>
+                    <!-- Date Group Header -->
+                    <div class="pendientes-date-header">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4" style="color: #ea580c;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            <span class="pendientes-date-label" x-text="group.label"></span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="pendientes-date-count" x-text="group.invoices.length + ' factura' + (group.invoices.length !== 1 ? 's' : '')"></span>
+                            <span class="pendientes-date-total" x-text="'$' + group.total.toLocaleString('es-MX', {minimumFractionDigits: 2})"></span>
+                        </div>
+                    </div>
+
+                    <!-- Table for this date group -->
+                    <table class="w-full border-collapse">
+                        <thead class="pendientes-thead" x-show="gIdx === 0">
+                            <tr>
+                                <th class="text-left" style="width: 40px;">#</th>
+                                <th class="text-left">No. Factura</th>
+                                <th class="text-left">No. Pedido</th>
+                                <th class="text-left">Cliente</th>
+                                <th class="text-right">Importe</th>
+                                <th class="text-center">Condición</th>
+                                <th class="text-center">Tipo de Envío</th>
+                                <th class="text-center">Observación</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="(inv, idx) in group.invoices" :key="inv.invoice_number || idx">
+                                <tr class="pendientes-row"
+                                    :style="idx % 2 === 0 ? '' : 'background-color: #f8fafc;'">
+                                    <!-- # -->
+                                    <td style="color: #94a3b8; font-size: 12px; font-weight: 600;" x-text="idx + 1"></td>
+                                    <!-- No. Factura -->
+                                    <td>
+                                        <span class="pendientes-invoice-num" x-text="inv.invoice_number || ''"></span>
+                                    </td>
+                                    <!-- No. Pedido -->
+                                    <td style="color: #64748b; font-size: 12px;" x-text="inv.order_number || '—'"></td>
+                                    <!-- Cliente -->
+                                    <td style="color: #334155; font-size: 12px; font-weight: 500;" x-text="inv.customer_name || ''"></td>
+                                    <!-- Importe -->
+                                    <td class="text-right">
+                                        <span class="pendientes-amount" x-text="'$' + Number(inv.total || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})"></span>
+                                        <span class="pendientes-amount-currency" x-text="inv.currency || 'MXN'"></span>
+                                    </td>
+                                    <!-- Condición de pago -->
+                                    <td class="text-center">
+                                        <span class="inline-flex items-center gap-1"
+                                            :class="isCredito(inv) ? 'pendientes-badge-credito' : 'pendientes-badge-contado'"
+                                            x-text="isCredito(inv) ? 'CRÉDITO' : 'CONTADO'">
+                                        </span>
+                                    </td>
+                                    <!-- Tipo de Envío -->
+                                    <td class="text-center">
+                                        <span class="inline-flex items-center"
+                                            :class="(inv.shipping_type || 'LOCAL').toUpperCase().includes('FORAN') ? 'pendientes-badge-foraneo' : 'pendientes-badge-local'"
+                                            x-text="inv.shipping_type || 'LOCAL'">
+                                        </span>
+                                    </td>
+                                    <!-- Observación -->
+                                    <td class="text-center" style="color: #64748b; font-size: 12px;" x-text="inv.observaciones || '—'"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </template>
+
+            <!-- Grand Totals Footer -->
+            <table class="w-full border-collapse">
                 <tfoot>
-                    <tr class="bg-slate-100 border-t-2 border-slate-300">
-                        <td colspan="4" class="px-3 py-2.5 text-right font-bold text-slate-700 text-xs uppercase">Total Pendiente</td>
-                        <td class="px-3 py-2.5 text-right font-bold text-slate-800 text-sm"
-                            x-text="'$' + pendingInvoices.reduce((s, i) => s + Number(i.total || 0), 0).toLocaleString('es-MX', {minimumFractionDigits: 2})">
+                    <tr class="pendientes-footer">
+                        <td colspan="4" class="text-right">
+                            <span class="pendientes-footer-label">Total Pendiente</span>
+                        </td>
+                        <td class="text-right">
+                            <span class="pendientes-footer-total"
+                                x-text="'$' + pendingInvoices.reduce((s, i) => s + Number(i.total || 0), 0).toLocaleString('es-MX', {minimumFractionDigits: 2})">
+                            </span>
                         </td>
                         <td colspan="3"></td>
                     </tr>
