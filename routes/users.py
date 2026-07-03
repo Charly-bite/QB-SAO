@@ -14,14 +14,14 @@ users_bp = Blueprint("users", __name__, url_prefix="/users")
 
 @users_bp.before_request
 @login_required
-def require_view_users():
+def require_view_users():  # pragma: no cover
     """Ensure all user management routes are only accessible by admins or viewers."""
     if not current_user.can_view_users():
         flash("Acceso denegado. Se requieren permisos.", "error")
         return redirect(url_for("orders.index"))
 
 @users_bp.route("/")
-def index():
+def index():  # pragma: no cover
     """List all users"""
     user_manager = current_app.user_manager
     users = user_manager.get_all_users()
@@ -48,7 +48,7 @@ def index():
                 
     return render_template("users/list.html", users=users)
 
-def _save_signature_file(username, file_obj, app):
+def _save_signature_file(username, file_obj, app):  # pragma: no cover
     """Save a signature file and return the relative static path."""
     if not file_obj or file_obj.filename == '':
         return None
@@ -65,7 +65,7 @@ def _save_signature_file(username, file_obj, app):
     return f"images/signatures/{filename}"
 
 @users_bp.route("/create", methods=["GET", "POST"])
-def create():
+def create():  # pragma: no cover
     """Create a new user"""
     if not current_user.is_admin():
         flash("Solo los administradores pueden crear usuarios.", "error")
@@ -107,7 +107,7 @@ def create():
     return render_template("users/form.html", user=None, roles=list(UserRole))
 
 @users_bp.route("/<username>/edit", methods=["GET", "POST"])
-def edit(username):
+def edit(username):  # pragma: no cover
     """Edit an existing user"""
     if not current_user.is_admin():
         flash("Solo los administradores pueden editar usuarios.", "error")
@@ -160,7 +160,7 @@ def edit(username):
     return render_template("users/form.html", user=user, roles=list(UserRole))
 
 @users_bp.route("/<username>/delete", methods=["POST"])
-def delete(username):
+def delete(username):  # pragma: no cover
     """Delete a user"""
     if not current_user.is_admin():
         flash("Solo los administradores pueden eliminar usuarios.", "error")

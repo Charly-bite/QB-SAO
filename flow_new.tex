@@ -1,0 +1,122 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{tikz}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+\usetikzlibrary{shapes.geometric, arrows, positioning, shadows}
+
+\title{\textbf{Diagrama de Flujo: Lógica de Envíos y Pendientes (QB-SAO)}}
+\author{Departamento de Sistemas}
+\date{30 de junio de 2026}
+
+% Definición de Estilos para TikZ
+\tikzset{
+    startstop/.style={
+        rectangle, rounded corners, minimum width=4.5cm, minimum height=1cm,
+        align=center, draw=red!70!black, fill=pink!60, drop shadow,
+        font=\bfseries
+    },
+    area/.style={
+        rectangle, minimum width=4.5cm, minimum height=1cm,
+        align=center, draw=blue!70!black, fill=blue!15, drop shadow,
+        font=\bfseries
+    },
+    decision/.style={
+        diamond, aspect=1.8, minimum width=4.5cm, minimum height=1.3cm,
+        align=center, draw=yellow!80!black, fill=yellow!20, drop shadow
+    },
+    joint/.style={
+        rectangle, minimum width=5cm, minimum height=1cm,
+        align=center, draw=gray!70!black, fill=gray!15, drop shadow
+    },
+    envio/.style={
+        rectangle, rounded corners, minimum width=5.5cm, minimum height=1cm,
+        align=center, draw=green!70!black, fill=green!20, drop shadow,
+        font=\bfseries
+    },
+    pendientes/.style={
+        rectangle, rounded corners, minimum width=5.5cm, minimum height=1cm,
+        align=center, draw=orange!70!black, fill=orange!15, drop shadow,
+        font=\bfseries
+    },
+    bloqueada/.style={
+        rectangle, rounded corners, minimum width=4.5cm, minimum height=1.2cm,
+        align=center, draw=red!80!black, fill=red!20, drop shadow,
+        font=\bfseries
+    },
+    arrow/.style={
+        thick, ->, >=stealth
+    },
+    line/.style={
+        thick
+    }
+}
+
+\begin{document}
+
+\maketitle
+
+\vspace{0.5cm}
+
+\begin{center}
+\begin{tikzpicture}[scale=0.9, every node/.style={transform shape}]
+    % Nodos con coordenadas exactas y espaciado matemático perfecto para evitar solapamientos
+    \node (start) at (0, 6.5) [startstop] {Obtención de Facturas (SAP)};
+    
+    \node (area_fac) at (-4.5, 5.0) [area] {Área: Facturación};
+    \node (area_cyc) at (4.5, 5.0) [area] {Área: Crédito y Cobranza};
+    
+    \node (val_ambas) at (0, 3.8) [joint] {Validación Conjunta:\\Ambas aprueban};
+    
+    \node (dec_fac) at (-4.5, 2.0) [decision] {¿Facturación\\marca para envío?};
+    \node (dec_cyc) at (4.5, 2.0) [decision] {¿Crédito autoriza?};
+    |
+    \node (rel_envio) at (0, -0.5) [envio] {Aparece en Relación de Envío};
+    
+    \node (bloqueada) at (9.5, 2.0) [bloqueada] {Retenida / Bloqueada\\(No avanza)};
+    
+    \node (val_cyc_no_fac) at (-3.0, -2.5) [joint] {Validación Conjunta:\\CyC aprueba, Fac NO};
+    \node (pendientes) at (-3.0, -4.5) [pendientes] {Pasa a Sección: Pendientes};
+
+    % Conexiones de entrada
+    \draw [arrow] (start) -| (area_fac);
+    \draw [arrow] (start) -| (area_cyc);
+    
+    \draw [arrow] (area_fac) -- (dec_fac);
+    \draw [arrow] (area_cyc) -- (dec_cyc);
+    
+    % Ruta No de Crédito
+    \draw [arrow] (dec_cyc) -- node[above] {No} (bloqueada);
+    
+    % Conexión Sí de Facturación y Sí de Crédito hacia Validación Conjunta (Ambas aprueban)
+    \draw [line] (dec_fac.south) -- node[left] {Sí} ++(0,-0.35) |- (0, 0.4);
+    \draw [line] (dec_cyc.south) -- node[right] {Sí} ++(0,-0.35) |- (0, 0.4);
+    
+    % Línea vertical de validación conjunta que sube al nodo de decisión y baja al de envío
+    \draw [arrow] (0, 0.4) -- (val_ambas.south);
+    \draw [arrow] (0, 0.4) -- (rel_envio.north);
+    
+    % Ruta No de Facturación hacia Validación Conjunta (CyC aprueba, Fac NO)
+    \draw [arrow] (dec_fac.west) -- node[above, near start] {No} ++(-0.6, 0) |- (val_cyc_no_fac.west);
+    
+    % Ruta Sí de Crédito hacia Validación Conjunta (CyC aprueba, Fac NO)
+    % Rodea rel_envio por debajo para evitar cruzar su línea
+    \draw [arrow] (dec_cyc.south) -- ++(0,-2.0) -| node[above, near start] {Sí} (val_cyc_no_fac.north);
+    
+    % De Validación Conjunta a Pendientes
+    \draw [arrow] (val_cyc_no_fac) -- (pendientes);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.5cm}
+
+\section*{Resumen de Reglas de Negocio}
+\begin{itemize}
+    \item \textbf{Relación de Envío} = Aprobada por Facturación \textbf{Y} Aprobada por Crédito y Cobranza.
+    \item \textbf{Pendientes} = No marcada por Facturación \textbf{Y} Aprobada por Crédito y Cobranza.
+    \item \textbf{Bloqueo / Espera} = Facturas rechazadas o sin autorización de Crédito y Cobranza permanecen bloqueadas, sin importar lo que elija Facturación.
+    \item \textbf{Salvaguarda:} Si Crédito revoca su aprobación sobre una factura ya en Relación de Envío o en Pendientes, ésta será removida de inmediato y devuelta a estado de Bloqueo.
+\end{itemize}
+
+\end{document}
