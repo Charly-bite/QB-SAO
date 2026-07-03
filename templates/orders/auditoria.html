@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Auditoría — Open-OMS{% endblock %}
+
+{% block content %}
+<div class="px-6 py-4" x-data="auditoriaApp()" x-init="initApp()">
+    <div class="flex justify-between items-center mb-4">
+        <h1 class="text-2xl font-bold text-gray-800">Registro de Auditoría</h1>
+        <div>
+            <button @click="fetchLogs()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow flex items-center transition-colors">
+                <i class="fas fa-sync-alt mr-2" :class="{'fa-spin': loading}"></i> Actualizar
+            </button>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="p-4 border-b border-gray-200 bg-gray-50 flex flex-wrap gap-4 items-center">
+            <div class="flex-1 min-w-[200px]">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Buscar</label>
+                <input type="text" x-model="searchQuery" placeholder="Usuario, acción, folio..." class="w-full border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+            </div>
+            <div class="w-48">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Filtro de Acción</label>
+                <select x-model="filterAction" class="w-full border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    <option value="">Todas las acciones</option>
+                    <template x-for="action in uniqueActions" :key="action">
+                        <option :value="action" x-text="action"></option>
+                    </template>
+                </select>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha / Hora</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuario</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acción</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Entidad (ID)</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Detalles</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200 text-sm">
+                    <template x-if="loading && logs.length === 0">
+                        <tr><td colspan="5" class="px-6 py-8 text-center text-gray-500"><i class="fas fa-circle-notch fa-spin text-2xl text-blue-500 mb-2"></i><br>Cargando registros...</td></tr>
+                    </template>
+                    <template x-if="!loading && filteredLogs.length === 0">
+                        <tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">No se encontraron registros de auditoría que coincidan con la búsqueda.</td></tr>
+                    </template>
+                    <template x-for="log in filteredLogs" :key="log.id">
+                        <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="px-6 py-3 whitespace-nowrap text-gray-600 font-mono text-xs" x-text="log.timestamp"></td>
+                            <td class="px-6 py-3 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800" x-text="log.username"></span>
+                            </td>
+                            <td class="px-6 py-3 whitespace-nowrap text-gray-800 font-medium" x-text="log.action_type"></td>
+                            <td class="px-6 py-3 whitespace-nowrap text-gray-600 font-bold" x-text="log.entity_id || '-'"></td>
+                            <td class="px-6 py-3 text-gray-500 text-xs">
+                                <pre class="whitespace-pre-wrap bg-gray-100 p-2 rounded border border-gray-200 font-mono" style="max-width: 400px; max-height: 100px; overflow-y: auto;" x-show="log.details" x-text="JSON.stringify(log.details, null, 2)"></pre>
+                                <span x-show="!log.details">-</span>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        <div class="px-6 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+            <div class="text-sm text-gray-700">
+                Mostrando <span class="font-medium" x-text="filteredLogs.length"></span> registros.
+                <span class="text-gray-500 ml-2">(Los registros mayores a 3 meses se eliminan automáticamente)</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function auditoriaApp() {
+    return {
+        logs: [],
+        loading: false,
+        searchQuery: '',
+        filterAction: '',
+        
+        initApp() {
+            this.fetchLogs();
+        },
+        
+        async fetchLogs() {
+            this.loading = true;
+            try {
+                const response = await fetch('/orders/api/audit-logs');
+                const data = await response.json();
+                if (data.success) {
+                    this.logs = data.logs;
+                } else {
+                    console.error('Error cargando auditoria:', data.error);
+                }
+            } catch (err) {
+                console.error('Fetch error:', err);
+            } finally {
+                this.loading = false;
+            }
+        },
+        
+        get uniqueActions() {
+            const actions = new Set(this.logs.map(l => l.action_type));
+            return Array.from(actions).sort();
+        },
+        
+        get filteredLogs() {
+            return this.logs.filter(log => {
+                let match = true;
+                
+                if (this.filterAction) {
+                    if (log.action_type !== this.filterAction) match = false;
+                }
+                
+                if (this.searchQuery) {
+                    const q = this.searchQuery.toLowerCase();
+                    const searchStr = `${log.username} ${log.action_type} ${log.entity_id || ''} ${JSON.stringify(log.details || {})}`.toLowerCase();
+                    if (!searchStr.includes(q)) match = false;
+                }
+                
+                return match;
+            });
+        }
+    }
+}
+</script>
+{% endblock %}

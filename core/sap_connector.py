@@ -59,6 +59,7 @@ class SAPHanaConnector:
         self._cb_lock = threading.Lock()
         self._cb_consecutive_failures = 0
         self._cb_last_failure_time = 0.0
+        self._last_ping_time = 0.0  # throttle ping checks
 
     def connect(self, username=None, password=None):
         user = username or self.username
@@ -134,9 +135,15 @@ class SAPHanaConnector:
         conn = getattr(self._local, "connection", None)
 
         if connected and conn:
+            # Skip ping if we verified recently (within 30s)
+            if time.time() - self._last_ping_time < 30:
+                return
             # Use a fast ping instead of trusting internal driver state blindly
             if not self._ping_connection():  # pragma: no cover
                 connected = False
+            else:
+                self._last_ping_time = time.time()
+                return
 
         if not connected:
             # Circuit-breaker: fail fast if SAP has been unreachable
@@ -226,9 +233,11 @@ class SAPHanaConnector:
                 T0."DocStatus"  AS doc_status,
                 T0."CANCELED"   AS canceled,
                 T0."Printed"    AS printed,
-                T3."SlpName"    AS creator_name
+                T3."SlpName"    AS creator_name,
+                T4."TrnspName"  AS shipping_type
             FROM {self._get_table_name("sales_orders")} T0
             LEFT JOIN {self.schema}."OSLP" T3 ON T0."SlpCode" = T3."SlpCode"
+            LEFT JOIN {self.schema}."OSHP" T4 ON T0."TrnspCode" = T4."TrnspCode"
             {where_clause}
             ORDER BY T0."DocNum" DESC
             LIMIT {limit}
@@ -290,6 +299,7 @@ class SAPHanaConnector:
                 "delivery_number": None,  # filled in query 2.5
                 "creator_name": row[12] if len(row) > 12 and row[12] else "SAP System",
                 "updater_name": row[12] if len(row) > 12 and row[12] else "SAP System",
+                "shipping_type": row[13] if len(row) > 13 and row[13] else "LOCAL",
             }
             headers_by_entry[doc_entry] = header
             doc_entries.append(doc_entry)
@@ -417,9 +427,11 @@ class SAPHanaConnector:
                 T0."CANCELED" AS canceled,
                 T0."Printed" AS printed,
                 T3."SlpName" AS creator_name,
-                T3."SlpName" AS updater_name
+                T3."SlpName" AS updater_name,
+                T4."TrnspName" AS shipping_type
             FROM {self._get_table_name("sales_orders")} T0
             LEFT JOIN {self.schema}."OSLP" T3 ON T0."SlpCode" = T3."SlpCode"
+            LEFT JOIN {self.schema}."OSHP" T4 ON T0."TrnspCode" = T4."TrnspCode"
             WHERE T0."DocNum" = ?
         """
 
@@ -515,6 +527,9 @@ class SAPHanaConnector:
             "updater_name": header_row[13]
             if len(header_row) > 13 and header_row[13]
             else "SAP System",
+            "shipping_type": header_row[14]
+            if len(header_row) > 14 and header_row[14]
+            else "LOCAL",
         }
 
         # Get line items
@@ -885,9 +900,15 @@ class SAPHanaConnector:
             base_filter = f"T0.\"DocDate\" = '{date_str}'"
         else:
             base_filter = 'T0."DocDate" = CURRENT_DATE'
-        base_filter += """
-              AND (T1."TrnspName" != 'VENTA MOSTRADOR' OR T1."TrnspName" IS NULL)
+        base_filter += f"""
+              AND (T1."TrnspName" NOT IN ('VENTA MOSTRADOR', 'VENTA DE MOSTRADOR', 'VENTAS MOSTRADOR') OR T1."TrnspName" IS NULL)
               AND T0."CardCode" != 'CL1662'
+              AND T0."CANCELED" != 'C'
+              AND NOT EXISTS (
+                  SELECT 1 FROM {self.schema}."NNM1" N1
+                  WHERE N1."Series" = T0."Series"
+                  AND N1."BeginStr" = 'FC'
+              )
         """
 
         if extra_invoice_numbers:
@@ -917,20 +938,159 @@ class SAPHanaConnector:
         else:
             final_filter = base_filter
 
-        if date_str:
-            sub_base = f"T0.\"DocDate\" = '{date_str}'"
-        else:
-            sub_base = 'T0."DocDate" = CURRENT_DATE'
-        sub_base += ' AND T0."CardCode" != \'CL1662\''
+        # Optimized query: subqueries for warehouse & order use correlated
+        # DocEntry joins instead of re-filtering the entire invoices table.
+        query = f"""
+            SELECT
+                T0."DocNum"    AS invoice_number,
+                T0."DocEntry"  AS doc_entry,
+                T0."CardCode"  AS customer_code,
+                T0."CardName"  AS customer_name,
+                T0."DocDate"   AS invoice_date,
+                T0."DocTotal"  AS total,
+                T0."DocCur"    AS currency,
+                T0."DocStatus" AS doc_status,
+                T0."CANCELED"  AS canceled,
+                T0."Comments"  AS comments,
+                T3."SlpName"   AS seller_name,
+                T0."PaidToDate" AS paid_to_date,
+                T1."TrnspName" AS shipping_type,
+                T2."PymntGroup" AS payment_terms,
+                WH.warehouse   AS warehouse,
+                SO.order_number AS order_number,
+                SO.order_date   AS order_date,
+                COALESCE(M0."dias_mora", 0) AS dias_mora,
+                COALESCE(CR."CreditLine", 0) AS credit_limit
+            FROM {self._get_table_name("invoices")} T0
+            LEFT JOIN {self.schema}."OSLP" T3 ON T0."SlpCode" = T3."SlpCode"
+            LEFT JOIN {self.schema}."OSHP" T1 ON T0."TrnspCode" = T1."TrnspCode"
+            LEFT JOIN {self.schema}."OCTG" T2 ON T0."GroupNum" = T2."GroupNum"
+            LEFT JOIN {self._get_table_name("customers")} CR ON T0."CardCode" = CR."CardCode"
+            LEFT JOIN (
+                SELECT 
+                    L1."DocEntry" AS InvoiceDocEntry,
+                    MAX(L1."WhsCode") AS warehouse
+                FROM {self._get_table_name("invoice_lines")} L1
+                GROUP BY L1."DocEntry"
+            ) WH ON T0."DocEntry" = WH.InvoiceDocEntry
+            LEFT JOIN (
+                SELECT 
+                    InvoiceDocEntry,
+                    MAX(OrderNum) AS order_number,
+                    MAX(OrderDate) AS order_date
+                FROM (
+                    SELECT 
+                        L2."DocEntry" AS InvoiceDocEntry,
+                        R0."DocNum" AS OrderNum,
+                        R0."DocDate" AS OrderDate
+                    FROM {self._get_table_name("sales_orders")} R0
+                    INNER JOIN {self._get_table_name("invoice_lines")} L2
+                        ON L2."BaseType" = 17 AND L2."BaseEntry" = R0."DocEntry"
+                    
+                    UNION ALL
+                    
+                    SELECT 
+                        L3."DocEntry" AS InvoiceDocEntry,
+                        R0."DocNum" AS OrderNum,
+                        R0."DocDate" AS OrderDate
+                    FROM {self._get_table_name("sales_orders")} R0
+                    INNER JOIN {self._get_table_name("delivery_lines")} D1
+                        ON D1."BaseType" = 17 AND D1."BaseEntry" = R0."DocEntry"
+                    INNER JOIN {self._get_table_name("invoice_lines")} L3
+                        ON L3."BaseType" = 15 AND L3."BaseEntry" = D1."DocEntry"
+                )
+                GROUP BY InvoiceDocEntry
+            ) SO ON T0."DocEntry" = SO.InvoiceDocEntry
+            LEFT JOIN (
+                SELECT 
+                    I0."CardCode",
+                    MAX(DAYS_BETWEEN(I0."DocDueDate", CURRENT_DATE)) AS "dias_mora"
+                FROM {self._get_table_name("invoices")} I0
+                WHERE I0."DocStatus" = 'O' 
+                  AND I0."CANCELED" = 'N'
+                  AND I0."DocDueDate" < CURRENT_DATE
+                GROUP BY I0."CardCode"
+            ) M0 ON T0."CardCode" = M0."CardCode"
+            WHERE {final_filter}
+            ORDER BY T0."DocNum" DESC
+        """
 
-        subquery_filter = sub_base
-        if extra_invoice_numbers:
-            try:  # pragma: no cover
-                nums = ",".join(str(int(n)) for n in extra_invoice_numbers if n)
-                if nums:
-                    subquery_filter = f"({sub_base}) OR T0.\"DocNum\" IN ({nums})"
-            except (ValueError, TypeError):  # pragma: no cover
-                pass
+        conn = getattr(self._local, "connection", None)
+        if conn is None:
+            raise ConnectionError("No active connection")
+
+        cursor = conn.cursor()
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        cursor.close()
+
+        invoices = []
+        for row in rows:
+            canceled = row[8] or "N"
+            doc_status = row[7] or "O"
+
+            if canceled == "Y":
+                status = "Cancelada"
+            elif doc_status == "C":
+                status = "Cerrada"
+            else:
+                status = "Abierta"
+
+            shipping_type = row[12] or "LOCAL"
+            if shipping_type.strip().upper() in ["ENVIO LOCAL", "ENVÍO LOCAL"]:
+                shipping_type = "LOCAL"  # pragma: no cover
+
+            invoices.append({
+                "invoice_number": int(row[0]),
+                "doc_entry": int(row[1]),
+                "customer_code": row[2] or "",
+                "customer_name": row[3] or "",
+                "invoice_date": str(row[4]),
+                "total": float(row[5]) if row[5] else 0.0,
+                "currency": row[6] or "MXN",
+                "status": status,
+                "doc_status": doc_status,
+                "canceled": canceled,
+                "comments": row[9] or "",
+                "seller_name": row[10] or "SAP System",
+                "paid_to_date": float(row[11]) if row[11] else 0.0,
+                "shipping_type": shipping_type,
+                "payment_terms": row[13] or "CONTADO",
+                "warehouse": row[14] or "",
+                "order_number": int(row[15]) if row[15] else None,
+                "order_date": str(row[16]) if row[16] else "",
+                "dias_mora": int(row[17]) if len(row) > 17 and row[17] else 0,
+                "credit_limit": float(row[18]) if len(row) > 18 and row[18] else 0.0,
+            })
+
+        return invoices
+
+    def get_invoices_date_range(self, date_from, date_to):
+        """Fetch invoices for a given date range.
+
+        Args:
+            date_from: Date string in 'YYYY-MM-DD' format.
+            date_to: Date string in 'YYYY-MM-DD' format.
+
+        Returns:
+            List of invoice dicts with header information.
+        """
+        self._ensure_connected()
+        base_filter = f"T0.\"DocDate\" >= '{date_from}' AND T0.\"DocDate\" <= '{date_to}'"
+        
+        base_filter += f"""
+              AND (T1."TrnspName" NOT IN ('VENTA MOSTRADOR', 'VENTA DE MOSTRADOR', 'VENTAS MOSTRADOR') OR T1."TrnspName" IS NULL)
+              AND T0."CardCode" != 'CL1662'
+              AND T0."CANCELED" != 'C'
+              AND NOT EXISTS (
+                  SELECT 1 FROM {self.schema}."NNM1" N1
+                  WHERE N1."Series" = T0."Series"
+                  AND N1."BeginStr" = 'FC'
+              )
+        """
+
+        subquery_filter = f"T0.\"DocDate\" >= '{date_from}' AND T0.\"DocDate\" <= '{date_to}'"
+        subquery_filter += f' AND T0."CardCode" != \'CL1662\' AND T0."CANCELED" != \'C\' AND NOT EXISTS (SELECT 1 FROM {self.schema}."NNM1" N1 WHERE N1."Series" = T0."Series" AND N1."BeginStr" = \'FC\')'
 
         query = f"""
             SELECT
@@ -999,8 +1159,8 @@ class SAPHanaConnector:
                 )
                 GROUP BY InvoiceDocEntry
             ) SO ON T0."DocEntry" = SO.InvoiceDocEntry
-            WHERE {final_filter}
-            ORDER BY T0."DocNum" DESC
+            WHERE {base_filter}
+            ORDER BY T0."DocDate" DESC, T0."DocNum" DESC
         """
 
         conn = getattr(self._local, "connection", None)
@@ -1026,7 +1186,7 @@ class SAPHanaConnector:
 
             shipping_type = row[12] or "LOCAL"
             if shipping_type.strip().upper() in ["ENVIO LOCAL", "ENVÍO LOCAL"]:
-                shipping_type = "LOCAL"  # pragma: no cover
+                shipping_type = "LOCAL"
 
             invoices.append({
                 "invoice_number": int(row[0]),
@@ -1106,3 +1266,314 @@ class SAPHanaConnector:
             })
 
         return items
+
+    def search_customers(self, query, limit=10):
+        """Search customers by code or name.
+
+        Returns a lightweight list of matching customers for autocomplete.
+        Only returns customers (CardType = 'C'), limited to ``limit`` results.
+        """
+        self._ensure_connected()
+
+        conn = getattr(self._local, "connection", None)
+        if conn is None:
+            raise ConnectionError("No active connection")
+
+        cursor = conn.cursor()
+        search_term = f"%{query}%"
+        search_query = f"""
+            SELECT TOP {int(limit)}
+                T0."CardCode",
+                T0."CardName",
+                T0."CreditLine",
+                T0."Balance"
+            FROM {self._get_table_name("customers")} T0
+            WHERE T0."CardType" = 'C'
+              AND (
+                  UPPER(T0."CardCode") LIKE UPPER(?)
+                  OR UPPER(T0."CardName") LIKE UPPER(?)
+              )
+            ORDER BY T0."CardName" ASC
+        """
+        cursor.execute(search_query, [search_term, search_term])
+        rows = cursor.fetchall()
+        cursor.close()
+
+        results = []
+        for row in rows:
+            results.append({
+                "card_code": row[0],
+                "card_name": row[1] or "",
+                "credit_limit": float(row[2]) if row[2] else 0.0,
+                "balance": float(row[3]) if row[3] else 0.0,
+            })
+        return results
+
+    def get_customer_account_statement(self, card_code):
+        """Retrieve an account statement for a customer.
+
+        Returns all open/partially-paid invoices with customer master data,
+        credit limit, and balance information.
+        """
+        self._ensure_connected()
+
+        conn = getattr(self._local, "connection", None)
+        if conn is None:
+            raise ConnectionError("No active connection")
+
+        cursor = conn.cursor()
+
+        # 1. Fetch customer master data
+        cust_query = f"""
+            SELECT
+                T0."CardCode",
+                T0."CardName",
+                T0."CreditLine",
+                T0."Balance"
+            FROM {self._get_table_name("customers")} T0
+            WHERE T0."CardCode" = ?
+        """
+        cursor.execute(cust_query, [card_code])
+        cust_row = cursor.fetchone()
+        if not cust_row:
+            cursor.close()
+            return None
+
+        customer = {
+            "card_code": cust_row[0],
+            "card_name": cust_row[1] or "",
+            "credit_limit": float(cust_row[2]) if cust_row[2] else 0.0,
+            "balance": float(cust_row[3]) if cust_row[3] else 0.0,
+        }
+
+        # 2. Fetch all open invoices (including partially paid)
+        # DocTotal / PaidToDate are in LOCAL currency (MXN).
+        # DocTotalFC / PaidFC are in the DOCUMENT currency (e.g. USD).
+        # DocRate is the exchange rate applied when the invoice was posted.
+        inv_query = f"""
+            SELECT
+                T0."DocNum",
+                T0."DocDate",
+                T0."DocDueDate",
+                T0."DocTotal",
+                T0."PaidToDate",
+                (T0."DocTotal" - T0."PaidToDate") AS "SaldoPendiente",
+                T0."DocCur",
+                DAYS_BETWEEN(T0."DocDueDate", CURRENT_DATE) AS "DiasRetraso",
+                T0."DocTotalFC",
+                T0."PaidFC",
+                (T0."DocTotalFC" - T0."PaidFC") AS "SaldoPendienteFC",
+                T0."DocRate"
+            FROM {self._get_table_name("invoices")} T0
+            WHERE T0."CardCode" = ?
+              AND T0."DocStatus" = 'O'
+              AND T0."CANCELED" = 'N'
+              AND (T0."DocTotal" - T0."PaidToDate") > 0
+            ORDER BY T0."DocDueDate" ASC
+        """
+        cursor.execute(inv_query, [card_code])
+        rows = cursor.fetchall()
+
+        invoices = []
+        total_mxn = 0.0
+        total_usd = 0.0
+        for row in rows:
+            (doc_num, doc_date, due_date, total_lc, paid_lc, balance_lc,
+             currency, days, total_fc, paid_fc, balance_fc, doc_rate) = row
+
+            # For foreign-currency invoices use FC fields (actual USD amounts);
+            # for local-currency (MXN) invoices use LC fields.
+            is_foreign = (currency or "MXN").upper() != "MXN"
+
+            inv = {
+                "doc_num": int(doc_num),
+                "doc_date": str(doc_date).split(" ")[0],
+                "due_date": str(due_date).split(" ")[0],
+                "total": float(total_fc) if is_foreign else float(total_lc),
+                "paid": float(paid_fc) if is_foreign else float(paid_lc),
+                "balance": float(balance_fc) if is_foreign else float(balance_lc),
+                "currency": currency or "MXN",
+                "days_overdue": int(days) if days and int(days) > 0 else 0,
+                "doc_rate": float(doc_rate) if doc_rate else None,
+                "total_lc": float(balance_lc),
+            }
+            invoices.append(inv)
+            if is_foreign:
+                total_usd += float(balance_fc)
+            else:
+                total_mxn += float(balance_lc)
+
+        # 3. Fetch yesterday's USD→MXN exchange rate from ORTT
+        exchange_rate = None
+        exchange_rate_date = None
+        try:
+            rate_query = f"""
+                SELECT TOP 1
+                    T0."RateDate",
+                    T0."Rate"
+                FROM "{self.schema}"."ORTT" T0
+                WHERE T0."Currency" = 'USD'
+                  AND T0."RateDate" < CURRENT_DATE
+                ORDER BY T0."RateDate" DESC
+            """
+            cursor.execute(rate_query)
+            rate_row = cursor.fetchone()
+            if rate_row:
+                exchange_rate_date = str(rate_row[0]).split(" ")[0]
+                exchange_rate = float(rate_row[1])
+        except Exception:
+            # If ORTT is not available, exchange rate stays None
+            pass
+
+        cursor.close()
+
+        import datetime as _dt
+        return {
+            "customer": customer,
+            "invoices": invoices,
+            "totals": {"mxn": total_mxn, "usd": total_usd},
+            "exchange_rate": exchange_rate,
+            "exchange_rate_date": exchange_rate_date,
+            "generated_at": _dt.datetime.now().isoformat(),
+        }
+
+    def get_invoice_relationship_map(self, invoice_number):
+        """Retrieve the document relationship map for a given invoice DocNum.
+
+        Traces:
+        - Linked Sales Order (Pedido)
+        - Linked Delivery Note (Entrega)
+        - Current Invoice (Factura)
+        - Linked Incoming Payment (Pago Recibido)
+        """
+        self._ensure_connected()
+
+        conn = getattr(self._local, "connection", None)
+        if conn is None:
+            raise ConnectionError("No active connection")
+
+        cursor = conn.cursor()
+
+        # 1. Fetch current Invoice details
+        inv_query = f"""
+            SELECT 
+                T0."DocEntry", T0."DocNum", T0."DocDate", T0."DocTotal", T0."DocCur", T0."DocStatus", T0."CANCELED", T0."PaidToDate", T0."CardCode", T0."CardName"
+            FROM {self._get_table_name("invoices")} T0
+            WHERE T0."DocNum" = ?
+        """
+        cursor.execute(inv_query, [int(invoice_number)])
+        inv_row = cursor.fetchone()
+        if not inv_row:
+            cursor.close()
+            return None
+
+        inv_entry, inv_num, inv_date, inv_total, inv_currency, inv_status, inv_canceled, inv_paid, card_code, card_name = inv_row
+
+        invoice_node = {
+            "type": "Factura",
+            "doc_num": int(inv_num),
+            "doc_entry": int(inv_entry),
+            "doc_date": str(inv_date).split(" ")[0],
+            "total": float(inv_total),
+            "currency": inv_currency,
+            "status": "Cancelado" if inv_canceled == "Y" else ("Cerrado" if inv_status == "C" else "Abierto"),
+            "paid_to_date": float(inv_paid)
+        }
+
+        # 2. Fetch linked Delivery Note
+        del_query = f"""
+            SELECT DISTINCT
+                T0."DocEntry", T0."DocNum", T0."DocDate", T0."DocTotal", T0."DocCur", T0."DocStatus", T0."CANCELED"
+            FROM {self._get_table_name("delivery_notes")} T0
+            INNER JOIN {self._get_table_name("invoice_lines")} T1 ON T0."DocEntry" = T1."BaseEntry"
+            WHERE T1."BaseType" = 15 AND T1."DocEntry" = ?
+        """
+        cursor.execute(del_query, [inv_entry])
+        del_row = cursor.fetchone()
+        delivery_node = None
+        if del_row:
+            del_entry, del_num, del_date, del_total, del_currency, del_status, del_canceled = del_row
+            delivery_node = {
+                "type": "Entrega",
+                "doc_num": int(del_num),
+                "doc_entry": int(del_entry),
+                "doc_date": str(del_date).split(" ")[0],
+                "total": float(del_total),
+                "currency": del_currency,
+                "status": "Cancelado" if del_canceled == "Y" else ("Cerrado" if del_status == "C" else "Abierto")
+            }
+
+        # 3. Fetch linked Sales Order (Pedido)
+        # Try to find it directly from invoice lines, or through delivery lines
+        order_node = None
+        order_query_direct = f"""
+            SELECT DISTINCT
+                T0."DocEntry", T0."DocNum", T0."DocDate", T0."DocTotal", T0."DocCur", T0."DocStatus", T0."CANCELED"
+            FROM {self._get_table_name("sales_orders")} T0
+            INNER JOIN {self._get_table_name("invoice_lines")} T1 ON T0."DocEntry" = T1."BaseEntry"
+            WHERE T1."BaseType" = 17 AND T1."DocEntry" = ?
+        """
+        cursor.execute(order_query_direct, [inv_entry])
+        ord_row = cursor.fetchone()
+        if not ord_row and delivery_node:
+            order_query_indirect = f"""
+                SELECT DISTINCT
+                    T0."DocEntry", T0."DocNum", T0."DocDate", T0."DocTotal", T0."DocCur", T0."DocStatus", T0."CANCELED"
+                FROM {self._get_table_name("sales_orders")} T0
+                INNER JOIN {self._get_table_name("delivery_lines")} T1 ON T0."DocEntry" = T1."BaseEntry"
+                WHERE T1."BaseType" = 17 AND T1."DocEntry" = ?
+            """
+            cursor.execute(order_query_indirect, [delivery_node["doc_entry"]])
+            ord_row = cursor.fetchone()
+
+        if ord_row:
+            ord_entry, ord_num, ord_date, ord_total, ord_currency, ord_status, ord_canceled = ord_row
+            order_node = {
+                "type": "Pedido",
+                "doc_num": int(ord_num),
+                "doc_entry": int(ord_entry),
+                "doc_date": str(ord_date).split(" ")[0],
+                "total": float(ord_total),
+                "currency": ord_currency,
+                "status": "Cancelado" if ord_canceled == "Y" else ("Cerrado" if ord_status == "C" else "Abierto")
+            }
+
+        # 4. Fetch linked Payments
+        payments = []
+        pay_query = f"""
+            SELECT DISTINCT
+                T0."DocEntry", T0."DocNum", T0."DocDate", T0."DocTotal", T0."DocCur", T0."Canceled", T1."SumApplied"
+            FROM {self._get_table_name("ORCT")} T0
+            INNER JOIN {self._get_table_name("RCT2")} T1 ON T0."DocEntry" = T1."DocNum"
+            WHERE T1."InvType" = 13 AND T1."DocEntry" = ?
+        """
+        try:
+            cursor.execute(pay_query, [inv_entry])
+            for p_row in cursor.fetchall():
+                p_entry, p_num, p_date, p_total, p_currency, p_canceled, p_applied = p_row
+                payments.append({
+                    "type": "Pago Recibido",
+                    "doc_num": int(p_num),
+                    "doc_entry": int(p_entry),
+                    "doc_date": str(p_date).split(" ")[0],
+                    "total": float(p_total),
+                    "currency": p_currency,
+                    "status": "Cancelado" if p_canceled == "Y" else "Aplicado",
+                    "applied_total": float(p_applied)
+                })
+        except Exception as e:
+            logger.warning(f"Could not fetch incoming payments for invoice {invoice_number}: {e}")
+
+        cursor.close()
+
+        return {
+            "invoice": invoice_node,
+            "delivery": delivery_node,
+            "order": order_node,
+            "payments": payments,
+            "customer": {
+                "card_code": card_code,
+                "card_name": card_name
+            }
+        }
+

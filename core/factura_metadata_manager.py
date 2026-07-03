@@ -51,6 +51,20 @@ class FacturaMetadataManager:
                     BEGIN
                         ALTER TABLE {self.TABLE_NAME} ADD custom_customer_name VARCHAR(150) NULL;
                     END
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('{self.TABLE_NAME}') AND name = 'credito_authorized')
+                    BEGIN
+                        ALTER TABLE {self.TABLE_NAME} ADD credito_authorized BIT NULL;
+                        ALTER TABLE {self.TABLE_NAME} ADD credito_authorized_by VARCHAR(50) NULL;
+                        ALTER TABLE {self.TABLE_NAME} ADD credito_authorized_at VARCHAR(50) NULL;
+                    END
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('{self.TABLE_NAME}') AND name = 'credito_revoked_from_relacion')
+                    BEGIN
+                        ALTER TABLE {self.TABLE_NAME} ADD credito_revoked_from_relacion BIT NULL;
+                    END
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('{self.TABLE_NAME}') AND name = 'credito_notes')
+                    BEGIN
+                        ALTER TABLE {self.TABLE_NAME} ADD credito_notes VARCHAR(MAX) NULL;
+                    END
                 END
                 
                 IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='factura_daily_order' and xtype='U')
@@ -197,6 +211,117 @@ class FacturaMetadataManager:
                 logger.error(f"Error fetching factura metadata from SQL: {e}")
                 
         return overrides, colors, custom_names
+
+    def get_credito_authorizations(self):
+        auths = {}
+        # 1. Load from local fallback
+        for k, v in self.local_metadata.items():
+            if isinstance(v, dict) and v.get("credito_authorized") is not None:
+                auths[int(k)] = {
+                    "credito_authorized": v.get("credito_authorized"),
+                    "credito_authorized_by": v.get("credito_authorized_by"),
+                    "credito_authorized_at": v.get("credito_authorized_at"),
+                    "credito_revoked_from_relacion": v.get("credito_revoked_from_relacion", False),
+                    "credito_notes": v.get("credito_notes", "")
+                }
+        
+        # 2. Try SQL
+        if self.db_client.engine:
+            try:
+                with self.db_client.engine.connect() as conn:
+                    result = conn.exec_driver_sql(f"SELECT invoice_number, credito_authorized, credito_authorized_by, credito_authorized_at, credito_revoked_from_relacion, credito_notes FROM {self.TABLE_NAME} WHERE credito_authorized IS NOT NULL OR credito_revoked_from_relacion = 1 OR credito_notes IS NOT NULL").fetchall()
+                    for row in result:
+                        inv = row[0]
+                        auths[inv] = {
+                            "credito_authorized": bool(row[1]) if row[1] is not None else False,
+                            "credito_authorized_by": row[2],
+                            "credito_authorized_at": row[3],
+                            "credito_revoked_from_relacion": bool(row[4]) if len(row) > 4 and row[4] is not None else False,
+                            "credito_notes": row[5] if len(row) > 5 and row[5] is not None else ""
+                        }
+                        if str(inv) not in self.local_metadata or not isinstance(self.local_metadata[str(inv)], dict):
+                            self.local_metadata[str(inv)] = {"category": "", "color": "", "custom_customer_name": ""}
+                        self.local_metadata[str(inv)].update(auths[inv])
+                    self._save_fallback()
+            except Exception as e:
+                logger.error(f"Error fetching credito auths: {e}")
+        return auths
+
+    def save_credito_authorization(self, invoice_number: int, authorized: bool, by: str, at: str):
+        inv_str = str(invoice_number)
+        if inv_str not in self.local_metadata or not isinstance(self.local_metadata[inv_str], dict):
+            self.local_metadata[inv_str] = {"category": "", "color": "", "custom_customer_name": ""}
+        self.local_metadata[inv_str]["credito_authorized"] = authorized
+        self.local_metadata[inv_str]["credito_authorized_by"] = by
+        self.local_metadata[inv_str]["credito_authorized_at"] = at
+        self._save_fallback()
+        
+        if self.db_client.engine:
+            try:
+                with self.db_client.engine.begin() as conn:
+                    query = f"""
+                        UPDATE {self.TABLE_NAME} 
+                        SET credito_authorized = ?, credito_authorized_by = ?, credito_authorized_at = ?
+                        WHERE invoice_number = ?;
+
+                        IF @@ROWCOUNT = 0
+                        BEGIN
+                            INSERT INTO {self.TABLE_NAME} (invoice_number, credito_authorized, credito_authorized_by, credito_authorized_at)
+                            VALUES (?, ?, ?, ?);
+                        END
+                    """
+                    auth_bit = 1 if authorized else 0
+                    conn.exec_driver_sql(query, [auth_bit, by, at, invoice_number, invoice_number, auth_bit, by, at])
+            except Exception as e:
+                logger.error(f"Error saving credito auth to SQL: {e}")
+        return True
+
+    def mark_revoked_from_relacion(self, invoice_number: int, was_revoked: bool):
+        inv_str = str(invoice_number)
+        if inv_str not in self.local_metadata or not isinstance(self.local_metadata[inv_str], dict):
+            self.local_metadata[inv_str] = {"category": "", "color": "", "custom_customer_name": ""}
+        self.local_metadata[inv_str]["credito_revoked_from_relacion"] = was_revoked
+        self._save_fallback()
+        
+        if self.db_client.engine:
+            try:
+                with self.db_client.engine.begin() as conn:
+                    query = f"""
+                        UPDATE {self.TABLE_NAME} 
+                        SET credito_revoked_from_relacion = ?
+                        WHERE invoice_number = ?
+                    """
+                    bit_val = 1 if was_revoked else 0
+                    conn.exec_driver_sql(query, [bit_val, invoice_number])
+            except Exception as e:
+                logger.error(f"Error saving revoked_from_relacion: {e}")
+        return True
+
+    def save_credito_notes(self, invoice_number: int, notes: str):
+        inv_str = str(invoice_number)
+        if inv_str not in self.local_metadata or not isinstance(self.local_metadata[inv_str], dict):
+            self.local_metadata[inv_str] = {"category": "", "color": "", "custom_customer_name": ""}
+        self.local_metadata[inv_str]["credito_notes"] = notes
+        self._save_fallback()
+        
+        if self.db_client.engine:
+            try:
+                with self.db_client.engine.begin() as conn:
+                    query = f"""
+                        UPDATE {self.TABLE_NAME} 
+                        SET credito_notes = ?
+                        WHERE invoice_number = ?;
+
+                        IF @@ROWCOUNT = 0
+                        BEGIN
+                            INSERT INTO {self.TABLE_NAME} (invoice_number, credito_notes)
+                            VALUES (?, ?);
+                        END
+                    """
+                    conn.exec_driver_sql(query, [notes, invoice_number, invoice_number, notes])
+            except Exception as e:
+                logger.error(f"Error saving credito notes: {e}")
+        return True
 
     def get_daily_order(self, date_str: str):
         # Try SQL first

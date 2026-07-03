@@ -27,6 +27,8 @@ def _is_safe_url(target):
 def login():
     """User login page"""
     if current_user.is_authenticated:
+        if current_user.username.lower() in ["mostrador", "monitor"]:
+            return redirect(url_for("orders.monitor"))
         return redirect(url_for("orders.index"))
 
     if request.method == "POST":
@@ -61,6 +63,8 @@ def login():
             next_page = request.args.get("next")
             if next_page and not _is_safe_url(next_page):
                 next_page = None
+            if not next_page and user.username.lower() in ["mostrador", "monitor"]:
+                return redirect(url_for("orders.monitor"))
             return redirect(next_page or url_for("orders.index"))
         else:
             flash("Usuario o contraseña incorrectos", "error")

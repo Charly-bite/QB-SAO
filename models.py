@@ -81,3 +81,24 @@ class User(UserMixin):
 
     def can_manage_users(self):
         return self.role == UserRole.ADMIN
+
+    # ── Signature Permissions ────────────────────────────────────────────
+    # These control who can sign each area of the Relación de Envíos.
+    # Configure roles here once department bosses are assigned.
+
+    def can_sign_facturacion(self):
+        """Facturación department boss — billing role or admin."""
+        return self.role in [UserRole.ADMIN, UserRole.BILLING]
+
+    def can_sign_credito(self):
+        """Crédito y Cobranza (Payments) department boss — billing role or admin."""
+        return self.role in [UserRole.ADMIN, UserRole.BILLING]
+
+    def can_sign_almacen(self):
+        """Almacén (Warehouse) department boss — operator role or admin."""
+        return self.role in [UserRole.ADMIN, UserRole.OPERATOR]
+
+    def can_authorize_credito(self):
+        """Crédito y Cobranza per-invoice authorization — who can approve shipments."""
+        return self.role in [UserRole.ADMIN, UserRole.BILLING]
+

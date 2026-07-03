@@ -3,6 +3,8 @@ User management routes for Open-OMS
 """
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
+import os
+from werkzeug.utils import secure_filename
 from flask_login import current_user, login_required
 
 from extensions import current_app
@@ -46,6 +48,22 @@ def index():
                 
     return render_template("users/list.html", users=users)
 
+def _save_signature_file(username, file_obj, app):
+    """Save a signature file and return the relative static path."""
+    if not file_obj or file_obj.filename == '':
+        return None
+    ext = file_obj.filename.rsplit('.', 1)[-1].lower()
+    if ext not in ['png', 'jpg', 'jpeg']:
+        return None
+    
+    filename = secure_filename(f"{username}_signature.{ext}")
+    save_dir = os.path.join(app.static_folder, 'images', 'signatures')
+    os.makedirs(save_dir, exist_ok=True)
+    
+    file_path = os.path.join(save_dir, filename)
+    file_obj.save(file_path)
+    return f"images/signatures/{filename}"
+
 @users_bp.route("/create", methods=["GET", "POST"])
 def create():
     """Create a new user"""
@@ -60,10 +78,13 @@ def create():
         email = request.form.get("email", "").strip()
         role = request.form.get("role", "viewer")
         sap_seller_name = request.form.get("sap_seller_name", "").strip()
+        signature_file = request.files.get("signature")
 
         if not username or not password:
             flash("Usuario y contraseña son requeridos", "error")
             return render_template("users/form.html", user=None, roles=list(UserRole))
+
+        signature_path = _save_signature_file(username, signature_file, current_app) if signature_file else ""
 
         user_manager = current_app.user_manager
         success, message = user_manager.create_user(
@@ -73,7 +94,8 @@ def create():
             email=email,
             role=role,
             requesting_user={"role": "admin"},
-            sap_seller_name=sap_seller_name
+            sap_seller_name=sap_seller_name,
+            signature_path=signature_path
         )
 
         if success:
@@ -105,6 +127,7 @@ def edit(username):
         is_active = request.form.get("is_active") == "on"
         sap_seller_name = request.form.get("sap_seller_name", "").strip()
         password = request.form.get("password", "")
+        signature_file = request.files.get("signature")
 
         kwargs = {
             "full_name": full_name,
@@ -113,6 +136,11 @@ def edit(username):
             "is_active": is_active,
             "sap_seller_name": sap_seller_name
         }
+
+        if signature_file and signature_file.filename:
+            sig_path = _save_signature_file(username, signature_file, current_app)
+            if sig_path:
+                kwargs["signature_path"] = sig_path
 
         if password:
             kwargs["password"] = password

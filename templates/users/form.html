@@ -16,7 +16,7 @@
 
 {% block content %}
 <div class="max-w-2xl bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden qb-visor-panel">
-    <form method="POST" class="p-6 space-y-6">
+    <form method="POST" class="p-6 space-y-6" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -68,6 +68,22 @@
                 <input type="text" name="sap_seller_name" value="{{ user.sap_seller_name if user else '' }}" placeholder="Ej: Juan Perez"
                     class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 search-input">
                 <p class="mt-1 text-xs text-slate-500">Usado para filtrar pedidos si el rol es vendedor.</p>
+            </div>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Firma (Imagen)</label>
+            <div class="flex items-center gap-4">
+                {% if user and user.signature_path %}
+                <div class="flex-shrink-0 w-32 p-2 border border-slate-200 rounded-lg bg-slate-50 flex items-center justify-center">
+                    <img src="{{ url_for('static', filename=user.signature_path.replace('images/signatures/', 'images/signatures/')) }}" alt="Firma actual" class="max-h-12 object-contain" />
+                </div>
+                {% endif %}
+                <div class="flex-1">
+                    <input type="file" name="signature" accept="image/png, image/jpeg, image/jpg"
+                        class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 search-input">
+                    <p class="mt-1 text-xs text-slate-500">Esta imagen se usará al firmar Relaciones de Envío (recomendado 200x50px, fondo transparente).</p>
+                </div>
             </div>
         </div>
 

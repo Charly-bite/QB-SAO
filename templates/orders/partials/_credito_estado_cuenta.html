@@ -1,0 +1,223 @@
+<!-- Estado de Cuenta Subtab — Client search, invoice selection, bill generation -->
+<div x-show="creditoSubTab === 'EstadoCuenta'" x-cloak class="p-4 space-y-4">
+
+    <!-- Search Bar -->
+    <div class="relative">
+        <div class="flex items-center gap-3">
+            <div class="relative flex-1">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                </div>
+                <input type="text" x-model="ecSubSearchQuery" @input="ecSubSearch()" @focus="if(ecSubSearchResults.length > 0) ecSubSearchResults = ecSubSearchResults"
+                    class="block w-full pl-10 pr-10 py-2.5 border-2 border-slate-200 rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm font-medium transition-all"
+                    placeholder="Buscar cliente por nombre o código (ej: OXI, CL01223)..." />
+                <!-- Clear button -->
+                <button x-show="ecSubSearchQuery.length > 0" @click="ecSubClearClient()" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Search Results Dropdown -->
+        <div x-show="ecSubSearchResults.length > 0 && !ecSubSelectedClient" x-transition
+            class="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl max-h-64 overflow-y-auto">
+            <template x-for="client in ecSubSearchResults" :key="client.card_code">
+                <button @click="ecSubSelectClient(client)"
+                    class="w-full px-4 py-3 flex items-center justify-between hover:bg-emerald-50 transition-colors border-b border-slate-100 last:border-0 text-left">
+                    <div>
+                        <span class="text-sm font-bold text-slate-800" x-text="client.card_name"></span>
+                        <span class="ml-2 text-xs font-mono px-1.5 py-0.5 bg-slate-100 rounded text-slate-500" x-text="client.card_code"></span>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-xs text-slate-400">Saldo:</span>
+                        <span class="text-sm font-bold" :class="client.balance > 0 ? 'text-red-600' : 'text-green-600'"
+                              x-text="'$' + Number(client.balance).toLocaleString('es-MX', {minimumFractionDigits: 2})"></span>
+                    </div>
+                </button>
+            </template>
+        </div>
+
+        <!-- Loading spinner for search -->
+        <div x-show="ecSubSearchLoading" class="absolute right-12 top-1/2 -translate-y-1/2">
+            <div class="w-4 h-4 border-2 border-slate-200 border-t-emerald-500 rounded-full animate-spin"></div>
+        </div>
+    </div>
+
+    <!-- Selected Client Info -->
+    <template x-if="ecSubSelectedClient && ecSubClientData">
+        <div class="space-y-4">
+            <!-- Client Header Card -->
+            <div class="bg-slate-800 rounded-xl p-4 text-white shadow-md">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-bold" x-text="ecSubClientData.customer.card_name"></h3>
+                        <span class="text-xs font-mono opacity-70" x-text="ecSubClientData.customer.card_code"></span>
+                    </div>
+                    <div class="text-right space-y-1">
+                        <div>
+                            <span class="text-[10px] uppercase opacity-60">Límite de Crédito</span>
+                            <p class="text-sm font-bold text-emerald-300" x-text="'$' + Number(ecSubClientData.customer.credit_limit).toLocaleString('es-MX', {minimumFractionDigits: 2})"></p>
+                        </div>
+                        <div>
+                            <span class="text-[10px] uppercase opacity-60">Saldo Total</span>
+                            <p class="text-sm font-bold text-red-300" x-text="'$' + Number(ecSubClientData.customer.balance).toLocaleString('es-MX', {minimumFractionDigits: 2})"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-2 gap-3">
+                <div class="border-2 border-amber-200 bg-amber-50 rounded-xl p-3">
+                    <span class="text-[10px] font-bold text-amber-600 uppercase">Total MXN Seleccionado</span>
+                    <p class="text-lg font-black text-amber-800" x-text="'$' + ecSubSelectedTotalMXN().toLocaleString('es-MX', {minimumFractionDigits: 2})"></p>
+                </div>
+                <div class="border-2 border-blue-200 bg-blue-50 rounded-xl p-3">
+                    <span class="text-[10px] font-bold text-blue-600 uppercase">Total USD Seleccionado</span>
+                    <p class="text-lg font-black text-blue-800" x-text="'$' + ecSubSelectedTotalUSD().toLocaleString('es-MX', {minimumFractionDigits: 2})"></p>
+                </div>
+            </div>
+
+            <!-- Filters & Controls Bar -->
+            <div class="bg-slate-50 border-2 border-slate-200 rounded-xl p-4 space-y-3">
+                <div class="flex items-center gap-2 mb-1">
+                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+                    <span class="text-xs font-extrabold text-slate-700 uppercase tracking-wide">Filtros</span>
+                </div>
+                <div class="flex items-center gap-4 flex-wrap">
+                    <!-- Currency Filter -->
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold text-slate-600">Moneda:</span>
+                        <div class="inline-flex border-2 border-slate-300 rounded-lg overflow-hidden shadow-sm">
+                            <button @click="ecSubFilterCurrency = 'ALL'" class="px-4 py-2 text-sm font-extrabold transition-all border-r border-slate-300"
+                                :class="ecSubFilterCurrency === 'ALL' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">Todas</button>
+                            <button @click="ecSubFilterCurrency = 'MXN'" class="px-4 py-2 text-sm font-extrabold transition-all border-r border-slate-300"
+                                :class="ecSubFilterCurrency === 'MXN' ? 'bg-amber-500 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">MXN</button>
+                            <button @click="ecSubFilterCurrency = 'USD'" class="px-4 py-2 text-sm font-extrabold transition-all"
+                                :class="ecSubFilterCurrency === 'USD' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">USD</button>
+                        </div>
+                    </div>
+                    <!-- Overdue Filter -->
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold text-slate-600">Estado:</span>
+                        <div class="inline-flex border-2 border-slate-300 rounded-lg overflow-hidden shadow-sm">
+                            <button @click="ecSubFilterOverdue = 'ALL'" class="px-4 py-2 text-sm font-extrabold transition-all border-r border-slate-300"
+                                :class="ecSubFilterOverdue === 'ALL' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">Todas</button>
+                            <button @click="ecSubFilterOverdue = 'OVERDUE'" class="px-4 py-2 text-sm font-extrabold transition-all border-r border-slate-300"
+                                :class="ecSubFilterOverdue === 'OVERDUE' ? 'bg-red-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">Vencidas</button>
+                            <button @click="ecSubFilterOverdue = 'CURRENT'" class="px-4 py-2 text-sm font-extrabold transition-all"
+                                :class="ecSubFilterOverdue === 'CURRENT' ? 'bg-green-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">Al corriente</button>
+                        </div>
+                    </div>
+                    <!-- Selection controls -->
+                    <div class="flex items-center gap-3 ml-auto">
+                        <button @click="ecSubToggleAll()" 
+                            class="px-4 py-2 text-sm font-extrabold rounded-lg border-2 transition-all"
+                            :class="ecSubAllSelected() 
+                                ? 'bg-red-50 text-red-700 border-red-300 hover:bg-red-100' 
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'">
+                            <span x-text="ecSubAllSelected() ? '✕ Deseleccionar Todo' : '✓ Seleccionar Todo'"></span>
+                        </button>
+                        <span class="text-sm font-bold text-slate-500 bg-white px-3 py-1.5 rounded-lg border border-slate-200" 
+                              x-text="ecSubSelectedCount() + ' de ' + ecSubFilteredInvoices().length + ' seleccionadas'"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Invoice Table -->
+            <div class="border-2 border-slate-200 rounded-xl overflow-hidden">
+                <table class="w-full border-collapse text-sm">
+                    <thead>
+                        <tr class="bg-slate-100 border-b-2 border-slate-300">
+                            <th class="px-3 py-3 text-center w-10">
+                                <input type="checkbox" :checked="ecSubAllSelected()" @change="ecSubToggleAll()"
+                                    class="w-4 h-4 cursor-pointer accent-emerald-500" />
+                            </th>
+                            <th class="px-3 py-3 text-left font-extrabold text-slate-700 text-xs uppercase tracking-wide">No. Factura</th>
+                            <th class="px-3 py-3 text-center font-extrabold text-slate-700 text-xs uppercase tracking-wide">Fecha</th>
+                            <th class="px-3 py-3 text-center font-extrabold text-slate-700 text-xs uppercase tracking-wide">Vencimiento</th>
+                            <th class="px-3 py-3 text-right font-extrabold text-slate-700 text-xs uppercase tracking-wide">Saldo</th>
+                            <th class="px-3 py-3 text-center font-extrabold text-slate-700 text-xs uppercase tracking-wide">Moneda</th>
+                            <th class="px-3 py-3 text-center font-extrabold text-slate-700 text-xs uppercase tracking-wide">Días Atraso</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="(inv, idx) in ecSubFilteredInvoices()" :key="inv.doc_num">
+                            <tr :class="idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'"
+                                class="border-b border-slate-100 cursor-pointer hover:bg-emerald-50 transition-colors"
+                                @click="ecSubToggleInvoice(inv.doc_num)">
+                                <td class="px-3 py-2.5 text-center">
+                                    <input type="checkbox" :checked="ecSubSelectedInvoices.includes(inv.doc_num)" @click.stop="ecSubToggleInvoice(inv.doc_num)"
+                                        class="w-4 h-4 cursor-pointer accent-emerald-500" />
+                                </td>
+                                <td class="px-3 py-2.5 font-bold text-slate-800" x-text="inv.doc_num"></td>
+                                <td class="px-3 py-2.5 text-center text-slate-500" x-text="formatDocDate(inv.doc_date)"></td>
+                                <td class="px-3 py-2.5 text-center text-slate-500" x-text="formatDocDate(inv.due_date)"></td>
+                                <td class="px-3 py-2.5 text-right font-extrabold text-red-600" x-text="'$' + Number(inv.balance).toLocaleString('es-MX', {minimumFractionDigits: 2})"></td>
+                                <td class="px-3 py-2.5 text-center text-slate-500 font-semibold" x-text="inv.currency"></td>
+                                <td class="px-3 py-2.5 text-center">
+                                    <span class="px-2 py-0.5 rounded text-xs font-bold"
+                                        :class="inv.days_overdue > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'"
+                                        x-text="inv.days_overdue > 0 ? inv.days_overdue + ' días' : 'Al corriente'"></span>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                <!-- Empty state -->
+                <template x-if="ecSubFilteredInvoices().length === 0">
+                    <div class="px-6 py-8 text-center text-slate-400 text-sm">
+                        No se encontraron facturas con los filtros seleccionados
+                    </div>
+                </template>
+            </div>
+
+            <!-- Generate Button -->
+            <div class="flex justify-center pt-3 pb-2">
+                <button @click="ecSubGenerateBill()" :disabled="ecSubSelectedCount() === 0"
+                    class="inline-flex items-center gap-3 px-8 py-4 rounded-xl text-base font-black text-white transition-all duration-200 shadow-xl active:scale-95 border-2"
+                    :class="ecSubSelectedCount() > 0 ? 'bg-emerald-600 border-emerald-700 hover:bg-emerald-700 shadow-emerald-300/50 hover:shadow-emerald-400/50' : 'bg-slate-300 border-slate-400 cursor-not-allowed shadow-none'">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                    <span x-text="'Generar Estado de Cuenta — ' + ecSubSelectedCount() + ' facturas'"></span>
+                </button>
+            </div>
+        </div>
+    </template>
+
+    <!-- Loading state -->
+    <div x-show="ecSubClientLoading" class="py-12 text-center">
+        <div class="inline-block w-8 h-8 border-3 border-slate-200 border-t-emerald-500 rounded-full animate-spin"></div>
+        <p class="text-sm text-slate-500 mt-3">Cargando estado de cuenta...</p>
+    </div>
+
+    <!-- Empty state (no client selected) -->
+    <template x-if="!ecSubSelectedClient && !ecSubClientLoading">
+        <div class="py-16 text-center">
+            <div class="flex flex-col items-center gap-3">
+                <svg class="w-14 h-14 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <p class="text-slate-500 font-medium">Busca un cliente para ver su estado de cuenta</p>
+                <p class="text-sm text-slate-400">Escribe el nombre o código del cliente en la barra de búsqueda</p>
+            </div>
+        </div>
+    </template>
+
+    <!-- No invoices state -->
+    <template x-if="ecSubSelectedClient && ecSubClientData && ecSubClientData.invoices.length === 0 && !ecSubClientLoading">
+        <div class="py-12 text-center">
+            <div class="flex flex-col items-center gap-3">
+                <svg class="w-12 h-12 text-green-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <p class="text-slate-500 font-medium">Este cliente no tiene facturas pendientes</p>
+                <p class="text-sm text-slate-400" x-text="ecSubSelectedClient.card_name + ' (' + ecSubSelectedClient.card_code + ')'"></p>
+            </div>
+        </div>
+    </template>
+
+</div>
