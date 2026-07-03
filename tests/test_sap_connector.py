@@ -15,8 +15,13 @@ import pytest
 # ---------------------------------------------------------------------------
 
 def _make_connector(**kwargs):
-    """Create a SAPHanaConnector with mocked hdbcli."""
+    """Create a SAPHanaConnector with mocked hdbcli.
+    Provides test credentials by default so connect() works on CI where
+    no .env file is present.
+    """
     from core.sap_connector import SAPHanaConnector
+    kwargs.setdefault("username", "test_user")
+    kwargs.setdefault("password", "test_pass")
     return SAPHanaConnector(**kwargs)
 
 
@@ -27,11 +32,13 @@ def _make_connector(**kwargs):
 
 class TestSAPHanaConnectorInit:
     def test_defaults(self):
-        c = _make_connector()
-        assert c.host == "20.0.1.9"
-        assert c.port == 30015
-        assert c.schema == "SBO_QUIMICABOSS"
-        assert c.username == "SYSTEM"
+        """Verify the constructor reads defaults from class-level DEFAULT_* attributes."""
+        from core.sap_connector import SAPHanaConnector
+        c = SAPHanaConnector()  # raw constructor — no test defaults
+        assert c.host == SAPHanaConnector.DEFAULT_HOST
+        assert c.port == SAPHanaConnector.DEFAULT_PORT
+        assert c.schema == SAPHanaConnector.DEFAULT_SCHEMA
+        assert c.username == SAPHanaConnector.DEFAULT_USER
 
     def test_custom_params(self):
         c = _make_connector(host="10.0.0.1", port=30013, username="u", password="p", schema="S")
