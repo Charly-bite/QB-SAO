@@ -1,0 +1,85 @@
+<!-- Order Detail Floating Window — loads /orders/<order_number> in an iframe -->
+<div x-show="orderDetailShow && !orderDetailMinimized"
+     x-cloak
+     class="sao-modal-overlay"
+     style="display: none;">
+
+    <div class="sao-modal-container" style="max-width: 1100px; width: 95vw; height: 85vh; display: flex; flex-direction: column;">
+
+        <!-- Header -->
+        <div class="sao-modal-header" style="flex-shrink: 0;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="width: 40px; height: 40px; border-radius: 10px; background-color: #ede9fe; display: flex; align-items: center; justify-content: center; color: #7c3aed;">
+                    <svg style="width: 24px; height: 24px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h3 style="font-size: 18px; font-weight: 800; color: #1e293b; margin: 0;">Detalle de Pedido</h3>
+                    <p style="font-size: 12px; font-weight: 600; color: #64748b; margin: 2px 0 0 0;" x-text="orderDetailLabel"></p>
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px;">
+                <!-- Open in new tab -->
+                <a :href="orderDetailUrl" target="_blank"
+                   style="padding: 8px; border-radius: 8px; border: none; background: none; color: #94a3b8; cursor: pointer; transition: background-color 0.2s; display: flex; align-items: center; text-decoration: none;"
+                   onmouseover="this.style.backgroundColor='#f1f5f9'; this.style.color='#475569';"
+                   onmouseout="this.style.backgroundColor='transparent'; this.style.color='#94a3b8';"
+                   title="Abrir en nueva pestaña">
+                    <svg style="width: 20px; height: 20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                    </svg>
+                </a>
+                <!-- Minimize -->
+                <button @click.stop="orderDetailMinimized = true"
+                        style="padding: 8px; border-radius: 8px; border: none; background: none; color: #94a3b8; cursor: pointer; transition: background-color 0.2s;"
+                        onmouseover="this.style.backgroundColor='#f1f5f9'; this.style.color='#475569';"
+                        onmouseout="this.style.backgroundColor='transparent'; this.style.color='#94a3b8';"
+                        title="Minimizar">
+                    <svg style="width: 20px; height: 20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+                    </svg>
+                </button>
+                <!-- Close -->
+                <button @click.stop="closeOrderDetail()"
+                        style="padding: 8px; border-radius: 8px; border: none; background: none; color: #94a3b8; cursor: pointer; transition: background-color 0.2s;"
+                        onmouseover="this.style.backgroundColor='#fee2e2'; this.style.color='#dc2626';"
+                        onmouseout="this.style.backgroundColor='transparent'; this.style.color='#94a3b8';">
+                    <svg style="width: 20px; height: 20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Iframe Content -->
+        <div style="flex: 1; overflow: hidden; border-radius: 0 0 16px 16px;">
+            <iframe x-show="orderDetailShow"
+                    :src="orderDetailUrl"
+                    style="width: 100%; height: 100%; border: none; background: #f0f2f5;"
+                    title="Detalle de Pedido"></iframe>
+        </div>
+    </div>
+</div>
+
+<!-- Minimized Taskbar Item for Order Detail -->
+<template x-teleport="#ec-taskbar">
+    <div x-show="orderDetailShow && orderDetailMinimized"
+         x-cloak
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 translate-y-2"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100 translate-y-0"
+         x-transition:leave-end="opacity-0 translate-y-2"
+         class="ec-taskbar-tab" style="pointer-events: auto;">
+        <button @click="orderDetailMinimized = false" class="ec-taskbar-tab-btn">
+            <svg class="ec-taskbar-tab-icon" style="color: #8b5cf6;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            <span class="ec-taskbar-tab-label" style="color: #8b5cf6;">PED</span>
+            <span class="ec-taskbar-tab-name" x-text="orderDetailLabel"></span>
+        </button>
+        <button @click="closeOrderDetail()" class="ec-taskbar-tab-close" title="Cerrar">
+            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+    </div>
+</template>

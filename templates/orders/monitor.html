@@ -4,7 +4,9 @@
 {% block page_title %}Monitor de estado en tiempo real{% endblock %}
 
 {% block extra_head %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/design_tokens.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/monitor.css') }}">
+    
 {% endblock %}
 
 {% block breadcrumbs %}
@@ -16,7 +18,32 @@
 {% endblock %}
 
 {% block content %}
-<div x-data="monitorApp()" class="monitor-wrapper">
+
+<div x-data="monitorApp()" class="monitor-wrapper"
+     @keydown.window.alt.h.prevent="showHelp = !showHelp"
+     @keydown.window.alt.t.prevent="showTimer = !showTimer"
+     @keydown.window.alt.v.prevent="showRoleBadge = !showRoleBadge"
+     @keydown.window.alt.p.prevent="toggleSpeech()"
+     @keydown.window.alt.d.prevent="downloadKioskScript()"
+     @keydown.window.alt.o.prevent="showTvOverlay = !showTvOverlay">
+
+    <!-- Help Modal -->
+    <div x-show="showHelp" x-cloak style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+        <div style="background: var(--bg-surface); padding: var(--spacing-6); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); max-width: 400px; width: 100%; border: 1px solid var(--border-subtle);">
+            <h3 style="margin-top: 0; font-family: var(--font-sans); color: var(--text-primary);">Atajos de Teclado</h3>
+            <ul style="list-style: none; padding: 0; margin: var(--spacing-4) 0; color: var(--text-secondary); font-family: var(--font-sans); line-height: 1.6;">
+                <li><strong>ALT + H</strong>: Mostrar/Ocultar Ayuda</li>
+                <li><strong>ALT + T</strong>: Mostrar/Ocultar Temporizador</li>
+                <li><strong>ALT + V</strong>: Mostrar/Ocultar Rol</li>
+                <li><strong>ALT + P</strong>: Probar / Pausar Audio de Anuncio</li>
+                <li><strong>ALT + O</strong>: Mostrar / Ocultar Pantalla TV (Tiempos)</li>
+            </ul>
+            <div style="text-align: right;">
+                <button @click="showHelp = false" style="background: var(--color-primary-500); color: white; border: none; padding: 8px 16px; border-radius: var(--radius-md); cursor: pointer; font-family: var(--font-sans);">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
 
     <!-- ═══════ HEADER / CONTROLS ═══════ -->
     <div class="monitor-controls-bar" style="display: flex; justify-content: flex-end; align-items: center; padding: 12px 24px; gap: 12px; background: #ffffff; border-bottom: 1px solid #e2e8f0; margin: -24px -24px 24px -24px;">
@@ -31,6 +58,9 @@
                 </select>
             </div>
         </template>
+
+        <!-- Test Audio Button (Exclusivo Mostrador) -->
+        
 
         <!-- Notification bell -->
         <button type="button" id="btn-notifications"
@@ -48,8 +78,8 @@
 
         <!-- Refresh indicator -->
         <div class="refresh-badge" style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: #f8fafc; border-radius: 20px; border: 1px solid #e2e8f0;">
-            <span class="refresh-dot" :style="loading ? 'background: #f59e0b;' : 'background: #22c55e;'" style="width: 8px; height: 8px; border-radius: 50%;"></span>
-            <span class="refresh-text" style="font-size: 11px; font-weight: 600; color: #64748b;" x-text="loading ? 'Sincronizando...' : 'Tiempo Real'"></span>
+            <span class="refresh-dot" :style="sseState === 1 ? (loading ? 'background: #f59e0b;' : 'background: #22c55e;') : 'background: #ef4444;'" style="width: 8px; height: 8px; border-radius: 50%;"></span>
+            <span class="refresh-text" style="font-size: 11px; font-weight: 600; color: #64748b;" x-text="sseState === 1 ? (loading ? 'Sincronizando...' : 'Tiempo Real') : 'Desconectado'"></span>
         </div>
     </div>
 
@@ -80,9 +110,9 @@
             <button type="button" class="kpi-card kpi-picking"
                 :class="activeTopFilter === 'picking' ? 'is-active' : ''"
                 @click="toggleTopFilter('picking')"
-                title="Filtrar entregados">
+                title="Filtrar surtidos">
                 <div class="kpi-value" x-text="activeStats.picking || 0">0</div>
-                <div class="kpi-label">Entregados</div>
+                <div class="kpi-label">Surtidos</div>
             </button>
             <button type="button" class="kpi-card kpi-invoice"
                 :class="activeTopFilter === 'invoice' ? 'is-active' : ''"
@@ -132,7 +162,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
-                <input type="text" x-model="searchQuery" @input="currentPage = 1" placeholder="Buscar por #pedido, cliente o código..."
+                <input type="text" x-model="searchQuery" @input="currentPage = 1" :placeholder="isMostrador ? 'Buscar por #pedido...' : 'Buscar por #pedido, cliente o código...'"
                     class="search-input">
                 <button class="search-clear"
                     x-show="searchQuery.length > 0"
@@ -213,7 +243,8 @@
     </section>
 
     <!-- ═══════ ORDER CARDS ═══════ -->
-    <main class="orders-container">
+    <div class="orders-layout" style="display: flex; gap: 16px; flex: 1; min-height: 0; box-sizing: border-box; width: 100%;">
+        <main class="orders-container" style="flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0;">
 
         <!-- Loading skeleton -->
         <template x-if="firstLoad">
@@ -240,188 +271,158 @@
         </div>
 
         <!-- Order cards grid -->
-        <div x-show="!firstLoad && filteredOrders.length > 0" class="orders-grid">
+        <div x-show="!firstLoad && filteredOrders.length > 0" class="orders-grid" :style="getGridStyle()">
             <template x-for="(order, idx) in paginatedOrders" :key="order.order_id">
                 <div class="order-card" :class="getCardAccentClass(order.status)"
                     :style="'animation-delay:' + (idx * 0.03) + 's'"
                     @click="toggleExpand(order.order_id, $event)">
 
-                    <!-- Card header -->
-                    <div class="card-top">
-                        <div class="card-order-id">
-                            <span class="order-hash">#</span><span x-text="order.order_id"></span>
-                        </div>
-                        <div class="card-aging" :class="getAgingClass(order)">
-                            <svg class="aging-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <span x-text="getAgingText(order)"></span>
-                        </div>
-                    </div>
+                    <!-- Bank Mode View -->
+                    
 
-                    <!-- Customer info -->
-                    <div class="card-customer">
-                        <div class="customer-name" x-text="order.customer_name"></div>
-                        <div class="customer-id-row">
-                            <span class="customer-code" x-text="order.customer_code"></span>
-                            <template x-if="order.created_by">
-                                <span class="customer-seller" x-text="order.created_by"></span>
-                            </template>
-                        </div>
-                    </div>
+                    <!-- Normal Mode View -->
+                    <div>
+                            <!-- Card header -->
+                            <div class="card-top">
+                                <div class="card-order-id">
+                                    <span class="order-hash">#</span><span x-text="order.order_id"></span>
+                                </div>
+                            </div>
 
-                    <!-- Status banner if on hold -->
-                    <template x-if="order.status === 'En Espera'">
-                        <div class="wait-banner">
-                            <svg class="wait-banner-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <span>Pedido en Espera</span>
-                        </div>
-                    </template>
-
-                    <!-- Status banner if cancelled -->
-                    <template x-if="order.status === 'Cancelado'">
-                        <div class="cancel-banner">
-                            <svg class="cancel-banner-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <span>Pedido Cancelado</span>
-                        </div>
-                    </template>
-
-                    <!-- Progress timeline -->
-                    <template x-if="order.status !== 'En Espera' && order.status !== 'Cancelado'">
-                        <div class="progress-timeline">
-                        <template x-for="(step, si) in statusSteps" :key="step.key">
-                            <div class="timeline-step" :class="getStepClass(order.status, step.key)">
-                                <div class="step-dot">
-                                    <template x-if="isStepCompleted(order.status, step.key)">
-                                        <svg class="step-check" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3"
-                                                d="M5 13l4 4L19 7" />
-                                        </svg>
+                            <!-- Customer info -->
+                            <div class="card-customer">
+                                <div class="customer-name" x-text="order.customer_name"></div>
+                                <div class="customer-id-row">
+                                    <span class="customer-code" x-text="order.customer_code"></span>
+                                    <template x-if="order.created_by">
+                                        <span class="customer-seller" x-text="order.created_by"></span>
                                     </template>
                                 </div>
-                                <div class="step-label" x-text="step.short"></div>
-                                <div class="step-connector"
-                                    x-show="si < statusSteps.length - 1"
-                                    :class="isStepCompleted(order.status, step.key) ? 'connector-done' : ''">
-                                </div>
                             </div>
-                        </template>
-                        </div>
-                    </template>
 
-                    <!-- Card footer -->
-                    <div class="card-footer">
-                        <div class="footer-pills">
-                            <div class="pill pill-date" :class="isOverdue(order) ? 'pill-overdue' : ''">
-                                <svg class="pill-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
-                                <span x-text="formatDate(order.delivery_date)"></span>
-                            </div>
-                            <div class="pill pill-items">
-                                <svg class="pill-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                                </svg>
-                                <span x-text="(order.items ? order.items.length : 0) + ' art.'"></span>
-                            </div>
-                            <template x-if="order.factura_number">
-                                <div class="pill pill-factura">
-                                    <span x-text="'Fact. #' + order.factura_number"></span>
+                            <!-- Status banner if on hold -->
+                            <template x-if="order.status === 'En Espera'">
+                                <div class="wait-banner">
+                                    <svg class="wait-banner-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span>Pedido en Espera</span>
                                 </div>
                             </template>
-                            <template x-if="order.delivery_number">
-                                <div class="pill pill-delivery" style="background: rgba(245, 158, 11, 0.1); color: #d97706;">
-                                    <span x-text="'Ent. #' + order.delivery_number"></span>
+
+                            <!-- Status banner if cancelled -->
+                            <template x-if="order.status === 'Cancelado'">
+                                <div class="cancel-banner">
+                                    <svg class="cancel-banner-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span>Pedido Cancelado</span>
                                 </div>
                             </template>
-                        </div>
-                        <div class="sap-status" :class="getSapClass(order.sap_status)">
-                            <span x-text="order.sap_status || 'N/A'"></span>
-                        </div>
-                    </div>
 
-                    <!-- Expandable detail panel (CSS Grid accordion) -->
-                    <div class="card-detail"
-                        :class="expandedOrder === order.order_id ? 'is-open' : ''">
-                        <div class="card-detail-inner" style="position: relative;">
-                            <!-- Close button -->
-                            <button class="card-close-btn"
-                                x-show="expandedOrder === order.order_id"
-                                x-cloak
-                                @click.stop="expandedOrder = null"
-                                title="Cerrar">
-                                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                            </button>
-                            <div class="detail-divider"></div>
-
-                            <!-- Line items -->
-                            <div class="detail-section">
-                                <div class="detail-heading">Artículos del Pedido</div>
-                                <template x-if="order.items && order.items.length > 0">
-                                    <div class="items-list">
-                                        <template x-for="item in order.items"
-                                            :key="item.item_code || item.ItemCode || Math.random()">
-                                            <div class="item-row">
-                                                <div class="item-info">
-                                                    <div class="item-name"
-                                                        x-text="item.description || item.item_name || item.ItemName || item.Dscription || '-'">
-                                                    </div>
-                                                    <div class="item-code"
-                                                        x-text="item.item_code || item.ItemCode || ''"></div>
-                                                </div>
-                                                <div class="item-qty" x-text="formatItemQty(item)"></div>
-                                            </div>
-                                        </template>
+                            <!-- Progress timeline -->
+                            <template x-if="order.status !== 'En Espera' && order.status !== 'Cancelado'">
+                                <div class="progress-timeline">
+                                <template x-for="(step, si) in statusSteps" :key="step.key">
+                                    <div class="timeline-step" :class="getStepClass(order.status, step.key)">
+                                        <div class="step-dot">
+                                            <template x-if="isStepCompleted(order.status, step.key)">
+                                                <svg class="step-check" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3"
+                                                        d="M5 13l4 4L19 7" />
+                                                </svg>
+                                            </template>
+                                        </div>
+                                        <div class="step-label" x-text="step.short"></div>
+                                        <div class="step-connector"
+                                            x-show="si < statusSteps.length - 1"
+                                            :class="isStepCompleted(order.status, step.key) ? 'connector-done' : ''">
+                                        </div>
                                     </div>
                                 </template>
-                                <template x-if="!order.items || order.items.length === 0">
-                                    <p class="no-items">Sin detalle de artículos</p>
-                                </template>
+                                </div>
+                            </template>
+
+                            <!-- Card footer -->
+                            <div class="card-footer">
+                                <div class="footer-pills">
+                                    <div class="pill pill-date" :class="isOverdue(order) ? 'pill-overdue' : ''">
+                                        <svg class="pill-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                        </svg>
+                                        <span x-text="formatDate(order.delivery_date)"></span>
+                                    </div>
+                                    <div class="pill pill-items">
+                                        <svg class="pill-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                        </svg>
+                                        <span x-text="(order.items ? order.items.length : 0) + ' art.'"></span>
+                                    </div>
+                                    <template x-if="order.factura_number">
+                                        <div class="pill pill-factura">
+                                            <span x-text="'Fact. #' + order.factura_number"></span>
+                                        </div>
+                                    </template>
+                                    <template x-if="order.delivery_number">
+                                        <div class="pill pill-delivery" style="background: rgba(245, 158, 11, 0.1); color: #d97706;">
+                                            <span x-text="'Ent. #' + order.delivery_number"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                                <div class="sap-status" :class="getSapClass(order.sap_status)">
+                                    <span x-text="order.sap_status || 'N/A'"></span>
+                                </div>
                             </div>
 
-                            <!-- Dates and meta -->
-                            <div class="detail-meta-grid">
-                                <div>
-                                    <div class="meta-label">Fecha Pedido</div>
-                                    <div class="meta-value" x-text="formatDate(order.order_date)"></div>
-                                </div>
-                                <div>
-                                    <div class="meta-label">Fecha Entrega</div>
-                                    <div class="meta-value" x-text="formatDate(order.delivery_date)"></div>
-                                </div>
-                                <div>
-                                    <div class="meta-label">Vendedor</div>
-                                    <div class="meta-value" x-text="order.created_by || '-'"></div>
-                                </div>
-                                <div>
-                                    <div class="meta-label">Última Actualización</div>
-                                    <div class="meta-value" x-text="formatDateTime(order.last_updated)"></div>
-                                </div>
-                            </div>
+                            <!-- Expandable detail panel -->
+                            <div class="card-detail" :class="expandedOrder === order.order_id ? 'is-open' : ''">
+                                <div class="card-detail-inner" style="position: relative;">
+                                    <button class="card-close-btn" x-show="expandedOrder === order.order_id" x-cloak @click.stop="expandedOrder = null" title="Cerrar">
+                                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                    </button>
+                                    <div class="detail-divider"></div>
 
-                            <!-- Action link -->
-                            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-light); text-align: right;">
-                                <a :href="'/orders/' + order.order_id"
-                                   style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #4a7dff; text-decoration: none; padding: 6px 14px; border-radius: 8px; transition: background 0.15s;"
-                                   onmouseover="this.style.background='rgba(74,125,255,0.08)'"
-                                   onmouseout="this.style.background='transparent'"
-                                   @click.stop>
-                                    Ver detalle
-                                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                                </a>
+                                    <div class="detail-section">
+                                        <div class="detail-heading">Artículos del Pedido</div>
+                                        <template x-if="order.items && order.items.length > 0">
+                                            <div class="items-list">
+                                                <template x-for="item in order.items" :key="item.item_code || item.ItemCode || Math.random()">
+                                                    <div class="item-row">
+                                                        <div class="item-info">
+                                                            <div class="item-name" x-text="item.description || item.item_name || item.ItemName || item.Dscription || '-'"></div>
+                                                            <div class="item-code" x-text="item.item_code || item.ItemCode || ''"></div>
+                                                        </div>
+                                                        <div class="item-qty" x-text="formatItemQty(item)"></div>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        <template x-if="!order.items || order.items.length === 0">
+                                            <p class="no-items">Sin detalle de artículos</p>
+                                        </template>
+                                    </div>
+
+                                    <div class="detail-meta-grid">
+                                        <div><div class="meta-label">Fecha Pedido</div><div class="meta-value" x-text="formatDate(order.order_date)"></div></div>
+                                        <div><div class="meta-label">Fecha Entrega</div><div class="meta-value" x-text="formatDate(order.delivery_date)"></div></div>
+                                        <div><div class="meta-label">Vendedor</div><div class="meta-value" x-text="order.created_by || '-'"></div></div>
+                                        <div><div class="meta-label">Última Actualización</div><div class="meta-value" x-text="formatDateTime(order.last_updated)"></div></div>
+                                    </div>
+
+                                    <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-light); text-align: right;">
+                                        <a :href="'/orders/' + order.order_id" style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #4a7dff; text-decoration: none; padding: 6px 14px; border-radius: 8px; transition: background 0.15s;" onmouseover="this.style.background='rgba(74,125,255,0.08)'" onmouseout="this.style.background='transparent'" @click.stop>
+                                            Ver detalle
+                                            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                        </a>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
             </template>
         </div>
 
@@ -449,7 +450,44 @@
                 </button>
             </div>
         </div>
-    </main>
+        </main>
+
+        <!-- ═══════ HISTORY PANEL ═══════ -->
+        <template x-if="isMostrador && historyOrders.length > 0">
+            <aside class="history-panel">
+                <div class="history-title">
+                    Historial Reciente
+                </div>
+                <div class="history-list">
+                    <template x-for="order in historyOrders" :key="'hist-' + order.order_id">
+                        <div class="order-card history-card" :class="getCardAccentClass(order.status)">
+                            <!-- Bank Mode View -->
+                            
+                            <!-- Normal Mode View -->
+                            <div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; padding: 0 16px; width: 100%; height: 100%;">
+                                    <div style="display: flex; flex-direction: column; justify-content: center; min-width: 0;">
+                                        <div class="card-order-id" style="font-size: 16px; margin: 0; line-height: 1;">
+                                            <span class="order-hash">#</span><span x-text="order.order_id"></span>
+                                        </div>
+                                        <div class="customer-name" style="font-size: 11px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" x-text="order.customer_name"></div>
+                                    </div>
+                                    <div class="sap-status" :class="getSapClass(order.sap_status)" style="margin: 0; flex-shrink: 0; padding: 2px 6px;">
+                                        <span x-text="order.sap_status || 'N/A'"></span>
+                                    </div>
+                                </div>
+                        </div>
+                    </template>
+                </div>
+            </aside>
+        </template>
+    </div>
+
+    <!-- Audio Role Badge -->
+    <div style="position: fixed; bottom: 20px; left: 20px; background: rgba(0,0,0,0.7); color: white; padding: 8px 16px; border-radius: 8px; font-size: 12px; font-family: monospace; z-index: 50;" x-show="isMostrador && showRoleBadge" x-transition>
+        Rol Actual: <strong x-text="isMostrador ? 'Mostrador (Voz Activada)' : 'Operador (Sin Voz)'"></strong>
+    </div>
+
+    
 
     <!-- ═══════ TOAST ═══════ -->
     <div x-show="toast.visible" x-cloak x-transition
@@ -460,13 +498,374 @@
         </div>
     </div>
 
-    <!-- Nokia notification sound (trimmed 1.5s clip) -->
-    <audio id="nokia-audio" preload="auto" src="{{ url_for('static', filename='nokia.wav') }}" style="display:none"></audio>
+    <!-- Chime notification sound (extracted from Jocelyn recording) -->
+    <audio id="chime-audio" preload="auto" src="{{ url_for('static', filename='audio/chime.mp3') }}" style="display:none"></audio>
+    <!-- Recorded announcement (HTML5 Audio fallback) -->
+    <audio id="announcement-audio" preload="auto" src="{{ url_for('static', filename='audio/announcement_jocelyn.wav') }}" style="display:none"></audio>
+
+    <!-- Full-screen Tiempos TV Overlay for Mostrador rotation -->
+    <template x-if="showTvOverlay">
+        <div style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #f1f5f9; z-index: 999998; border: none; overflow: hidden;">
+            <iframe id="tv-iframe" src="{{ url_for('orders.tiempos_tv') }}" allow="autoplay" style="width: 100%; height: 100%; border: none; overflow: hidden;" @load="onTvIframeLoad()"></iframe>
+        </div>
+    </template>
 
     <!-- ═══════ ALPINE APP ═══════ -->
     <script>
         document.addEventListener('alpine:init', () => {
             Alpine.data('monitorApp', () => ({
+                isMostrador: false,
+                activePanelView: 'times',
+                panelRotationTimer: null,
+                timeUntilNextAnnounce: 600, // 10 minutes in seconds
+                flashTimer: null,
+                newOrderNumber: '',
+                speechPlaying: false,
+                _announcementAudio: null,
+                _audioCtx: null,           // Web Audio API context
+                _audioBuffer: null,        // Pre-decoded audio buffer
+                _chimeBuffer: null,        // Pre-decoded chime buffer
+                _activeSource: null,       // Currently playing buffer source
+                _audioReady: false,        // Buffer decoded and ready
+                sseState: 0, // 0 = connecting, 1 = open, 2 = closed/error
+                _lastAnnouncedKey: '',
+                showTvOverlay: false,
+                currentTime: Date.now(),
+                _timeUpdater: null,
+                showTimer: true,
+                showRoleBadge: true,
+                showHelp: false,
+                testOrder: null,
+                _testOrderInterval: null,
+
+                getGridStyle() {
+                    if (!this.isMostrador) return '';
+                    const N = this.paginatedOrders.length;
+                    if (N === 0) return '';
+
+                    let cols = 3;
+                    let rows = 2;
+
+                    if (N === 1) { cols = 1; rows = 1; }
+                    else if (N === 2) { cols = 2; rows = 1; }
+                    else if (N === 3) { cols = 3; rows = 1; }
+                    else if (N === 4) { cols = 2; rows = 2; }
+                    else if (N <= 6) { cols = 3; rows = 2; }
+                    else if (N <= 8) { cols = 4; rows = 2; }
+                    else if (N <= 9) { cols = 3; rows = 3; }
+                    else if (N <= 12) { cols = 4; rows = 3; }
+                    else {
+                        cols = Math.ceil(Math.sqrt(N));
+                        rows = Math.ceil(N / cols);
+                    }
+
+                    return `grid-template-columns: repeat(${cols}, 1fr) !important; grid-template-rows: repeat(${rows}, 1fr) !important;`;
+                },
+
+                startPanelRotation() {
+                    if (this.panelRotationTimer) clearInterval(this.panelRotationTimer);
+                    
+                    const savedEpoch = localStorage.getItem('sao_next_announce_epoch');
+                    const now = Date.now();
+                    
+                    if (savedEpoch && parseInt(savedEpoch) > now) {
+                        this.timeUntilNextAnnounce = Math.ceil((parseInt(savedEpoch) - now) / 1000);
+                    } else {
+                        this.timeUntilNextAnnounce = 600; // Reset to 10 minutes
+                        localStorage.setItem('sao_next_announce_epoch', (now + 600000).toString());
+                    }
+                    
+                    this.panelRotationTimer = setInterval(() => {
+                        this.timeUntilNextAnnounce--;
+                        
+                        if (this.timeUntilNextAnnounce <= 0) {
+                            // Clear it so it starts a fresh 10 min cycle when returning
+                            localStorage.removeItem('sao_next_announce_epoch');
+                            
+                            if (this.isMostrador) {
+                                this.showTvOverlay = true;
+                                if (this.panelRotationTimer) clearInterval(this.panelRotationTimer);
+                            } else {
+                                this.activePanelView = this.activePanelView === 'times' ? 'audio' : 'times';
+                                this.timeUntilNextAnnounce = 600; // Reset for next rotation
+                                localStorage.setItem('sao_next_announce_epoch', (Date.now() + 600000).toString());
+                            }
+                        }
+                    }, 1000);
+                },
+
+                downloadKioskScript() {
+                    if (!this.isMostrador) return;
+                    const a = document.createElement('a');
+                    a.href = "{{ url_for('static', filename='downloads/launch_kiosk.bat') }}";
+                    a.download = "launch_kiosk.bat";
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    this.showToast('🚀 Descarga iniciada', 'El script para el Kiosco se está descargando', 'info');
+                },
+
+                triggerAudioPanel(orderId) {
+                    if (!this.isMostrador) return;
+                    this.newOrderNumber = orderId || '';
+                    this.activePanelView = 'flash';
+                    
+                    if (this.panelRotationTimer) clearInterval(this.panelRotationTimer);
+                    if (this.flashTimer) clearTimeout(this.flashTimer);
+                    
+                    // Show flash for 10 seconds, then switch to audio view for 2 minutes, then resume rotation
+                    this.flashTimer = setTimeout(() => {
+                        this.activePanelView = 'audio';
+                        
+                        setTimeout(() => {
+                            this.activePanelView = 'times';
+                            this.startPanelRotation(); // Resume 10-min rotation starting from times
+                        }, 120000); // Wait 2 mins on audio
+                    }, 10000); // 10 seconds flash
+                    
+                    // Attempt to autoplay recorded audio
+                    if (!this.speechPlaying) {
+                        try {
+                            this.playRecordedAnnouncement();
+                        } catch(e) { console.warn("Autoplay blocked", e); }
+                    }
+                },
+
+                toggleSpeech() {
+                    if (this.speechPlaying) {
+                        this.stopRecordedAnnouncement();
+                        return;
+                    }
+                    this.playRecordedAnnouncement();
+                },
+
+                // ── Robust Audio Engine ──
+                // Layer 1: Web Audio API (best autoplay support)
+                // Layer 2: HTML5 Audio element (fallback)
+                // Layer 3: Retry with delay
+
+                async _initAudioEngine() {
+                    try {
+                        // Create AudioContext (browsers allow creation anytime)
+                        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                        if (!AudioCtx) {
+                            console.warn('Web Audio API not supported, will use HTML5 Audio only');
+                            return;
+                        }
+                        this._audioCtx = new AudioCtx();
+                        console.log('🔊 AudioContext created (state: ' + this._audioCtx.state + ')');
+
+                        // DON'T await resume() here — it hangs before user interaction
+                        // due to Chrome's autoplay policy. Instead, fire-and-forget.
+                        if (this._audioCtx.state === 'suspended') {
+                            this._audioCtx.resume().catch(() => {});
+                        }
+
+                        // Set up a one-time listener to resume AudioContext on first
+                        // user interaction (click/touch/keydown). This is the standard
+                        // pattern recommended by Chrome for autoplay compliance.
+                        const resumeOnGesture = () => {
+                            if (this._audioCtx && this._audioCtx.state === 'suspended') {
+                                this._audioCtx.resume().then(() => {
+                                    console.log('🔊 AudioContext resumed via user gesture');
+                                }).catch(() => {});
+                            }
+                            // Remove all listeners after first interaction
+                            ['click', 'touchstart', 'keydown'].forEach(evt =>
+                                document.removeEventListener(evt, resumeOnGesture, { capture: true })
+                            );
+                        };
+                        ['click', 'touchstart', 'keydown'].forEach(evt =>
+                            document.addEventListener(evt, resumeOnGesture, { once: true, capture: true })
+                        );
+
+                        // Pre-fetch and decode audio buffers REGARDLESS of context state.
+                        // decodeAudioData works even when the context is suspended.
+
+                        // 1. Pre-fetch and decode the chime sound (small, loads fast)
+                        try {
+                            const chimeUrl = '{{ url_for("static", filename="audio/chime.mp3") }}';
+                            const chimeResponse = await fetch(chimeUrl);
+                            const chimeArrayBuffer = await chimeResponse.arrayBuffer();
+                            this._chimeBuffer = await this._audioCtx.decodeAudioData(chimeArrayBuffer);
+                            console.log('🔔 Chime buffer pre-decoded (' + 
+                                Math.round(this._chimeBuffer.duration * 1000) + 'ms)');
+                        } catch(ce) {
+                            console.warn('Chime buffer decode failed:', ce);
+                        }
+
+                        // 2. Pre-fetch and decode the announcement WAV file (larger)
+                        try {
+                            const audioUrl = '{{ url_for("static", filename="audio/announcement_jocelyn.wav") }}';
+                            const response = await fetch(audioUrl);
+                            const arrayBuffer = await response.arrayBuffer();
+                            this._audioBuffer = await this._audioCtx.decodeAudioData(arrayBuffer);
+                            this._audioReady = true;
+                            console.log('🔊 Announcement buffer pre-decoded (' + 
+                                Math.round(this._audioBuffer.duration) + 's, ' + 
+                                this._audioBuffer.numberOfChannels + 'ch)');
+                        } catch(ae) {
+                            console.warn('Announcement buffer decode failed:', ae);
+                        }
+                    } catch(e) {
+                        console.warn('Web Audio API init failed, will fallback to HTML5 Audio:', e);
+                    }
+                },
+
+                _playViaWebAudio() {
+                    return new Promise((resolve, reject) => {
+                        if (!this._audioCtx || !this._audioBuffer) {
+                            return reject(new Error('Web Audio not initialized'));
+                        }
+
+                        // Resume context if suspended
+                        if (this._audioCtx.state === 'suspended') {
+                            this._audioCtx.resume().catch(() => {});
+                        }
+
+                        // Stop any previous source
+                        if (this._activeSource) {
+                            try { this._activeSource.stop(); } catch(e) {}
+                        }
+
+                        const source = this._audioCtx.createBufferSource();
+                        source.buffer = this._audioBuffer;
+                        source.connect(this._audioCtx.destination);
+                        this._activeSource = source;
+
+                        source.onended = () => {
+                            console.log('🔊 [WebAudio] Recording finished');
+                            this._activeSource = null;
+                            this.speechPlaying = false;
+                            const iframe = document.getElementById('tv-iframe');
+                            if (iframe && iframe.contentWindow) {
+                                iframe.contentWindow.postMessage('audio_ended', '*');
+                            }
+                        };
+
+                        try {
+                            source.start(0);
+                            console.log('🔊 [WebAudio] Recording playing via Web Audio API');
+                            this.speechPlaying = true;
+                            const iframe = document.getElementById('tv-iframe');
+                            if (iframe && iframe.contentWindow) {
+                                iframe.contentWindow.postMessage('audio_started', '*');
+                            }
+                            resolve();
+                        } catch(e) {
+                            reject(e);
+                        }
+                    });
+                },
+
+                _playViaHtml5Audio() {
+                    return new Promise((resolve, reject) => {
+                        const audioEl = document.getElementById('announcement-audio');
+                        if (!audioEl) return reject(new Error('Audio element not found'));
+
+                        this._announcementAudio = audioEl;
+                        audioEl.currentTime = 0;
+
+                        audioEl.onplay = () => {
+                            console.log('🔊 [HTML5] Recording started playing');
+                            this.speechPlaying = true;
+                            const iframe = document.getElementById('tv-iframe');
+                            if (iframe && iframe.contentWindow) {
+                                iframe.contentWindow.postMessage('audio_started', '*');
+                            }
+                        };
+
+                        audioEl.onended = () => {
+                            console.log('🔊 [HTML5] Recording finished');
+                            this.speechPlaying = false;
+                            const iframe = document.getElementById('tv-iframe');
+                            if (iframe && iframe.contentWindow) {
+                                iframe.contentWindow.postMessage('audio_ended', '*');
+                            }
+                        };
+
+                        audioEl.onerror = (e) => {
+                            console.error('[HTML5] Audio error:', e);
+                            this.speechPlaying = false;
+                            reject(e);
+                        };
+
+                        const p = audioEl.play();
+                        if (p !== undefined) {
+                            p.then(resolve).catch(reject);
+                        } else {
+                            resolve();
+                        }
+                    });
+                },
+
+                async playRecordedAnnouncement(retryCount = 0) {
+                    const MAX_RETRIES = 5;
+                    const RETRY_DELAY_MS = 1000;
+
+                    // Stop any current playback
+                    this.stopRecordedAnnouncement();
+
+                    // Layer 1: Try Web Audio API first (best autoplay support)
+                    try {
+                        await this._playViaWebAudio();
+                        console.log('✅ Playing via Web Audio API (Layer 1)');
+                        return;
+                    } catch(e) {
+                        console.warn('⚠️ Web Audio API failed:', e.message);
+                    }
+
+                    // Layer 2: Fallback to HTML5 Audio element
+                    try {
+                        await this._playViaHtml5Audio();
+                        console.log('✅ Playing via HTML5 Audio (Layer 2)');
+                        return;
+                    } catch(e) {
+                        console.warn('⚠️ HTML5 Audio failed:', e.message);
+                    }
+
+                    // Layer 3: Retry with delay
+                    if (retryCount < MAX_RETRIES) {
+                        console.log(`🔄 Retry ${retryCount + 1}/${MAX_RETRIES} in ${RETRY_DELAY_MS}ms...`);
+                        // Try to resume AudioContext before retrying
+                        if (this._audioCtx && this._audioCtx.state === 'suspended') {
+                            try { await this._audioCtx.resume(); } catch(e) {}
+                        }
+                        setTimeout(() => {
+                            this.playRecordedAnnouncement(retryCount + 1);
+                        }, RETRY_DELAY_MS);
+                    } else {
+                        console.error('❌ All audio playback methods failed after ' + MAX_RETRIES + ' retries');
+                        this.speechPlaying = false;
+                        const iframe = document.getElementById('tv-iframe');
+                        if (iframe && iframe.contentWindow) {
+                            iframe.contentWindow.postMessage('audio_failed', '*');
+                        }
+                    }
+                },
+
+                stopRecordedAnnouncement() {
+                    // Stop Web Audio source
+                    if (this._activeSource) {
+                        try { this._activeSource.stop(); } catch(e) {}
+                        this._activeSource = null;
+                    }
+                    // Stop HTML5 Audio
+                    const audioEl = this._announcementAudio || document.getElementById('announcement-audio');
+                    if (audioEl) {
+                        try {
+                            audioEl.pause();
+                            audioEl.currentTime = 0;
+                        } catch(e) {}
+                    }
+                    this.speechPlaying = false;
+                },
+
+                onTvIframeLoad() {
+                    console.log("📺 TV iframe loaded. Starting recorded announcement.");
+                    this.speechPlaying = false;
+                    this.playRecordedAnnouncement();
+                },
                 orders: [],
                 stats: {},
                 sellers: [],
@@ -493,16 +892,22 @@
                 statusSteps: [
                     { key: 'Pendiente', short: 'Pend' },
                     { key: 'En Proceso', short: 'Proc' },
-                    { key: 'Entregado', short: 'Entr' },
                     { key: 'Facturacion', short: 'Fact' },
                     { key: 'Relacion de envio', short: 'Rel' },
                     { key: 'Enviado al cliente', short: 'Env' },
                 ],
 
                 get statusIndex() {
-                    const map = {};
-                    this.statusSteps.forEach((s, i) => map[s.key] = i);
-                    return map;
+                    return {
+                        'Pendiente': 0,
+                        'En Proceso': 1,
+                        'Entregado': 1,
+                        'Preparando': 1,
+                        'Facturacion': 2,
+                        'Relacion de envio': 3,
+                        'Recibido por almacen': 3,
+                        'Enviado al cliente': 4,
+                    };
                 },
 
                 // Base filtered: date + search only (no KPI top filter, no max cap)
@@ -522,14 +927,68 @@
                             if (to && oDate > to) return false;
                         }
 
+                        // Remove Cancelado and Facturacion after 3 minutes if not searching (only for Mostrador)
+                        if (this.isMostrador && !q && (o.status === 'Cancelado' || o.status === 'Facturacion')) {
+                            const lastUpdated = o.last_updated || o.created_at || o.order_date;
+                            if (lastUpdated) {
+                                const lastUpdatedMs = new Date(lastUpdated.replace('T', ' ').replace('Z', '')).getTime();
+                                if (!isNaN(lastUpdatedMs)) {
+                                    const elapsedMs = this.currentTime - lastUpdatedMs;
+                                    if (elapsedMs > 3 * 60 * 1000) {
+                                        return false;
+                                    }
+                                }
+                            }
+                        }
+
                         // Text search
                         if (!q) return true;
+                        if (this.isMostrador) {
+                            return String(o.order_id).includes(q) ||
+                                (o.factura_number && String(o.factura_number).includes(q)) ||
+                                (o.delivery_number && String(o.delivery_number).includes(q));
+                        }
                         return String(o.order_id).includes(q) ||
                             (o.customer_name || '').toLowerCase().includes(q) ||
                             (o.customer_code || '').toLowerCase().includes(q) ||
                             (o.factura_number && String(o.factura_number).includes(q)) ||
                             (o.delivery_number && String(o.delivery_number).includes(q));
                     });
+                },
+
+                get historyOrders() {
+                    const q = (this.searchQuery || '').toLowerCase().trim();
+                    if (q) return []; // Hide history while searching
+
+                    const todayDate = new Date();
+                    const todayStr = todayDate.getFullYear() + '-' + String(todayDate.getMonth() + 1).padStart(2, '0') + '-' + String(todayDate.getDate()).padStart(2, '0');
+
+                    let hist = this.orders.filter(o => {
+                        if (o.status === 'Cancelado' || o.status === 'Facturacion') {
+                            const rawDate = o.order_date || o.created_at || o.delivery_date || '';
+                            const oDate = rawDate.split('T')[0].split(' ')[0];
+                            if (oDate !== todayStr) return false;
+
+                            const lastUpdated = o.last_updated || o.created_at || o.order_date;
+                            if (lastUpdated) {
+                                const lastUpdatedMs = new Date(lastUpdated.replace('T', ' ').replace('Z', '')).getTime();
+                                if (!isNaN(lastUpdatedMs)) {
+                                    const elapsedMs = this.currentTime - lastUpdatedMs;
+                                    if (elapsedMs > 3 * 60 * 1000) {
+                                        return true; // Older than 3 minutes -> History Panel
+                                    }
+                                }
+                            }
+                        }
+                        return false;
+                    });
+
+                    // Sort descending by order ID (newest first in history)
+                    return hist.sort((a, b) => {
+                        const idA = parseInt(a.order_id) || 0;
+                        const idB = parseInt(b.order_id) || 0;
+                        return idB - idA;
+                    }).slice(0, 13); // Show latest 13 orders in history
                 },
 
                 // Reactive stats computed from the date/search-filtered orders
@@ -620,7 +1079,7 @@
                     const labels = {
                         pending: 'Pendientes',
                         process: 'En Proceso',
-                        picking: 'Entregados',
+                        picking: 'Surtidos',
                         invoice: 'Facturados',
                         relation: 'Relación',
                         shipped: 'Enviados',
@@ -705,6 +1164,18 @@
                 },
 
                 // ── Format helpers ──
+                getBankStatusClass(status) {
+                    if (status === 'Relacion de envio' || status === 'Facturacion') return 'status-ready';
+                    if (status === 'En Proceso' || status === 'Preparando' || status === 'Entregado') return 'status-prep';
+                    if (status === 'Pendiente') return 'status-pending';
+                    if (status === 'En Espera') return 'status-wait';
+                    return 'status-other';
+                },
+                formatStatus(status) {
+                    if (status === 'Facturacion') return 'FINALIZADO';
+                    if (status === 'En Proceso' || status === 'Preparando' || status === 'Entregado') return 'EN PREPARACION';
+                    return status;
+                },
                 formatDate(str) {
                     if (!str) return '-';
                     const clean = str.split('T')[0].split(' ')[0];
@@ -742,13 +1213,35 @@
                 },
 
                 // ── Notification helpers ──
-                playNotificationSound() {
+                async playNotificationSound() {
+                    // Play chime via Web Audio API (primary) or HTML5 Audio (fallback)
+                    if (this._audioCtx && this._chimeBuffer) {
+                        try {
+                            // Ensure context is running (may still be suspended)
+                            if (this._audioCtx.state === 'suspended') {
+                                await this._audioCtx.resume();
+                            }
+                            const source = this._audioCtx.createBufferSource();
+                            source.buffer = this._chimeBuffer;
+                            source.connect(this._audioCtx.destination);
+                            source.start(0);
+                            console.log('🔔 Chime played via Web Audio API');
+                            return;
+                        } catch(e) {
+                            console.warn('Web Audio chime failed:', e);
+                        }
+                    }
+                    // Fallback: HTML5 Audio
                     try {
-                        const audio = document.getElementById('nokia-audio');
-                        if (!audio) return;
-                        audio.currentTime = 0;
-                        audio.play().catch(() => {});
-                    } catch (e) {}
+                        const audio = document.getElementById('chime-audio');
+                        if (audio) {
+                            audio.currentTime = 0;
+                            await audio.play();
+                            console.log('🔔 Chime played via HTML5 Audio fallback');
+                        }
+                    } catch(e) {
+                        console.warn('HTML5 Audio chime failed:', e);
+                    }
                 },
 
                 async toggleNotifications() {
@@ -770,25 +1263,38 @@
 
                 sendNotification(order_id, fromStatus, toStatus, customerName) {
                     if (!this.notificationsEnabled) return;
-                    // Sound
+                    // Play chime sound for all users
                     this.playNotificationSound();
                     // Toast
                     this.showToast(
                         `📦 Pedido #${order_id}`,
-                        `${customerName || ''} · ${fromStatus} → ${toStatus}`,
+                        `${this.isMostrador ? '' : (customerName ? customerName + ' · ' : '')}${this.formatStatus(fromStatus)} → ${this.formatStatus(toStatus)}`,
                         'info'
                     );
                     // Browser notification (if permitted)
                     if ('Notification' in window && Notification.permission === 'granted') {
                         try {
                             new Notification(`QB-SAO · Pedido #${order_id}`, {
-                                body: `${customerName ? customerName + '\n' : ''}${fromStatus} → ${toStatus}`,
+                                body: `${this.isMostrador ? '' : (customerName ? customerName + '\n' : '')}${this.formatStatus(fromStatus)} → ${this.formatStatus(toStatus)}`,
                                 icon: '/static/images/logo_new.png',
                                 tag: `order-${order_id}`,  // collapse duplicates
                                 renotify: true,
                             });
                         } catch(e) {}
                     }
+                },
+
+                // ── Chime Notification on Status Change (Mostrador) ──
+                queueOrderAnnouncement(order_id, toStatus) {
+                    if (!this.isMostrador) return;
+                    if (this.showTvOverlay) return;
+                    
+                    const key = `${order_id}-${toStatus}`;
+                    if (this._lastAnnouncedKey === key) return;
+                    this._lastAnnouncedKey = key;
+
+                    console.log(`🔔 Chime for order #${order_id} → ${toStatus}`);
+                    this.playNotificationSound();
                 },
 
                 // ── Data fetching ──
@@ -815,6 +1321,7 @@
                         });
 
                         this.orders = sorted;
+                        this.injectTestOrder();
                         this.stats = data.stats || {};
                         this.sellers = data.sellers || [];
                         this.canSeeAll = data.can_see_all || false;
@@ -834,7 +1341,106 @@
                     this.toast._timer = setTimeout(() => { this.toast.visible = false; }, 4000);
                 },
 
+                injectTestOrder() {
+                    if (!this.testOrder) {
+                        this.orders = this.orders.filter(o => o.order_id !== 'PRUEBA');
+                        return;
+                    }
+                    const idx = this.orders.findIndex(o => o.order_id === 'PRUEBA');
+                    if (idx >= 0) {
+                        this.orders[idx] = { ...this.testOrder };
+                    } else {
+                        this.orders.push({ ...this.testOrder });
+                    }
+                    const pri = {};
+                    this.statusSteps.forEach((s, i) => pri[s.key] = i);
+                    this.orders.sort((a, b) => {
+                        const pDiff = (pri[a.status] ?? 99) - (pri[b.status] ?? 99);
+                        if (pDiff !== 0) return pDiff;
+                        const idA = a.order_id === 'PRUEBA' ? 0 : (parseInt(a.order_id) || 0);
+                        const idB = b.order_id === 'PRUEBA' ? 0 : (parseInt(b.order_id) || 0);
+                        return idB - idA;
+                    });
+                },
+
+                startTestOrderSimulation() {
+                    console.log("🧪 Iniciando simulación de pedido de prueba...");
+                    this.showToast('🧪 Simulación Iniciada', 'Pedido PRUEBA avanzará cada 5s', 'info');
+                    if (this._testOrderInterval) {
+                        clearInterval(this._testOrderInterval);
+                    }
+                    const statuses = this.statusSteps.map(s => s.key);
+                    let currentStatusIdx = 0;
+                    
+                    const updateTestOrder = () => {
+                        const nowStr = new Date().toISOString();
+                        const status = statuses[currentStatusIdx];
+                        
+                        this.testOrder = {
+                            order_id: 'PRUEBA',
+                            customer_name: 'CLIENTE DE PRUEBA',
+                            customer_code: 'TEST01',
+                            status: status,
+                            sap_status: 'Abierto',
+                            delivery_date: nowStr,
+                            order_date: nowStr,
+                            last_updated: nowStr,
+                            items: [
+                                { item_code: 'TEST-01', description: 'Producto de Prueba 1', quantity: 1 },
+                                { item_code: 'TEST-02', description: 'Producto de Prueba 2', quantity: 2 }
+                            ]
+                        };
+                        
+                        if (this.isMostrador) {
+                            const oldStatus = currentStatusIdx > 0 ? statuses[currentStatusIdx - 1] : null;
+                            if (oldStatus !== status) {
+                                this.queueOrderAnnouncement('PRUEBA', status);
+                            }
+                        }
+                        
+                        this.injectTestOrder();
+                        console.log(`🧪 Pedido de prueba: ${status}`);
+                        
+                        currentStatusIdx++;
+                        if (currentStatusIdx >= statuses.length) {
+                            clearInterval(this._testOrderInterval);
+                            this._testOrderInterval = null;
+                            setTimeout(() => {
+                                this.testOrder = null;
+                                this.injectTestOrder();
+                                this.showToast('🧪 Simulación Terminada', 'Pedido PRUEBA eliminado', 'info');
+                            }, 15000);
+                        }
+                    };
+                    
+                    updateTestOrder();
+                    this._testOrderInterval = setInterval(updateTestOrder, 5000);
+                },
+
                 init() {
+                    // ── Initialize robust audio engine for chime + announcements ──
+                    this._initAudioEngine();
+
+                    // Key shortcut ALT + Ñ to start simulation
+                    window.addEventListener('keydown', (e) => {
+                        if (e.altKey && (e.key === 'ñ' || e.key === 'Ñ')) {
+                            e.preventDefault();
+                            this.startTestOrderSimulation();
+                        }
+                    });
+
+                    // Listen for message from times TV iframe
+                    window.addEventListener('message', (event) => {
+                        if (event.data === 'announcement_done') {
+                            console.log("📺 TV announcement completed. Hiding TV overlay.");
+                            this.stopRecordedAnnouncement();
+                            this.showTvOverlay = false;
+                            this.timeUntilNextAnnounce = 600;
+                            localStorage.setItem('sao_next_announce_epoch', (Date.now() + 600000).toString());
+                            this.startPanelRotation();
+                        }
+                    });
+
                     // Restore notification preference
                     this.notificationsEnabled = localStorage.getItem('sao_notif') === '1';
 
@@ -843,8 +1449,17 @@
                     // Polling fallback every 30s
                     this._interval = setInterval(() => this.fetchOrders(), 30000);
 
+                    // Update current time every 10 seconds for reactive filters
+                    this._timeUpdater = setInterval(() => {
+                        this.currentTime = Date.now();
+                    }, 10000);
+
                     // SSE real-time stream
                     this._connectSSE();
+
+                    if (this.isMostrador) {
+                        this.startPanelRotation();
+                    }
                 },
 
                 _connectSSE() {
@@ -856,26 +1471,42 @@
                         if (this._es) { try { this._es.close(); } catch(e) {} }
                         this._es = new EventSource('/orders/stream_web');
 
+                        this._es.onopen = () => {
+                            console.log("🟢 Conexión SSE establecida con éxito.");
+                            this.sseState = 1;
+                        };
+
                         this._es.onmessage = (evt) => {
                             try {
                                 const payload = JSON.parse(evt.data);
                                 if (!payload) return;
+                                console.log("📥 SSE Recibido:", payload);
 
                                 if (payload.type === 'order_updated') {
                                     const o = payload.order;
                                     const id = String(payload.order_id);
-                                    const idx = this.orders.findIndex(x => String(x.order_id) === id);
-                                    if (idx >= 0) {
-                                        this.orders.splice(idx, 1, o);
-                                    } else {
-                                        this.fetchOrders();
+                                    if (this.isMostrador && o) {
+                                        const idx = this.orders.findIndex(x => String(x.order_id) === id);
+                                        const oldStatus = idx >= 0 ? this.orders[idx].status : null;
+                                        if (oldStatus !== o.status) {
+                                            this.queueOrderAnnouncement(id, o.status);
+                                        }
                                     }
-                                    this._recomputeStats();
+                                    this.fetchOrders();
                                 }
 
                                 if (payload.type === 'status_changed') {
                                     const { order_id, customer, from: fromStatus, to: toStatus } = payload;
                                     this.sendNotification(order_id, fromStatus, toStatus, customer);
+                                    if (this.isMostrador) {
+                                        this.queueOrderAnnouncement(order_id, toStatus);
+                                    }
+                                    this.fetchOrders();
+                                }
+
+                                if (payload.type === 'sync_completed') {
+                                    console.log("🔄 Background sync completed, refreshing data.");
+                                    this.fetchOrders();
                                 }
                             } catch (e) {
                                 console.error('SSE parse error', e);
@@ -884,6 +1515,7 @@
 
                         this._es.onerror = () => {
                             console.warn('SSE disconnected — reconnecting in 5s...');
+                            this.sseState = 0;
                             if (this._es) { try { this._es.close(); } catch(e) {} }
                             if (this._sseReconnectTimer) clearTimeout(this._sseReconnectTimer);
                             this._sseReconnectTimer = setTimeout(() => this._connectSSE(), 5000);
@@ -910,8 +1542,12 @@
 
                 destroy() {
                     if (this._interval) clearInterval(this._interval);
+                    if (this._timeUpdater) clearInterval(this._timeUpdater);
                     if (this._sseReconnectTimer) clearTimeout(this._sseReconnectTimer);
+                    if (this.panelRotationTimer) clearInterval(this.panelRotationTimer);
                     if (this._es) { try { this._es.close(); } catch(e) {} }
+                    this.stopRecordedAnnouncement();
+                    if (this._audioCtx) { try { this._audioCtx.close(); } catch(e) {} }
                 }
             }));
         });

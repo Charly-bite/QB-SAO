@@ -161,10 +161,15 @@ def create_app(config_name: Optional[str] = None) -> "OpenOMSApp":
 
 
     from core.factura_metadata_manager import FacturaMetadataManager
+    from core.relacion_manager import RelacionManager
+    from core.audit_manager import AuditManager
+    
     # Initialize managers
     app.user_manager = UserManager()
     app.order_status_mgr = OrderStatusManager()
     app.factura_metadata_mgr = FacturaMetadataManager()
+    app.relacion_mgr = RelacionManager()
+    app.audit_mgr = AuditManager()
 
     # SAP Connector (lazy connection)
     app.sap_connector = None
@@ -221,7 +226,8 @@ def create_app(config_name: Optional[str] = None) -> "OpenOMSApp":
     csrf.exempt(sga_label_printed)
     
     # Start the background webhook retry worker
-    init_webhook_retry(app)
+    if not app.config.get("TESTING"):
+        init_webhook_retry(app)
 
     # Request logger middleware
     from middleware.request_logger import init_request_logger
@@ -353,8 +359,10 @@ if __name__ == "__main__":
 
     debug_mode = app.config.get("DEBUG", False)
     if debug_mode:
-        logger.info("🚀 Starting Flask Development Server...")
-        app.run(host="192.168.2.218", port=5009, debug=True, threaded=True)
+        from werkzeug.serving import WSGIRequestHandler
+        WSGIRequestHandler.protocol_version = "HTTP/1.1"
+        logger.info("🚀 Starting Flask Development Server (HTTP/1.1 Keep-Alive enabled)...")
+        app.run(host="192.168.2.134", port=5009, debug=True, threaded=True)
     else:
         from waitress import serve
         logger.info("🚀 Starting Waitress Production WSGI Server...")

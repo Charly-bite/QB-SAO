@@ -441,3 +441,89 @@ class TestGetOrdersStatusBatch:
 
         result = c.get_orders_status_batch([100])
         assert result == {}
+
+
+class TestGetInvoiceRelationshipMap:
+    @patch("core.sap_connector.dbapi")
+    def test_get_relationship_map_not_found(self, mock_dbapi):
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = None
+        mock_conn.cursor.return_value = mock_cursor
+        mock_dbapi.connect.return_value = mock_conn
+
+        c = _make_connector()
+        c.connect()
+        result = c.get_invoice_relationship_map(12345)
+        assert result is None
+
+    @patch("core.sap_connector.dbapi")
+    def test_get_relationship_map_success(self, mock_dbapi):
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+
+        # Mock fetchone calls
+        inv_row = (
+            10,         # DocEntry
+            12345,      # DocNum
+            "2026-06-19", # DocDate
+            15000.0,    # DocTotal
+            "MXN",      # DocCur
+            "O",        # DocStatus
+            "N",        # CANCELED
+            5000.0,     # PaidToDate
+            "CL-TEST",  # CardCode
+            "Test Customer" # CardName
+        )
+        del_row = (
+            20,         # DocEntry
+            54321,      # DocNum
+            "2026-06-18", # DocDate
+            15000.0,    # DocTotal
+            "MXN",      # DocCur
+            "C",        # DocStatus
+            "N"         # CANCELED
+        )
+        ord_row = (
+            30,         # DocEntry
+            98765,      # DocNum
+            "2026-06-17", # DocDate
+            15000.0,    # DocTotal
+            "MXN",      # DocCur
+            "C",        # DocStatus
+            "N"         # CANCELED
+        )
+        mock_cursor.fetchone.side_effect = [inv_row, del_row, ord_row]
+
+        # Mock fetchall call for payments
+        pay_rows = [
+            (
+                40,          # DocEntry
+                2222,        # DocNum
+                "2026-06-19", # DocDate
+                5000.0,      # DocTotal
+                "MXN",       # DocCur
+                "N",         # Canceled
+                5000.0       # SumApplied
+            )
+        ]
+        mock_cursor.fetchall.return_value = pay_rows
+
+        mock_conn.cursor.return_value = mock_cursor
+        mock_dbapi.connect.return_value = mock_conn
+
+        c = _make_connector()
+        c.connect()
+        result = c.get_invoice_relationship_map(12345)
+
+        assert result is not None
+        assert result["invoice"]["doc_num"] == 12345
+        assert result["invoice"]["status"] == "Abierto"
+        assert result["delivery"]["doc_num"] == 54321
+        assert result["delivery"]["status"] == "Cerrado"
+        assert result["order"]["doc_num"] == 98765
+        assert len(result["payments"]) == 1
+        assert result["payments"][0]["doc_num"] == 2222
+        assert result["payments"][0]["applied_total"] == 5000.0
+        assert result["customer"]["card_name"] == "Test Customer"
+

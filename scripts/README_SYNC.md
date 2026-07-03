@@ -30,3 +30,7 @@ pip install pywin32
 Notes:
 - The service runs `sync_print_daemon.py` with `-i 10` (10s interval) and will automatically restart the daemon if it exits.
 - If you prefer using NSSM or another service manager, the daemon script is compatible — point the service command to `python .\scripts\sync_print_daemon.py -i 10`.
+
+
+---
+*Graph Context: Return to [[Home]] (Architecture)*

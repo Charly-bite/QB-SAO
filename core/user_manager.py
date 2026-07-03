@@ -74,12 +74,18 @@ class UserManager:
                         last_login VARCHAR(50),
                         created_at VARCHAR(50),
                         warehouse VARCHAR(50) DEFAULT '',
-                        sap_seller_name VARCHAR(100) DEFAULT ''
+                        sap_seller_name VARCHAR(100) DEFAULT '',
+                        signature_path VARCHAR(500) DEFAULT ''
                     )
                 """)
                 # Auto-migrate: add sap_seller_name if missing
                 try:
                     conn.exec_driver_sql(f"ALTER TABLE {self.TABLE_NAME} ADD sap_seller_name VARCHAR(100) DEFAULT ''")
+                except Exception:
+                    pass  # column likely exists
+                # Auto-migrate: add signature_path if missing
+                try:
+                    conn.exec_driver_sql(f"ALTER TABLE {self.TABLE_NAME} ADD signature_path VARCHAR(500) DEFAULT ''")
                 except Exception:
                     pass  # column likely exists
         except Exception as e:
@@ -112,6 +118,7 @@ class UserManager:
                         "created_at": user_data.get("created_at", ""),
                         "warehouse": user_data.get("warehouse", ""),
                         "sap_seller_name": user_data.get("sap_seller_name", ""),
+                        "signature_path": user_data.get("signature_path", ""),
                     }
             logger.info(f"[OK] Loaded {len(self.users)} users from {self.TABLE_NAME}")
         except Exception as e:
@@ -134,13 +141,14 @@ class UserManager:
                         UPDATE {self.TABLE_NAME} SET
                             password_hash = ?, salt = ?, full_name = ?, email = ?,
                             role = ?, is_active = ?, must_change_password = ?,
-                            last_login = ?, created_at = ?, warehouse = ?, sap_seller_name = ?
+                            last_login = ?, created_at = ?, warehouse = ?, sap_seller_name = ?,
+                            signature_path = ?
                         WHERE username = ?
                     ELSE
                         INSERT INTO {self.TABLE_NAME}
                             (username, password_hash, salt, full_name, email, role,
-                             is_active, must_change_password, last_login, created_at, warehouse, sap_seller_name)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             is_active, must_change_password, last_login, created_at, warehouse, sap_seller_name, signature_path)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                     [
                         # For EXISTS check
@@ -157,6 +165,7 @@ class UserManager:
                         user_data.get("created_at", ""),
                         user_data.get("warehouse", ""),
                         user_data.get("sap_seller_name", ""),
+                        user_data.get("signature_path", ""),
                         user_data["username"],
                         # For INSERT
                         user_data["username"],
@@ -171,6 +180,7 @@ class UserManager:
                         user_data.get("created_at", ""),
                         user_data.get("warehouse", ""),
                         user_data.get("sap_seller_name", ""),
+                        user_data.get("signature_path", ""),
                     ],
                 )
                 raw.commit()
@@ -287,6 +297,7 @@ class UserManager:
             "created_at": datetime.datetime.now().isoformat(),
             "warehouse": "",
             "sap_seller_name": kwargs.get("sap_seller_name", ""),
+            "signature_path": kwargs.get("signature_path", ""),
         }
 
         self.users[username] = user_data
@@ -318,6 +329,7 @@ class UserManager:
             "is_active",
             "warehouse",
             "sap_seller_name",
+            "signature_path",
         ]:
             if field in kwargs:
                 user[field] = kwargs[field]

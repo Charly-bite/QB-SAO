@@ -44,3 +44,7 @@ Finally, go to GitHub and make a Pull Request.
 
 - Please ensure your code follows the `.editorconfig` rules.
 - Run any linting tools before submitting your PR.
+
+
+---
+*Graph Context: Return to [[Home]] (Architecture)*

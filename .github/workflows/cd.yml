@@ -5,7 +5,7 @@ on:
   workflow_run:
     workflows: ["CI"]
     types: [completed]
-    branches: [develop, main]
+    branches: [develop, staging, main]
   workflow_dispatch:
     inputs:
       target:
@@ -20,6 +20,19 @@ on:
 concurrency:
   group: cd-${{ github.ref }}
   cancel-in-progress: false
+
+# ---------------------------------------------------------------------------
+# DEPLOYMENT WORKFLOW
+# ---------------------------------------------------------------------------
+# This project deploys to Windows servers via manual git pull:
+#
+#   Development:  push to 'develop'  →  on dev machine:  git pull origin develop
+#   Production:   push to 'main'     →  on prod machine: git pull origin main
+#                                     →  run: scripts\deploy_prod.bat
+#
+# The CD pipeline creates a versioned release artifact for each successful
+# CI run.  The actual deployment is done manually on the target machine.
+# ---------------------------------------------------------------------------
 
 jobs:
   package:
@@ -36,6 +49,19 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
+      - name: Determine environment
+        id: env
+        run: |
+          BRANCH="${{ github.event.workflow_run.head_branch || github.ref_name }}"
+          if [[ "$BRANCH" == "main" ]]; then
+            echo "environment=production" >> "$GITHUB_OUTPUT"
+          elif [[ "$BRANCH" == "staging" ]]; then
+            echo "environment=staging" >> "$GITHUB_OUTPUT"
+          else
+            echo "environment=development" >> "$GITHUB_OUTPUT"
+          fi
+          echo "sha_short=$(echo ${{ github.event.workflow_run.head_sha || github.sha }} | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
       - name: Create release bundle
         run: |
           mkdir -p dist
@@ -45,93 +71,23 @@ jobs:
       - name: Upload deploy artifact
         uses: actions/upload-artifact@v4
         with:
-          name: open-oms-${{ github.event.workflow_run.head_sha || github.sha }}
+          name: open-oms-${{ steps.env.outputs.environment }}-${{ steps.env.outputs.sha_short }}
           path: dist/open-oms-${{ github.event.workflow_run.head_sha || github.sha }}.zip
+          retention-days: 30
 
-  deploy-development:
-    name: Deploy Development
-    runs-on: ubuntu-latest
-    needs: package
-    environment: development
-    if: |
-      (github.event.workflow_run.head_branch == 'develop' || (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'development'))
-
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: open-oms-${{ github.event.workflow_run.head_sha || github.sha }}
-          path: dist
-
-      - name: Upload artifact to server
-        if: ${{ secrets.DEPLOY_HOST != '' && secrets.DEPLOY_USER != '' && secrets.DEPLOY_SSH_KEY != '' }}
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          source: dist/open-oms-${{ github.event.workflow_run.head_sha || github.sha }}.zip
-          target: ${{ secrets.DEPLOY_PATH }}
-
-      - name: Run remote deploy command
-        if: ${{ secrets.DEPLOY_HOST != '' && secrets.DEPLOY_USER != '' && secrets.DEPLOY_SSH_KEY != '' }}
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            set -e
-            DEPLOY_DIR="${{ secrets.DEPLOY_PATH }}"
-            APP_DIR="${DEPLOY_DIR}/open-oms"
-            SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
-            BUNDLE="${DEPLOY_DIR}/open-oms-${SHA}.zip"
-            mkdir -p "${APP_DIR}"
-            unzip -o "${BUNDLE}" -d "${APP_DIR}"
-            cd "${APP_DIR}"
-            if [ -f scripts/deploy_dev.bat ]; then
-              echo "Windows deployment script found. Run it manually on Windows host if required."
-            fi
-
-  deploy-production:
-    name: Deploy Production
-    runs-on: ubuntu-latest
-    needs: package
-    environment: production
-    if: |
-      (github.event.workflow_run.head_branch == 'main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'production'))
-
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: open-oms-${{ github.event.workflow_run.head_sha || github.sha }}
-          path: dist
-
-      - name: Upload artifact to server
-        if: ${{ secrets.DEPLOY_HOST != '' && secrets.DEPLOY_USER != '' && secrets.DEPLOY_SSH_KEY != '' }}
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          source: dist/open-oms-${{ github.event.workflow_run.head_sha || github.sha }}.zip
-          target: ${{ secrets.DEPLOY_PATH }}
-
-      - name: Run remote deploy command
-        if: ${{ secrets.DEPLOY_HOST != '' && secrets.DEPLOY_USER != '' && secrets.DEPLOY_SSH_KEY != '' }}
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            set -e
-            DEPLOY_DIR="${{ secrets.DEPLOY_PATH }}"
-            APP_DIR="${DEPLOY_DIR}/open-oms"
-            SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
-            BUNDLE="${DEPLOY_DIR}/open-oms-${SHA}.zip"
-            mkdir -p "${APP_DIR}"
-            unzip -o "${BUNDLE}" -d "${APP_DIR}"
-            cd "${APP_DIR}"
-            echo "Production artifact deployed. Add your process restart command here."
+      - name: Summary
+        run: |
+          echo "### ✅ Deploy artifact ready" >> "$GITHUB_SUMMARY"
+          echo "" >> "$GITHUB_SUMMARY"
+          echo "| Key | Value |" >> "$GITHUB_SUMMARY"
+          echo "| --- | ----- |" >> "$GITHUB_SUMMARY"
+          echo "| **Environment** | ${{ steps.env.outputs.environment }} |" >> "$GITHUB_SUMMARY"
+          echo "| **Commit** | \`${{ steps.env.outputs.sha_short }}\` |" >> "$GITHUB_SUMMARY"
+          echo "| **Branch** | ${{ github.event.workflow_run.head_branch || github.ref_name }} |" >> "$GITHUB_SUMMARY"
+          echo "" >> "$GITHUB_SUMMARY"
+          echo "**To deploy on the production machine:**" >> "$GITHUB_SUMMARY"
+          echo '```bat' >> "$GITHUB_SUMMARY"
+          echo "cd C:\\path\\to\\Open-OMS" >> "$GITHUB_SUMMARY"
+          echo "git pull origin main" >> "$GITHUB_SUMMARY"
+          echo "scripts\\deploy_prod.bat" >> "$GITHUB_SUMMARY"
+          echo '```' >> "$GITHUB_SUMMARY"

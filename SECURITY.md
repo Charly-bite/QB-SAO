@@ -16,3 +16,7 @@ Please do not report security vulnerabilities through public GitHub issues.
 Instead, please send an email or privately contact the repository owner (`Charly-bite`) to report any security vulnerabilities.
 
 You should receive a response within 48 hours. If the issue is confirmed, a patch will be released as soon as possible.
+
+
+---
+*Graph Context: Return to [[Home]] (Architecture)*

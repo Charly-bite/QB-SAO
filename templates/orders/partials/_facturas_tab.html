@@ -1,0 +1,250 @@
+<div x-show="activeTab === 'facturas'" class="bg-white rounded-xl shadow-sm" style="overflow-x: auto;">
+
+
+    <!-- Botón Deshacer -->
+    <div class="fixed bottom-4 right-4 z-50">
+        <button x-show="undoStack.length > 0" @click="undo()" x-transition
+            class="bg-slate-800 text-white px-4 py-2 rounded-full shadow-lg hover:bg-slate-700 hover:scale-105 transition-all flex items-center gap-2 font-medium text-sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+            Deshacer (Ctrl+Z)
+        </button>
+    </div>
+
+    <div class="border-t border-slate-200">
+        <table class="w-full text-left border-collapse" id="facturas-table">
+            <thead>
+                <!-- Fila Superior: RELACIÓN DE ENVÍOS -->
+                <tr class="bg-white">
+                    <th colspan="10" class="px-3 py-1.5 text-center text-sm font-bold text-slate-800 border border-slate-400 uppercase">
+                        FACTURAS DEL DÍA
+                        <span x-show="currentRelacion && currentRelacion.folio" class="ml-2 text-indigo-600" x-text="currentRelacion ? currentRelacion.folio : ''"></span>
+                    </th>
+                </tr>
+                <!-- Fila de Fecha -->
+                <tr class="bg-white">
+                    <th colspan="6" class="px-3 py-1 text-right text-xs font-bold text-slate-800 border border-slate-400 bg-[#D9D9D9]">Fecha:</th>
+                    <th colspan="4" class="px-3 py-1 text-center text-xs font-bold text-slate-800 border border-slate-400 bg-[#D9D9D9]" x-text="selectedDate.split('-').reverse().join('/')"></th>
+                </tr>
+                <!-- Encabezados de Columna -->
+                <tr class="text-[10px] font-semibold tracking-wide text-slate-800 uppercase bg-[#D9D9D9] text-center">
+                    <th class="px-1 py-1.5 w-8 drag-handle border border-slate-400 align-middle"></th>
+                    <th class="px-1 py-1.5 border border-slate-400 align-middle w-20 text-center">
+                        <div class="flex flex-col items-center gap-0">
+                            <input type="checkbox" :checked="allSelected" @change="toggleAll()" :disabled="!canEditFacturas" class="w-3.5 h-3.5 text-amber-500 rounded focus:ring-amber-500 border-slate-400 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" title="Seleccionar todas">
+                            <span class="text-[9px] leading-none mt-0.5">Relación de<br>envío</span>
+                        </div>
+                    </th>
+                    <th class="px-1 py-1.5 border border-slate-400 align-middle w-10 text-center">#</th>
+                    <th class="px-1 py-1.5 border border-slate-400 align-middle w-24">Fecha de<br>Pedido</th>
+                    <th class="px-1 py-1.5 border border-slate-400 align-middle">No. de<br>Pedido</th>
+                    <th class="px-1 py-1.5 border border-slate-400 align-middle w-24">Fecha de<br>Facturación</th>
+                    <th class="px-1 py-1.5 cursor-pointer hover:text-slate-600 border border-slate-400 align-middle" @click="sortBy('invoice_number')">
+                        No. de<br>Factura
+                        <span x-show="sortColumn === 'invoice_number'" x-text="sortDir === 'asc' ? '↑' : '↓'"></span>
+                    </th>
+                    <th class="px-2 py-1.5 border border-slate-400 align-middle text-left">Cliente</th>
+                    <th class="px-2 py-1.5 cursor-pointer hover:text-slate-600 border border-slate-400 align-middle text-center" @click="sortBy('total')">Importe</th>
+                    <th class="px-2 py-1.5 border border-slate-400 align-middle w-56 text-left">Observación</th>
+                </tr>
+            </thead>
+
+            <!-- AGRUPADOS POR OBSERVACION (SHIPPING TYPE) -->
+            <template x-for="group in invoiceGroups" :key="group.name">
+                <tbody class="divide-y divide-slate-100" :data-category="group.category" x-init="initGroupSortable($el, group.category)" x-show="group.invoices.length > 0" :class="{'has-selected': group.invoices.some(i => i._selected)}">
+                    <!-- Dark Gray Separator Row -->
+                    <tr class="border border-slate-400 ignore-elements" :style="group.category.startsWith('ANEXO') ? 'background-color: #b91c1c; color: white;' : 'background-color: #475569; color: white;'">
+                        <td colspan="10" class="px-4 py-1.5 border border-slate-400">
+                            <div class="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                                <template x-if="group.category.startsWith('ANEXO')">
+                                    <span class="flex items-center gap-1.5 text-red-100 font-extrabold">
+                                        <svg class="w-4 h-4 text-white animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                                        </svg>
+                                        <span x-text="group.name + ' (URGENTE / PRIORIDAD)'"></span>
+                                    </span>
+                                </template>
+                                <template x-if="!group.category.startsWith('ANEXO')">
+                                    <span x-text="group.name"></span>
+                                </template>
+                                <span class="ml-2 text-gray-300 text-[10px] lowercase italic" x-show="group.category.startsWith('ANEXO') || ['LOCAL', 'ENVIO LOCAL', 'PAQUETERIA', 'PASE A PAQUETERIA', 'PASE PROGRAMADO'].includes(group.category)">(Arrastrable para ordenar)</span>
+                            </div>
+                        </td>
+                    </tr>
+                    <template x-for="inv in group.invoices" :key="inv.invoice_number">
+                        <tr @click="handleRowClick($event, inv)" @contextmenu.prevent="showContextMenu($event, inv)" class="fade-in invoice-row" :class="(isMatch(inv) ? 'bg-amber-50 ring-2 ring-amber-300 match-row ' : (inv._highlighted ? 'invoice-row-highlighted ' : (rowColors[inv.invoice_number] ? 'row-color-' + rowColors[inv.invoice_number] + ' ' : (inv._global_index % 2 === 0 ? 'bg-slate-100 hover:bg-slate-200 ' : 'bg-white hover:bg-slate-50 ')))) + (inv._selected ? 'is-selected' : '')" :data-id="inv.invoice_number">
+                            <td class="px-2 py-1.5 border border-slate-400 text-center align-middle">
+                                <div class="relative flex flex-col items-center gap-3" x-data="{ showColors: false }">
+                                    <div x-show="canEditFacturas" 
+                                         class="px-3 py-2 cursor-grab drag-handle touch-none select-none rounded hover:bg-slate-200 transition-colors" 
+                                         title="Arrastrar para ordenar"
+                                         @selectstart.prevent>
+                                        <svg class="w-5 h-5 text-slate-400 hover:text-slate-600 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 8h16M4 16h16"/></svg>
+                                    </div>
+                                    <button x-show="canEditFacturas" @click="showColors = !showColors" @click.away="showColors = false"
+                                            class="w-4 h-4 rounded-full border shadow-sm transition-transform hover:scale-110"
+                                            :class="getColorClass(inv.invoice_number, true)"
+                                            title="Cambiar color de etiqueta"></button>
+                                    
+                                    <!-- Selector de colores -->
+                                    <div x-show="showColors" x-transition.opacity
+                                         class="absolute left-full ml-3 top-0 z-50 grid grid-cols-4 gap-2 p-3 bg-white border border-slate-200 rounded-xl shadow-2xl"
+                                         style="display: none; width: max-content;">
+                                        <template x-for="c in availableColors" :key="c">
+                                            <button @click="setColor(inv.invoice_number, c); showColors = false"
+                                                    class="w-5 h-5 rounded-full border shadow-sm hover:scale-110 transition-transform flex-shrink-0 flex items-center justify-center text-slate-400"
+                                                    :class="getBaseColorClass(c)"
+                                                    :title="c === '' ? 'Quitar color a selección' : 'Seleccionar color'">
+                                                <template x-if="c === ''">
+                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                                </template>
+                                            </button>
+                                        </template>
+                                    </div>
+                                </div>
+                            </td>
+                            <!-- Checkbox -->
+                            <td class="px-2 py-1.5 border border-slate-400 text-center align-middle" 
+                                :class="{'cursor-pointer': canEditFacturas && canBeInRelation(inv), 'cursor-not-allowed bg-red-50/50': !canBeInRelation(inv)}"
+                                @click.stop="if(canEditFacturas) { handleCheck({target: {checked: !inv._selected}, shiftKey: $event.shiftKey, preventDefault: () => {}}, inv); }">
+                                <input type="checkbox" :checked="inv._selected" :disabled="!canEditFacturas || !canBeInRelation(inv)" class="w-4 h-4 text-amber-500 rounded focus:ring-amber-500 border-slate-300 pointer-events-none disabled:opacity-50">
+                            </td>
+                            <!-- Posición -->
+                            <td class="px-2 py-1.5 border border-slate-400 text-center align-middle font-bold text-slate-700 text-sm group">
+                                <div class="flex items-center justify-center gap-1">
+                                    <button x-show="canEditFacturas" @click.stop="moveRowByOffset(inv, -1)" class="text-slate-300 hover:text-slate-600 focus:outline-none opacity-0 group-hover:opacity-100 transition-opacity" title="Mover arriba">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>
+                                    </button>
+                                    <div :class="{'cursor-pointer': canEditFacturas}" @dblclick.stop="if(canEditFacturas) { inv._editing_position = true; $nextTick(() => { $refs['posInput_' + inv.invoice_number].focus(); $refs['posInput_' + inv.invoice_number].select(); }) }" title="Doble clic para cambiar posición">
+                                        <span x-show="!inv._editing_position" x-text="inv._global_index + '°'"></span>
+                                        <input :ref="'posInput_' + inv.invoice_number" x-show="inv._editing_position" type="number" :value="inv._global_index" @keydown.enter="changeRowPosition(inv, $event.target.value)" @keydown.up.prevent="moveRowByOffset(inv, -1)" @keydown.down.prevent="moveRowByOffset(inv, 1)" @keydown.escape="inv._editing_position = false" @blur="inv._editing_position = false" class="w-12 text-center border border-amber-400 rounded px-0.5 py-0.5 text-sm font-bold text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-sm" style="display: none;" min="1" :max="invoices.length" />
+                                    </div>
+                                    <button x-show="canEditFacturas" @click.stop="moveRowByOffset(inv, 1)" class="text-slate-300 hover:text-slate-600 focus:outline-none opacity-0 group-hover:opacity-100 transition-opacity" title="Mover abajo">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                    </button>
+                                </div>
+                            </td>
+                            <!-- Fecha de Pedido -->
+                            <td class="px-2 py-1.5 font-medium text-slate-800 border border-slate-400 text-center text-[11px]">
+                                <div x-text="inv.order_date ? inv.order_date.substring(0,10).split('-').reverse().join('/') : ''"></div>
+                            </td>
+                            <!-- No. de Pedido -->
+                            <td class="px-2 py-1.5 font-medium text-slate-800 border border-slate-400 text-center">
+                                <div class="flex flex-col items-center justify-center gap-1">
+                                    <span x-html="highlightText(inv.order_number || '')"></span>
+                                    <template x-if="inv.order_status === 'Cancelado' || inv.order_sap_status === 'Cancelado'">
+                                        <span class="px-1.5 py-0.5 text-[9px] font-bold bg-red-100 text-red-800 rounded uppercase tracking-wide">Cancelado</span>
+                                    </template>
+                                </div>
+                            </td>
+                            <!-- Fecha de Facturación -->
+                            <td class="px-2 py-1.5 font-medium text-slate-800 border border-slate-400 text-center text-[11px]">
+                                <div x-text="inv.invoice_date ? inv.invoice_date.substring(0,10).split('-').reverse().join('/') : ''"></div>
+                            </td>
+                            <!-- No. de Factura -->
+                            <td class="px-2 py-1.5 font-bold text-slate-800 border border-slate-400 text-center">
+                                <div class="flex flex-col items-center justify-center gap-1">
+                                    <span x-html="highlightText(inv.invoice_number)"></span>
+                                    <template x-if="inv.status === 'Cancelada' || inv.canceled === 'Y'">
+                                        <span class="px-1.5 py-0.5 text-[9px] font-bold bg-red-100 text-red-800 rounded uppercase tracking-wide">Cancelada</span>
+                                    </template>
+                                </div>
+                            </td>
+                            <!-- Cliente -->
+                            <td class="px-3 py-1.5 border border-slate-400 text-xs relative group">
+                                <template x-if="!inv.credito_authorized && inv.credito_revoked_from_relacion">
+                                    <div class="absolute inset-y-0 flex items-center justify-center pointer-events-none z-10" style="left: -150px; right: -300px; background: rgba(239, 68, 68, 0.15);">
+                                        <span class="text-red-600 font-black text-2xl tracking-[0.3em] uppercase transform -rotate-2 opacity-80" style="text-shadow: 2px 2px 0 rgba(255,255,255,0.8);">NO AUTORIZADO</span>
+                                    </div>
+                                </template>
+                                <template x-if="(inv.customer_name || '').includes('VENTAS MOSTRADOR')">
+                                    <div @dblclick="if(canEditFacturas) editCustomerName(inv)" title="Doble clic para cambiar nombre (Venta de mostrador)">
+                                        <template x-if="!inv._editing_customer">
+                                            <div class="font-medium text-slate-800 cursor-pointer border-b border-dashed border-slate-300 inline-block" x-html="highlightText(getDisplayCustomerName(inv))"></div>
+                                        </template>
+                                        <template x-if="inv._editing_customer">
+                                            <input type="text" x-model="inv._temp_customer"
+                                                @keydown.enter="saveCustomerName(inv)"
+                                                @keydown.escape="inv._editing_customer = false"
+                                                @blur="saveCustomerName(inv)"
+                                                x-init="$el.focus()"
+                                                class="w-full px-2 py-1 border border-amber-400 rounded focus:outline-none focus:ring-1 focus:ring-amber-500 bg-white shadow-sm" />
+                                        </template>
+                                    </div>
+                                </template>
+                                <template x-if="!(inv.customer_name || '').includes('VENTAS MOSTRADOR')">
+                                    <div class="font-medium text-slate-800" x-html="highlightText(inv.customer_name)"></div>
+                                </template>
+                            </td>
+                            <!-- Importe -->
+                            <td class="px-2.5 py-1.5 text-center font-semibold text-slate-800 border border-slate-400 text-xs">
+                                <div x-text="formatMoney(inv.total) + ' ' + (inv.currency || 'MXN')"></div>
+                            </td>
+                            <!-- Observación (Combines Select + Notes) -->
+                            <td class="px-2 py-2 border border-slate-400 font-medium text-slate-700 align-top">
+                                <div class="flex flex-col gap-1 w-full">
+                                    <select :disabled="!canEditFacturas" :value="inv.shipping_type" @change="handleCategoryDropdownChange(inv.invoice_number, $event.target.value, inv.shipping_type)" class="w-full text-xs font-semibold px-1 py-1 border border-slate-300 rounded text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-sm disabled:bg-slate-50 disabled:opacity-75 disabled:cursor-not-allowed">
+                                        <option value="ANEXO GDL">ANEXADAS GDL</option>
+                                        <option value="ANEXO MY">ANEXADAS MTY</option>
+                                        <option value="ANEXO IRP">ANEXADAS IRP</option>
+                                        <option value="LOCAL">LOCAL</option>
+                                        <option value="ENVIO LOCAL">ENVIO LOCAL</option>
+                                        <option value="PAQUETERIA">PAQUETERIA</option>
+                                        <option value="PASE A PAQUETERIA">PASE A PAQUETERIA</option>
+                                        <option value="PASE DIRECTO">PASE DIRECTO</option>
+                                        <option value="PASE PROGRAMADO">PASE PROGRAMADO</option>
+                                        <option value="FLETE INTERNO">FLETE INTERNO</option>
+                                        <option value="FORANEO">FORANEO</option>
+                                    </select>
+                                    
+                                    <div class="mt-0.5" @click.stop="if(canEditFacturas) editObservacion(inv)" title="Clic para editar nota">
+                                        <template x-if="!inv._editing">
+                                            <div class="w-full min-h-[1.5rem] px-1 py-0.5 bg-yellow-50 border border-yellow-200 rounded text-[11px] cursor-pointer" :class="!inv.observaciones ? 'text-slate-400 italic bg-slate-50 border-transparent' : 'text-slate-800'">
+                                                <span x-text="inv.observaciones || 'Clic para añadir nota'"></span>
+                                            </div>
+                                        </template>
+                                        <template x-if="inv._editing">
+                                            <input type="text" x-model="inv._temp_observaciones" 
+                                                @keydown.enter="saveObservacion(inv)" 
+                                                @keydown.escape="inv._editing = false"
+                                                @blur="saveObservacion(inv)"
+                                                x-init="$el.focus()"
+                                                class="w-full px-1 py-0.5 border border-amber-400 rounded focus:outline-none focus:ring-1 focus:ring-amber-500 bg-white text-[11px] shadow-sm" />
+                                        </template>
+                                    </div>
+                                </div>
+                                <div class="text-[10px] text-slate-400 mt-0.5 text-right font-normal" x-show="inv.warehouse" x-text="'📦 ' + formatWarehouse(inv.warehouse)"></div>
+                            </td>
+                        </tr>
+                    </template>
+                </template>
+                      <tbody class="divide-y divide-slate-100">
+                <!-- Empty state -->
+                <tr x-show="filteredInvoices.length === 0 && !loading" style="display: none;">
+                    <td colspan="10" class="px-6 py-16 text-center">
+                        <div class="flex flex-col items-center gap-3">
+                            <svg class="w-12 h-12 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                            <p class="text-slate-500 font-medium">No se encontraron facturas</p>
+                            <p class="text-sm text-slate-400" x-text="searchQuery ? 'Intenta con otra búsqueda' : 'No hay facturas para la fecha seleccionada'"></p>
+                        </div>
+                    </td>
+                </tr>
+
+                <!-- Loading state -->
+                <tr x-show="loading && invoices.length === 0" style="display: none;">
+                    <td colspan="10" class="px-6 py-16 text-center">
+                        <div class="flex flex-col items-center gap-3">
+                            <svg class="w-8 h-8 text-amber-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <p class="text-slate-500 font-medium">Cargando facturas de SAP...</p>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
