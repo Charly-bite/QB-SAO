@@ -24,6 +24,15 @@ function indexData() {
         sortBy: 'order_id',
         sortDesc: true,
         savedViews: [],
+        navigatingTo: null,
+
+        navigateToOrder(id) {
+            if (this.navigatingTo) return;
+            this.navigatingTo = id;
+            setTimeout(() => {
+                window.location.href = `/orders/${id}`;
+            }, 150);
+        },
 
         get baseFilteredOrders() {
             const q = (this.searchQuery || '').toLowerCase().trim();

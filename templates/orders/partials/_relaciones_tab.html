@@ -62,10 +62,8 @@
                 <thead>
                     <!-- Row 1: Title -->
                     <tr style="height: 32px;">
-                        <td style="border: 1px solid #999; width: 120px;" class="bg-white"></td>
-                        <td colspan="3" style="border: 1px solid #999; font-size: 22px; font-weight: bold; text-align: center;" class="bg-white">RELACIÓN DE ENVÍOS <span x-show="currentRelacion && currentRelacion.folio" style="color: #3949AB;" x-text="currentRelacion ? currentRelacion.folio : ''"></span></td>
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
-                        <td style="border: 1px solid #999;" class="bg-white"></td>
+                        <td style="border: 1px solid #999; width: 530px; min-width: 530px;" class="bg-white"></td>
+                        <td colspan="5" style="border: 1px solid #999; font-size: 22px; font-weight: bold; text-align: center;" class="bg-white">RELACIÓN DE ENVÍOS <span x-show="currentRelacion && currentRelacion.folio" style="color: #3949AB;" x-text="currentRelacion ? currentRelacion.folio : ''"></span></td>
                         <td colspan="2" style="border: 1px solid #999; text-align: center; font-size: 12px;" class="bg-white">QB-IT-VE-01-F06</td>
                     </tr>
 
@@ -77,7 +75,7 @@
                     <!-- Row 3: Fecha + Section headers -->
                     <tr style="height: 26px;">
                         <td style="border: 1px solid #999; background: #D9D9D9;"></td>
-                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 13px;">Fecha:</td>
+                        <td class="align-test-cliente" style="border: 1px solid #999; background: #D9D9D9; text-align: center; padding-left: 0px; font-weight: bold; font-size: 13px;">Fecha:</td>
                         <td colspan="2" style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 13px;" x-text="selectedDate.split('-').reverse().join('/')"></td>
                         <td colspan="2" style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 12px;">Crédito y Cobranza</td>
                         <td colspan="2" style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 12px;">Almacén y Logística</td>
@@ -85,10 +83,10 @@
 
                     <!-- Row 4: Column headers (merged with row 5) -->
                     <tr style="height: 22px;">
-                        <th rowspan="2" style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 12px; vertical-align: middle; width: 120px;">No. De<br>Factura</th>
-                        <th rowspan="2" style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 12px; vertical-align: middle; min-width: 200px;">Cliente</th>
+                        <th rowspan="2" style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 12px; vertical-align: middle; width: 530px; min-width: 530px;">No. De<br>Factura</th>
+                        <th rowspan="2" class="align-test-cliente" style="border: 1px solid #999; background: #D9D9D9; text-align: center; padding-left: 0px; font-weight: bold; font-size: 12px; vertical-align: middle; min-width: 200px;">Cliente</th>
                         <th rowspan="2" style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 12px; vertical-align: middle; width: 110px;">Importe</th>
-                        <th rowspan="2" style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 12px; vertical-align: middle; width: 140px;">Observación</th>
+                        <th rowspan="2" class="align-test-observacion" style="border: 1px solid #999; background: #D9D9D9; text-align: center; padding-left: 0px; font-weight: bold; font-size: 12px; vertical-align: middle; width: 140px;">Observación</th>
                         <th style="border: 1px solid #999; background: #D9D9D9; width: 70px;"></th>
                         <th style="border: 1px solid #999; background: #D9D9D9; width: 70px;"></th>
                         <th style="border: 1px solid #999; background: #D9D9D9; width: 70px;"></th>
@@ -133,11 +131,11 @@
                             <tr :data-id="inv.invoice_number" style="height: 26px;" :class="inv._highlighted ? 'invoice-row-highlighted-relacion transition-colors-custom' : 'bg-white transition-colors-custom'">
                                 <td style="border: 1px solid #999; text-align: center; font-size: 12px; font-weight: bold; padding: 2px 5px;"
                                     x-text="(inv.order_number ? inv.order_number + '/' : '') + (inv.invoice_number || '')"></td>
-                                <td style="border: 1px solid #999; text-align: center; font-size: 12px; font-weight: bold; padding: 2px 5px;"
+                                <td class="align-test-cliente" style="border: 1px solid #999; text-align: center; padding-left: 0px; font-size: 12px; font-weight: bold; padding-top: 2px; padding-bottom: 2px; padding-right: 5px;"
                                     x-text="inv.customer_name || ''"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 12px; padding: 2px 5px;"
                                     x-text="'$' + Number(inv.total || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})"></td>
-                                <td style="border: 1px solid #999; text-align: center; font-size: 12px; font-weight: bold; padding: 2px 5px;"
+                                <td class="align-test-observacion" style="border: 1px solid #999; text-align: center; padding-left: 0px; font-size: 12px; font-weight: bold; padding-top: 2px; padding-bottom: 2px; padding-right: 5px;"
                                     x-text="inv.observaciones || inv.nota || inv.shipping_type || 'LOCAL'"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 12px; padding: 2px 5px;"
                                     x-text="(() => { const pt = (inv.payment_terms || '').toUpperCase(); return pt !== 'CONTADO' ? 'X' : ''; })()"></td>
@@ -182,9 +180,9 @@
                     <!-- GDL Headers row 2 -->
                     <tr style="height: 22px;">
                         <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">No. de<br>Factura</td>
-                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Cliente</td>
+                        <td class="align-test-cliente" style="border: 1px solid #999; background: #D9D9D9; text-align: center; padding-left: 0px; font-weight: bold; font-size: 11px;">Cliente</td>
                         <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Importe</td>
-                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Observación</td>
+                        <td class="align-test-observacion" style="border: 1px solid #999; background: #D9D9D9; text-align: center; padding-left: 0px; font-weight: bold; font-size: 11px;">Observación</td>
                         <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Crédito</td>
                         <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Contado</td>
                         <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Recibido</td>
@@ -195,9 +193,9 @@
                         <template x-for="(inv, idx) in relacionInvoiceGroups.find(g => g.category === 'ANEXADAS GDL').invoices" :key="inv.invoice_number || idx">
                             <tr :data-id="inv.invoice_number" style="height: 22px;" :class="inv._highlighted ? 'invoice-row-highlighted-relacion transition-colors-custom' : 'bg-white transition-colors-custom'">
                                 <td style="border: 1px solid #999; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 5px;" x-text="(inv.order_number ? inv.order_number + '/' : '') + (inv.invoice_number || '')"></td>
-                                <td style="border: 1px solid #999; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 5px;" x-text="inv.customer_name || ''"></td>
+                                <td class="align-test-cliente" style="border: 1px solid #999; text-align: center; padding-left: 0px; font-size: 11px; font-weight: bold; padding-top: 2px; padding-bottom: 2px; padding-right: 5px;" x-text="inv.customer_name || ''"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 11px; padding: 2px 5px;" x-text="'$' + Number(inv.total || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})"></td>
-                                <td style="border: 1px solid #999; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 5px;" x-text="inv.observaciones || inv.nota || inv.shipping_type || 'LOCAL'"></td>
+                                <td class="align-test-observacion" style="border: 1px solid #999; text-align: center; padding-left: 0px; font-size: 11px; font-weight: bold; padding-top: 2px; padding-bottom: 2px; padding-right: 5px;" x-text="inv.observaciones || inv.nota || inv.shipping_type || 'LOCAL'"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="(() => { const pt = (inv.payment_terms || '').toUpperCase(); return pt !== 'CONTADO' ? 'X' : ''; })()"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="(() => { const pt = (inv.payment_terms || '').toUpperCase(); return pt === 'CONTADO' ? 'X' : ''; })()"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="inv.recibido ? 'X' : ''"></td>
@@ -246,9 +244,9 @@
                     <!-- MTY Headers row 2 -->
                     <tr style="height: 22px;">
                         <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">No. de<br>Factura</td>
-                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Cliente</td>
+                        <td class="align-test-cliente" style="border: 1px solid #999; background: #D9D9D9; text-align: center; padding-left: 0px; font-weight: bold; font-size: 11px;">Cliente</td>
                         <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Importe</td>
-                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Observación</td>
+                        <td class="align-test-observacion" style="border: 1px solid #999; background: #D9D9D9; text-align: center; padding-left: 0px; font-weight: bold; font-size: 11px;">Observación</td>
                         <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Crédito</td>
                         <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Contado</td>
                         <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Recibido</td>
@@ -259,9 +257,9 @@
                         <template x-for="(inv, idx) in relacionInvoiceGroups.find(g => g.category === 'ANEXADAS MTY').invoices" :key="inv.invoice_number || idx">
                             <tr :data-id="inv.invoice_number" style="height: 22px;" :class="inv._highlighted ? 'invoice-row-highlighted-relacion transition-colors-custom' : 'bg-white transition-colors-custom'">
                                 <td style="border: 1px solid #999; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 5px;" x-text="(inv.order_number ? inv.order_number + '/' : '') + (inv.invoice_number || '')"></td>
-                                <td style="border: 1px solid #999; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 5px;" x-text="inv.customer_name || ''"></td>
+                                <td class="align-test-cliente" style="border: 1px solid #999; text-align: center; padding-left: 0px; font-size: 11px; font-weight: bold; padding-top: 2px; padding-bottom: 2px; padding-right: 5px;" x-text="inv.customer_name || ''"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 11px; padding: 2px 5px;" x-text="'$' + Number(inv.total || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})"></td>
-                                <td style="border: 1px solid #999; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 5px;" x-text="inv.observaciones || inv.nota || inv.shipping_type || 'LOCAL'"></td>
+                                <td class="align-test-observacion" style="border: 1px solid #999; text-align: center; padding-left: 0px; font-size: 11px; font-weight: bold; padding-top: 2px; padding-bottom: 2px; padding-right: 5px;" x-text="inv.observaciones || inv.nota || inv.shipping_type || 'LOCAL'"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="(() => { const pt = (inv.payment_terms || '').toUpperCase(); return pt !== 'CONTADO' ? 'X' : ''; })()"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="(() => { const pt = (inv.payment_terms || '').toUpperCase(); return pt === 'CONTADO' ? 'X' : ''; })()"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="inv.recibido ? 'X' : ''"></td>
@@ -310,9 +308,9 @@
                     <!-- IRP Headers row 2 -->
                     <tr style="height: 22px;">
                         <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">No. de<br>Factura</td>
-                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Cliente</td>
+                        <td class="align-test-cliente" style="border: 1px solid #999; background: #D9D9D9; text-align: center; padding-left: 0px; font-weight: bold; font-size: 11px;">Cliente</td>
                         <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Importe</td>
-                        <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 11px;">Observación</td>
+                        <td class="align-test-observacion" style="border: 1px solid #999; background: #D9D9D9; text-align: center; padding-left: 0px; font-weight: bold; font-size: 11px;">Observación</td>
                         <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Crédito</td>
                         <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Contado</td>
                         <td style="border: 1px solid #999; background: #D9D9D9; text-align: center; font-weight: bold; font-size: 10px;">Recibido</td>
@@ -323,9 +321,9 @@
                         <template x-for="(inv, idx) in relacionInvoiceGroups.find(g => g.category === 'ANEXADAS IRP').invoices" :key="inv.invoice_number || idx">
                             <tr :data-id="inv.invoice_number" style="height: 22px;" :class="inv._highlighted ? 'invoice-row-highlighted-relacion transition-colors-custom' : 'bg-white transition-colors-custom'">
                                 <td style="border: 1px solid #999; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 5px;" x-text="(inv.order_number ? inv.order_number + '/' : '') + (inv.invoice_number || '')"></td>
-                                <td style="border: 1px solid #999; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 5px;" x-text="inv.customer_name || ''"></td>
+                                <td class="align-test-cliente" style="border: 1px solid #999; text-align: center; padding-left: 0px; font-size: 11px; font-weight: bold; padding-top: 2px; padding-bottom: 2px; padding-right: 5px;" x-text="inv.customer_name || ''"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 11px; padding: 2px 5px;" x-text="'$' + Number(inv.total || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})"></td>
-                                <td style="border: 1px solid #999; text-align: center; font-size: 11px; font-weight: bold; padding: 2px 5px;" x-text="inv.observaciones || inv.nota || inv.shipping_type || 'LOCAL'"></td>
+                                <td class="align-test-observacion" style="border: 1px solid #999; text-align: center; padding-left: 0px; font-size: 11px; font-weight: bold; padding-top: 2px; padding-bottom: 2px; padding-right: 5px;" x-text="inv.observaciones || inv.nota || inv.shipping_type || 'LOCAL'"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="(() => { const pt = (inv.payment_terms || '').toUpperCase(); return pt !== 'CONTADO' ? 'X' : ''; })()"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="(() => { const pt = (inv.payment_terms || '').toUpperCase(); return pt === 'CONTADO' ? 'X' : ''; })()"></td>
                                 <td style="border: 1px solid #999; text-align: center; font-size: 10px; padding: 2px 5px;" x-text="inv.recibido ? 'X' : ''"></td>
@@ -352,17 +350,32 @@
                     <tr style="height: 30px;">
                         <td colspan="3" style="border: none; text-align: center; vertical-align: bottom; padding: 0 4px;" class="bg-white"
                             @click="toggleSignature('facturacion')" :style="{ cursor: 'pointer' }">
-                            <span x-show="signatures.facturacion" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 14px; color: #1a3c7a;" x-text="signatures.facturacion?.name || ''"></span>
+                            <template x-if="signatures.facturacion?.signature_path">
+                                <img :src="'/static/' + signatures.facturacion.signature_path" style="max-height: 26px; margin: 0 auto; object-fit: contain; display: block;" />
+                            </template>
+                            <template x-if="!signatures.facturacion?.signature_path">
+                                <span x-show="signatures.facturacion" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 14px; color: #1a3c7a;" x-text="signatures.facturacion?.name || ''"></span>
+                            </template>
                         </td>
                         <td style="border: none;" class="bg-white"></td>
                         <td colspan="2" style="border: none; text-align: center; vertical-align: bottom; padding: 0 4px;" class="bg-white"
                             @click="toggleSignature('credito')" :style="{ cursor: 'pointer' }">
-                            <span x-show="signatures.credito" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 14px; color: #1a3c7a;" x-text="signatures.credito?.name || ''"></span>
+                            <template x-if="signatures.credito?.signature_path">
+                                <img :src="'/static/' + signatures.credito.signature_path" style="max-height: 26px; margin: 0 auto; object-fit: contain; display: block;" />
+                            </template>
+                            <template x-if="!signatures.credito?.signature_path">
+                                <span x-show="signatures.credito" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 14px; color: #1a3c7a;" x-text="signatures.credito?.name || ''"></span>
+                            </template>
                         </td>
                         <td style="border: none;" class="bg-white"></td>
                         <td style="border: none; text-align: center; vertical-align: bottom; padding: 0 4px;" class="bg-white"
                             @click="toggleSignature('almacen')" :style="{ cursor: 'pointer' }">
-                            <span x-show="signatures.almacen" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 14px; color: #1a3c7a;" x-text="signatures.almacen?.name || ''"></span>
+                            <template x-if="signatures.almacen?.signature_path">
+                                <img :src="'/static/' + signatures.almacen.signature_path" style="max-height: 26px; margin: 0 auto; object-fit: contain; display: block;" />
+                            </template>
+                            <template x-if="!signatures.almacen?.signature_path">
+                                <span x-show="signatures.almacen" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 14px; color: #1a3c7a;" x-text="signatures.almacen?.name || ''"></span>
+                            </template>
                         </td>
                     </tr>
                     <!-- Thin black signature lines -->

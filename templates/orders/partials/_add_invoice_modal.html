@@ -1,0 +1,230 @@
+<!-- Add Invoice Modal — Shows pending invoices + manual entry -->
+<div x-show="addInvoiceModalOpen" x-cloak
+     class="fixed inset-0 z-[9998] flex items-center justify-center"
+     @keydown.escape.window="if(addInvoiceModalOpen) closeAddInvoiceModal()">
+    
+    <!-- Backdrop -->
+    <div class="absolute inset-0 bg-black/40" @click="closeAddInvoiceModal()"
+         x-transition:enter="transition ease-out duration-150"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-100"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"></div>
+
+    <!-- Modal Panel — compact -->
+    <div class="relative w-full max-w-lg mx-4 flex flex-col bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden"
+         style="max-height: 520px;"
+         x-transition:enter="transition ease-out duration-150"
+         x-transition:enter-start="opacity-0 scale-95"
+         x-transition:enter-end="opacity-100 scale-100"
+         x-transition:leave="transition ease-in duration-100"
+         x-transition:leave-start="opacity-100 scale-100"
+         x-transition:leave-end="opacity-0 scale-95">
+
+        <!-- Title Bar (compact) -->
+        <div class="px-4 py-2.5 flex items-center justify-between bg-slate-800 shrink-0">
+            <div class="flex items-center gap-2.5">
+                <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                <span class="text-[13px] font-bold text-white">Añadir Facturas</span>
+            </div>
+            <button @click="closeAddInvoiceModal()"
+                    class="w-6 h-6 rounded-md bg-white/10 hover:bg-red-500 flex items-center justify-center text-slate-400 hover:text-white transition-all"
+                    title="Cerrar (Esc)">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Search (compact, pinned) -->
+        <div class="px-3 py-2 border-b border-slate-100 bg-slate-50/80 shrink-0">
+            <div class="relative">
+                <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <input type="text" x-model="addInvoiceSearchQuery" placeholder="Buscar por factura o cliente..."
+                       class="block w-full pl-8 pr-7 py-1.5 border border-slate-200 rounded-lg text-[11px] font-medium text-slate-700 focus:outline-none focus:border-amber-400 transition-colors bg-white placeholder:text-slate-400" />
+                <button x-show="addInvoiceSearchQuery.length > 0" @click="addInvoiceSearchQuery = ''"
+                        class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Scrollable Body -->
+        <div class="flex-1 min-h-0 overflow-y-auto">
+
+            <!-- Loading -->
+            <div x-show="addInvoiceLoading" class="py-10 text-center">
+                <div class="inline-block w-5 h-5 border-2 border-slate-200 border-t-amber-500 rounded-full animate-spin mb-2"></div>
+                <p class="text-[11px] text-slate-400">Cargando pendientes...</p>
+            </div>
+
+            <div x-show="!addInvoiceLoading">
+
+                <!-- ═══ Current Day Pending ═══ -->
+                <div x-show="addInvoiceFilteredPendingList.length > 0" class="border-b border-slate-100">
+                    <div class="px-3 py-1.5 bg-slate-50 flex items-center justify-between border-b border-slate-100">
+                        <div class="flex items-center gap-1.5">
+                            <input type="checkbox" :checked="addInvoiceAllPendingSelected" @change="toggleAllPendingForAdd()"
+                                   class="w-3 h-3 cursor-pointer accent-amber-500" />
+                            <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Pendientes Hoy</span>
+                            <span class="text-[9px] px-1 py-0.5 rounded bg-orange-100 text-orange-600 font-bold" x-text="addInvoiceFilteredPendingList.length"></span>
+                        </div>
+                    </div>
+                    <template x-for="(inv, idx) in addInvoiceFilteredPendingList" :key="inv.invoice_number">
+                        <div class="flex items-center gap-2 px-3 py-1.5 text-[11px] cursor-pointer hover:bg-amber-50/60 transition-colors border-b border-slate-50"
+                             :class="idx % 2 !== 0 ? 'bg-slate-50/40' : ''"
+                             @click="togglePendingForAdd(inv.invoice_number)">
+                            <input type="checkbox" :checked="addInvoiceSelectedPending.includes(inv.invoice_number)"
+                                   @click.stop="togglePendingForAdd(inv.invoice_number)"
+                                   class="w-3 h-3 cursor-pointer accent-amber-500 shrink-0" />
+                            <span class="font-bold text-slate-800 w-14 shrink-0" x-text="inv.invoice_number"></span>
+                            <span class="text-slate-600 truncate flex-1 min-w-0" x-text="inv.customer_name" :title="inv.customer_name"></span>
+                            <span class="font-bold text-slate-700 shrink-0 tabular-nums" x-text="'$' + Number(inv.total || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})"></span>
+                            <span class="text-[9px] font-semibold text-slate-400 w-7 text-center shrink-0" x-text="inv.currency || 'MXN'"></span>
+                            <span class="px-1 py-0.5 rounded text-[9px] font-bold shrink-0 w-14 text-center"
+                                  :class="(inv.payment_terms || '').toUpperCase() !== 'CONTADO' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'"
+                                  x-text="(inv.payment_terms || '').toUpperCase() !== 'CONTADO' ? 'CRÉDITO' : 'CONTADO'"></span>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- ═══ Other Days Pending (collapsible) ═══ -->
+                <template x-if="addInvoiceFilteredOtherDays.length > 0">
+                    <div class="border-b border-slate-100" x-data="{ otherDaysOpen: true }">
+                        <button @click="otherDaysOpen = !otherDaysOpen"
+                                class="w-full px-3 py-1.5 bg-slate-50 flex items-center justify-between border-b border-slate-100 hover:bg-slate-100 transition-colors">
+                            <div class="flex items-center gap-1.5">
+                                <svg class="w-3 h-3 text-slate-400 transition-transform" :class="otherDaysOpen ? 'rotate-90' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/>
+                                </svg>
+                                <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Otros Días</span>
+                                <span class="text-[9px] px-1 py-0.5 rounded bg-indigo-100 text-indigo-600 font-bold"
+                                      x-text="addInvoiceFilteredOtherDays.reduce((s, d) => s + d.invoices.length, 0)"></span>
+                            </div>
+                            <span class="text-[9px] text-slate-400 font-medium" x-text="otherDaysOpen ? 'Ocultar' : 'Mostrar'"></span>
+                        </button>
+                        <div x-show="otherDaysOpen" x-collapse>
+                            <template x-for="day in addInvoiceFilteredOtherDays" :key="day.date">
+                                <div>
+                                    <!-- Day header (slim) -->
+                                    <div class="px-3 py-1 bg-slate-700 flex items-center justify-between">
+                                        <span class="text-[10px] font-bold text-white" x-text="day.label"></span>
+                                        <span class="text-[9px] text-slate-400 font-medium" x-text="day.invoices.length"></span>
+                                    </div>
+                                    <!-- Day invoices -->
+                                    <template x-for="(inv, idx) in day.invoices" :key="inv.invoice_number">
+                                        <div class="flex items-center gap-2 px-3 py-1.5 text-[11px] cursor-pointer hover:bg-amber-50/60 transition-colors border-b border-slate-50"
+                                             :class="idx % 2 !== 0 ? 'bg-slate-50/40' : ''"
+                                             @click="togglePendingForAdd(inv.invoice_number)">
+                                            <input type="checkbox" :checked="addInvoiceSelectedPending.includes(inv.invoice_number)"
+                                                   @click.stop="togglePendingForAdd(inv.invoice_number)"
+                                                   class="w-3 h-3 cursor-pointer accent-amber-500 shrink-0" />
+                                            <span class="font-bold text-slate-800 w-14 shrink-0" x-text="inv.invoice_number"></span>
+                                            <span class="text-slate-600 truncate flex-1 min-w-0" x-text="inv.customer_name" :title="inv.customer_name"></span>
+                                            <span class="font-bold text-slate-700 shrink-0 tabular-nums" x-text="'$' + Number(inv.total || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})"></span>
+                                            <span class="text-[9px] font-semibold text-slate-400 w-7 text-center shrink-0" x-text="inv.currency || 'MXN'"></span>
+                                            <span class="px-1 py-0.5 rounded text-[9px] font-bold shrink-0 w-14 text-center"
+                                                  :class="(inv.payment_terms || '').toUpperCase() !== 'CONTADO' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'"
+                                                  x-text="(inv.payment_terms || '').toUpperCase() !== 'CONTADO' ? 'CRÉDITO' : 'CONTADO'"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Empty pending (only if both sections empty and no search) -->
+                <div x-show="addInvoicePendingList.length === 0 && addInvoiceOtherDaysPending.length === 0 && !addInvoiceSearchQuery.trim()"
+                     class="py-5 text-center border-b border-slate-100">
+                    <p class="text-[11px] text-slate-400 font-medium">No hay facturas pendientes</p>
+                </div>
+
+                <!-- No search results -->
+                <div x-show="addInvoiceSearchQuery.trim() && addInvoiceFilteredPendingList.length === 0 && addInvoiceFilteredOtherDays.length === 0"
+                     class="py-5 text-center border-b border-slate-100">
+                    <p class="text-[11px] text-slate-400">Sin resultados para "<span class="font-bold" x-text="addInvoiceSearchQuery"></span>"</p>
+                </div>
+
+                <!-- ═══ Manual Entry (always visible) ═══ -->
+                <div class="px-3 py-3">
+                    <div class="flex items-center gap-1.5 mb-2">
+                        <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Agregar Manualmente</span>
+                        <span class="text-[9px] px-1 py-0.5 rounded bg-slate-100 text-slate-400 font-medium">Req. Crédito</span>
+                    </div>
+                    <div class="flex gap-1.5">
+                        <div class="relative flex-1">
+                            <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-300 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"/>
+                            </svg>
+                            <input type="number" x-model="addInvoiceManualNum" 
+                                   placeholder="No. de factura..."
+                                   @keydown.enter="addManualInvoiceToList()"
+                                   class="block w-full pl-9 pr-2 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-400 transition-colors placeholder:font-normal placeholder:text-slate-400" />
+                        </div>
+                        <button @click="addManualInvoiceToList()"
+                                :disabled="!addInvoiceManualNum || addInvoiceManualNum.trim() === ''"
+                                class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0"
+                                :class="addInvoiceManualNum && addInvoiceManualNum.trim() !== '' 
+                                    ? 'bg-slate-800 text-white hover:bg-slate-700 active:scale-95' 
+                                    : 'bg-slate-100 text-slate-400 cursor-not-allowed'">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                            Agregar
+                        </button>
+                    </div>
+                    
+                    <!-- Manual chips -->
+                    <div x-show="addInvoiceManualList.length > 0" class="flex flex-wrap gap-1 mt-2">
+                        <template x-for="num in addInvoiceManualList" :key="num">
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-200 rounded text-[10px] font-bold text-amber-800">
+                                <span x-text="num"></span>
+                                <button @click="removeManualInvoiceFromList(num)" class="text-amber-400 hover:text-red-500 transition-colors ml-0.5">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                                </button>
+                            </span>
+                        </template>
+                    </div>
+
+                    <!-- Crédito info (only when manual entries exist) -->
+                    <div x-show="addInvoiceManualList.length > 0" class="mt-2 flex items-center gap-1.5 px-2 py-1.5 bg-blue-50 border border-blue-100 rounded-lg">
+                        <svg class="w-3 h-3 text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <p class="text-[10px] text-blue-600 font-medium">Requieren autorización de Crédito para incluirse en Relación de Envío.</p>
+                    </div>
+                </div>
+
+            </div><!-- end !loading -->
+        </div>
+
+        <!-- Footer (compact) -->
+        <div class="px-3 py-2.5 border-t border-slate-200 bg-slate-50 shrink-0 flex items-center justify-between">
+            <span class="text-[11px] text-slate-500 font-medium">
+                <template x-if="addInvoiceTotalSelected > 0">
+                    <span><strong class="text-slate-700" x-text="addInvoiceTotalSelected"></strong> seleccionada(s)</span>
+                </template>
+                <template x-if="addInvoiceTotalSelected === 0">
+                    <span class="text-slate-400">Selecciona o agrega facturas</span>
+                </template>
+            </span>
+            <div class="flex items-center gap-1.5">
+                <button @click="closeAddInvoiceModal()"
+                        class="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-all">
+                    Cancelar
+                </button>
+                <button @click="addSelectedInvoices()"
+                        :disabled="addInvoiceTotalSelected === 0"
+                        class="px-4 py-1.5 rounded-lg text-[11px] font-bold text-white transition-all flex items-center gap-1 active:scale-95"
+                        :class="addInvoiceTotalSelected > 0 
+                            ? 'bg-amber-500 hover:bg-amber-600 shadow-sm' 
+                            : 'bg-slate-300 cursor-not-allowed'">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    <span x-text="addInvoiceTotalSelected > 0 ? 'Añadir ' + addInvoiceTotalSelected : 'Añadir'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
