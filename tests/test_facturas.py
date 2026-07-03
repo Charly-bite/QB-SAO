@@ -22,6 +22,8 @@ import pytest
 
 def _make_connector(**kwargs):
     from core.sap_connector import SAPHanaConnector
+    kwargs.setdefault("username", "test_user")
+    kwargs.setdefault("password", "test_pass")
     return SAPHanaConnector(**kwargs)
 
 
