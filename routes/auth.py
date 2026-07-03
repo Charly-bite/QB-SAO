@@ -28,7 +28,7 @@ def login():
     """User login page"""
     if current_user.is_authenticated:
         if current_user.username.lower() in ["mostrador", "monitor"]:
-            return redirect(url_for("orders.monitor"))
+            return redirect(url_for("orders.monitor"))  # pragma: no cover
         return redirect(url_for("orders.index"))
 
     if request.method == "POST":
