@@ -149,6 +149,18 @@ block page_title %}Estado de Pedidos{% endblock %}
     .qb-table tbody tr { border-bottom: 1px solid #f1f5f9; transition: all 0.15s ease; cursor: pointer; }
     .qb-table tbody tr:hover { background: #f8fafc; }
     .qb-table tbody tr:last-child { border-bottom: none; }
+    .qb-table tbody tr.is-navigating {
+        background-color: #f1f5f9;
+        pointer-events: none;
+        animation: qb-row-pulse 1s infinite;
+    }
+    .qb-table tbody tr.is-navigating td {
+        opacity: 0.7;
+    }
+    @keyframes qb-row-pulse {
+        0%, 100% { background-color: #f1f5f9; }
+        50% { background-color: #e2e8f0; }
+    }
     .qb-table td { padding: 16px 20px; font-size: 13px; color: #475569; }
 
     .qb-order-link { font-size: 14px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: #4a7dff; text-decoration: none; letter-spacing: -0.02em; transition: color 0.15s; }
@@ -454,9 +466,11 @@ block page_title %}Estado de Pedidos{% endblock %}
                 </thead>
                 <tbody>
                     <template x-for="order in paginatedOrders" :key="order.order_id">
-                        <tr class="order-row" @click="window.location.href = `/orders/${order.order_id}`">
+                        <tr class="order-row" 
+                            :class="{'is-navigating': navigatingTo === order.order_id}"
+                            @click="navigateToOrder(order.order_id)">
                             <td>
-                                <a :href="`/orders/${order.order_id}`" class="qb-order-link" @click.stop>
+                                <a :href="`/orders/${order.order_id}`" class="qb-order-link" @click.prevent="navigateToOrder(order.order_id)">
                                     <span class="qb-order-hash">#</span><span x-text="order.order_id"></span>
                                 </a>
                             </td>
@@ -483,7 +497,7 @@ block page_title %}Estado de Pedidos{% endblock %}
                                 <span class="qb-date" x-text="formatDateTime(order.last_updated || order.imported_at)"></span>
                             </td>
                             <td style="text-align: right;">
-                                <a :href="`/orders/${order.order_id}`" class="qb-action" @click.stop>
+                                <a :href="`/orders/${order.order_id}`" class="qb-action" @click.prevent="navigateToOrder(order.order_id)">
                                     Ver
                                     <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />

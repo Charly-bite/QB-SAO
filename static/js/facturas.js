@@ -6,6 +6,188 @@
    which is set in the template before this script loads.
    ══════════════════════════════════════════════════════ */
 
+window.estadoCuentaWindowApp = function(winConfig) {
+    return {
+        id: winConfig.id,
+        customerCode: winConfig.customerCode,
+        customerName: winConfig.customerName,
+        
+        show: true,
+        minimized: false,
+        loading: true,
+        data: null,
+        selected: [],
+        filterSearch: '',
+        filterCurrency: 'ALL',
+        filterOverdue: 'ALL',
+        
+        sortColumn: 'doc_num',
+        sortDir: 'desc',
+
+        // Window positioning state
+        ecWinCollapsed: false,
+        ecWinDragging: false,
+        ecWinX: winConfig.startX || 80,
+        ecWinY: winConfig.startY || 80,
+        ecWinOffsetX: 0,
+        ecWinOffsetY: 0,
+        _ecWinOnDrag: null,
+        _ecWinStopDrag: null,
+
+        // Window Z-Index to bring active window to front
+        zIndex: winConfig.zIndex || 9999,
+
+        async init() {
+            // Setup Drag handlers
+            this._ecWinOnDrag = (e) => {
+                if (!this.ecWinDragging) return;
+                e.preventDefault();
+                this.ecWinX = Math.max(0, Math.min(e.clientX - this.ecWinOffsetX, window.innerWidth - 200));
+                this.ecWinY = Math.max(0, Math.min(e.clientY - this.ecWinOffsetY, window.innerHeight - 50));
+            };
+            this._ecWinStopDrag = () => {
+                this.ecWinDragging = false;
+                document.removeEventListener('mousemove', this._ecWinOnDrag);
+                document.removeEventListener('mouseup', this._ecWinStopDrag);
+            };
+
+            // Fetch data
+            try {
+                const res = await fetch(`/orders/api/facturas/estado-cuenta/${this.customerCode}`);
+                const data = await res.json();
+                if (data.success && data.data) {
+                    this.data = data.data;
+                    this.selected = data.data.invoices.map(i => i.doc_num);
+                } else {
+                    alert(data.error || 'Error al obtener estado de cuenta');
+                    this.close();
+                }
+            } catch (e) {
+                console.error('Error fetching account statement:', e);
+                alert('Error de conexión');
+                this.close();
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        ecWinStartDrag(e) {
+            this.$dispatch('bring-estado-cuenta-front', { id: this.id });
+            this.ecWinDragging = true;
+            const rect = this.$refs.ecWindow.getBoundingClientRect();
+            this.ecWinOffsetX = e.clientX - rect.left;
+            this.ecWinOffsetY = e.clientY - rect.top;
+            document.addEventListener('mousemove', this._ecWinOnDrag);
+            document.addEventListener('mouseup', this._ecWinStopDrag);
+        },
+
+        close() {
+            // If the parent facturasApp provides closeEstadoCuenta, call it directly
+            if (typeof this.closeEstadoCuenta === 'function') {
+                this.closeEstadoCuenta(this.id);
+            } else {
+                this.$dispatch('close-estado-cuenta', { id: this.id });
+            }
+        },
+
+        toggleInvoice(docNum) {
+            const idx = this.selected.indexOf(docNum);
+            if (idx >= 0) this.selected.splice(idx, 1);
+            else this.selected.push(docNum);
+        },
+
+        filteredInvoices() {
+            if (!this.data) return [];
+            let result = this.data.invoices.filter(inv => {
+                if (this.filterSearch && !String(inv.doc_num).includes(this.filterSearch.trim())) return false;
+                if (this.filterCurrency !== 'ALL' && (inv.currency || 'MXN').toUpperCase() !== this.filterCurrency) return false;
+                if (this.filterOverdue === 'OVERDUE' && inv.days_overdue <= 0) return false;
+                if (this.filterOverdue === 'CURRENT' && inv.days_overdue > 0) return false;
+                return true;
+            });
+
+            result.sort((a, b) => {
+                let valA = a[this.sortColumn];
+                let valB = b[this.sortColumn];
+                
+                if (valA === undefined || valA === null) valA = '';
+                if (valB === undefined || valB === null) valB = '';
+
+                if (this.sortColumn === 'doc_date' || this.sortColumn === 'due_date') {
+                    // Dates might be 'YYYY-MM-DD HH:MM:SS'
+                    valA = valA ? new Date(String(valA).split(' ')[0]).getTime() : 0;
+                    valB = valB ? new Date(String(valB).split(' ')[0]).getTime() : 0;
+                } else if (this.sortColumn === 'balance' || this.sortColumn === 'doc_num' || this.sortColumn === 'days_overdue') {
+                    valA = Number(valA) || 0;
+                    valB = Number(valB) || 0;
+                } else {
+                    valA = String(valA).toLowerCase();
+                    valB = String(valB).toLowerCase();
+                }
+
+                if (valA < valB) return this.sortDir === 'asc' ? -1 : 1;
+                if (valA > valB) return this.sortDir === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            return result;
+        },
+
+        sortBy(column) {
+            if (this.sortColumn === column) {
+                this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.sortColumn = column;
+                this.sortDir = 'desc'; // Default to desc
+            }
+        },
+
+        toggleAll() {
+            const filtered = this.filteredInvoices();
+            const filteredNums = filtered.map(i => i.doc_num);
+            const allFilteredSelected = filteredNums.every(n => this.selected.includes(n));
+            if (allFilteredSelected) {
+                this.selected = this.selected.filter(n => !filteredNums.includes(n));
+            } else {
+                const newSet = new Set([...this.selected, ...filteredNums]);
+                this.selected = [...newSet];
+            }
+        },
+
+        allSelected() {
+            const filtered = this.filteredInvoices();
+            if (filtered.length === 0) return false;
+            return filtered.every(i => this.selected.includes(i.doc_num));
+        },
+
+        selectedCount() {
+            return this.selected.length;
+        },
+
+        selectedTotalMXN() {
+            if (!this.data) return 0;
+            return this.data.invoices
+                .filter(i => this.selected.includes(i.doc_num) && (i.currency || 'MXN').toUpperCase() !== 'USD')
+                .reduce((s, i) => s + i.balance, 0);
+        },
+
+        selectedTotalUSD() {
+            if (!this.data) return 0;
+            return this.data.invoices
+                .filter(i => this.selected.includes(i.doc_num) && (i.currency || 'MXN').toUpperCase() === 'USD')
+                .reduce((s, i) => s + i.balance, 0);
+        },
+
+        generate() {
+            if (this.selectedCount() === 0) return;
+            const invoices = this.selected.join(',');
+            const url = `/orders/estado-cuenta?card_code=${this.customerCode}&invoices=${invoices}`;
+            window.open(url, '_blank');
+            this.close();
+        }
+    };
+};
+
 function facturasApp() {
     const cfg = window.__facturasConfig || {};
     return {
@@ -34,6 +216,16 @@ function facturasApp() {
         eventSource: null,
         // Relación de Envíos tracking
         activeTab: localStorage.getItem('qb_facturas_active_tab') || 'facturas',
+        creditoSubTab: 'Todas',
+        
+        // Pending Summary Tracking
+        pendingSubTab: localStorage.getItem('qb_facturas_pending_subtab') || 'current', // 'calendar', 'all', 'current'
+        pendingSummaryData: [],
+        pendingSummaryLoading: false,
+        pendingCalendarMonth: new Date().getMonth(),
+        pendingCalendarYear: new Date().getFullYear(),
+        allPendingExpanded: false,
+        
         currentRelacion: null,
         relaciones: [],
         relacionLoading: false,
@@ -43,6 +235,7 @@ function facturasApp() {
         // Signature state
         currentUserUsername: cfg.currentUserUsername,
         currentUserFullName: cfg.currentUserFullName,
+        currentUserSignature: cfg.currentUserSignature,
         signatures: { facturacion: null, credito: null, almacen: null },
         canSignFacturacion: cfg.canSignFacturacion,
         canSignCredito: cfg.canSignCredito,
@@ -59,17 +252,67 @@ function facturasApp() {
         relationshipMapShow: false,
         relationshipMapLoading: false,
         relationshipMapData: null,
+        relationshipMapMinimized: false,
+        relationshipMapInvoiceNum: null,
+
+        // Order Detail Floating Window State
+        orderDetailShow: false,
+        orderDetailMinimized: false,
+        orderDetailUrl: '',
+        orderDetailLabel: '',
+
+        // Estado de Cuenta Windows State
+        estadoCuentaWindows: [],
+
+        // Estado de Cuenta Subtab State
+        ecSubSearchQuery: '',
+        ecSubSearchResults: [],
+        ecSubSearchLoading: false,
+        ecSubSearchTimeout: null,
+        ecSubSelectedClient: null,
+        ecSubClientData: null,
+        ecSubClientLoading: false,
+        ecSubSelectedInvoices: [],
+        ecSubFilterCurrency: 'ALL',
+        ecSubFilterOverdue: 'ALL',
+
+        // Add Invoice Modal State
+        addInvoiceModalOpen: false,
+        addInvoiceSearchQuery: '',
+        addInvoiceSelectedPending: [],
+        addInvoiceManualNum: '',
+        addInvoiceManualList: [],
+        addInvoiceLoading: false,
+        addInvoiceOtherDaysPending: [], // [{date, label, invoices: [...]}]
 
         showContextMenu(event, inv) {
-            if (this.activeTab !== 'facturas') return;
+            if (this.activeTab !== 'facturas' && this.activeTab !== 'credito') return;
             this.selectedInvoiceForMenu = inv;
             this.contextMenuX = event.clientX;
             this.contextMenuY = event.clientY;
             this.contextMenuShow = true;
+
+            // After render, clamp position so menu stays within viewport
+            this.$nextTick(() => {
+                const menu = document.querySelector('.sao-context-menu');
+                if (!menu) return;
+                const rect = menu.getBoundingClientRect();
+                const vw = window.innerWidth;
+                const vh = window.innerHeight;
+                const pad = 8; // pixels of margin from edge
+
+                if (rect.bottom > vh - pad) {
+                    this.contextMenuY = Math.max(pad, event.clientY - rect.height);
+                }
+                if (rect.right > vw - pad) {
+                    this.contextMenuX = Math.max(pad, event.clientX - rect.width);
+                }
+            });
         },
 
         closeRelationshipMap() {
             this.relationshipMapShow = false;
+            this.relationshipMapMinimized = false;
         },
 
         formatDocDate(dateStr) {
@@ -121,8 +364,10 @@ function facturasApp() {
         async openRelationshipMap(invoiceNum) {
             this.contextMenuShow = false;
             this.relationshipMapShow = true;
+            this.relationshipMapMinimized = false;
             this.relationshipMapLoading = true;
             this.relationshipMapData = null;
+            this.relationshipMapInvoiceNum = invoiceNum;
             try {
                 const res = await fetch(`/orders/api/facturas/${invoiceNum}/relationship-map`);
                 const data = await res.json();
@@ -139,6 +384,200 @@ function facturasApp() {
             } finally {
                 this.relationshipMapLoading = false;
             }
+        },
+
+        openOrderDetail(orderNumber) {
+            this.contextMenuShow = false;
+            this.orderDetailUrl = `/orders/${orderNumber}`;
+            this.orderDetailLabel = `Pedido #${orderNumber}`;
+            this.orderDetailShow = true;
+            this.orderDetailMinimized = false;
+        },
+
+        closeOrderDetail() {
+            this.orderDetailShow = false;
+            this.orderDetailMinimized = false;
+            this.orderDetailUrl = '';
+        },
+
+        // ── Estado de Cuenta Methods ──
+        async openEstadoCuenta(customerCode, customerName) {
+            this.contextMenuShow = false;
+            
+            // Check if already open
+            const existingWin = this.estadoCuentaWindows.find(w => w.customerCode === customerCode);
+            if (existingWin) {
+                this.$dispatch('bring-estado-cuenta-front', { id: existingWin.id });
+                // Also broadcast an event that will trigger the modal's `minimized = false`
+                this.$dispatch('focus-estado-cuenta', { id: existingWin.id });
+                return;
+            }
+
+            // Calculate cascading spawn position based on number of active windows
+            const winCount = this.estadoCuentaWindows.length;
+            const startX = 80 + (winCount * 30);
+            const startY = 80 + (winCount * 30);
+            
+            const maxZIndex = this.estadoCuentaWindows.length > 0 
+                ? Math.max(...this.estadoCuentaWindows.map(w => w.zIndex || 9999)) 
+                : 9999;
+
+            const newWin = {
+                id: 'ec_' + Date.now() + '_' + Math.floor(Math.random()*1000),
+                customerCode: customerCode,
+                customerName: customerName || 'Cliente',
+                startX: startX,
+                startY: startY,
+                zIndex: maxZIndex + 1
+            };
+            
+            this.estadoCuentaWindows.push(newWin);
+        },
+        
+        bringEstadoCuentaToFront(id) {
+            const maxZIndex = this.estadoCuentaWindows.length > 0 
+                ? Math.max(...this.estadoCuentaWindows.map(w => w.zIndex || 9999)) 
+                : 9999;
+                
+            const winIndex = this.estadoCuentaWindows.findIndex(w => w.id === id);
+            if (winIndex >= 0) {
+                // If it's not already the highest, make it the highest
+                if (this.estadoCuentaWindows[winIndex].zIndex < maxZIndex) {
+                    this.estadoCuentaWindows[winIndex].zIndex = maxZIndex + 1;
+                }
+            }
+        },
+
+        closeEstadoCuenta(id) {
+            this.estadoCuentaWindows = this.estadoCuentaWindows.filter(w => w.id !== id);
+        },
+
+        // ── Estado de Cuenta Subtab Methods ──
+        ecSubSearch() {
+            const q = this.ecSubSearchQuery.trim();
+            if (q.length < 2) {
+                this.ecSubSearchResults = [];
+                return;
+            }
+            clearTimeout(this.ecSubSearchTimeout);
+            this.ecSubSearchTimeout = setTimeout(async () => {
+                this.ecSubSearchLoading = true;
+                try {
+                    const res = await fetch(`/orders/api/customers/search?q=${encodeURIComponent(q)}`);
+                    const json = await res.json();
+                    if (json.success) {
+                        this.ecSubSearchResults = json.results;
+                    }
+                } catch (e) {
+                    console.error('Customer search error:', e);
+                } finally {
+                    this.ecSubSearchLoading = false;
+                }
+            }, 300);
+        },
+
+        async ecSubSelectClient(client) {
+            this.ecSubSelectedClient = client;
+            this.ecSubSearchResults = [];
+            this.ecSubSearchQuery = `${client.card_name} (${client.card_code})`;
+            this.ecSubClientLoading = true;
+            this.ecSubSelectedInvoices = [];
+            this.ecSubFilterCurrency = 'ALL';
+            this.ecSubFilterOverdue = 'ALL';
+            try {
+                const res = await fetch(`/orders/api/facturas/estado-cuenta/${client.card_code}`);
+                const json = await res.json();
+                if (json.success && json.data) {
+                    this.ecSubClientData = json.data;
+                    // Select all by default
+                    this.ecSubSelectedInvoices = json.data.invoices.map(i => i.doc_num);
+                } else {
+                    this.ecSubClientData = null;
+                }
+            } catch (e) {
+                console.error('Error fetching account statement:', e);
+                this.ecSubClientData = null;
+            } finally {
+                this.ecSubClientLoading = false;
+            }
+        },
+
+        ecSubClearClient() {
+            this.ecSubSelectedClient = null;
+            this.ecSubClientData = null;
+            this.ecSubSelectedInvoices = [];
+            this.ecSubSearchQuery = '';
+            this.ecSubSearchResults = [];
+        },
+
+        ecSubFilteredInvoices() {
+            if (!this.ecSubClientData) return [];
+            let list = [...this.ecSubClientData.invoices];
+            if (this.ecSubFilterCurrency !== 'ALL') {
+                list = list.filter(i => (i.currency || 'MXN').toUpperCase() === this.ecSubFilterCurrency);
+            }
+            if (this.ecSubFilterOverdue === 'OVERDUE') {
+                list = list.filter(i => i.days_overdue > 0);
+            } else if (this.ecSubFilterOverdue === 'CURRENT') {
+                list = list.filter(i => i.days_overdue <= 0);
+            }
+            return list;
+        },
+
+        ecSubToggleInvoice(docNum) {
+            const idx = this.ecSubSelectedInvoices.indexOf(docNum);
+            if (idx >= 0) {
+                this.ecSubSelectedInvoices.splice(idx, 1);
+            } else {
+                this.ecSubSelectedInvoices.push(docNum);
+            }
+        },
+
+        ecSubToggleAll() {
+            const filtered = this.ecSubFilteredInvoices();
+            const allSelected = filtered.every(i => this.ecSubSelectedInvoices.includes(i.doc_num));
+            if (allSelected) {
+                const nums = filtered.map(i => i.doc_num);
+                this.ecSubSelectedInvoices = this.ecSubSelectedInvoices.filter(n => !nums.includes(n));
+            } else {
+                filtered.forEach(i => {
+                    if (!this.ecSubSelectedInvoices.includes(i.doc_num)) {
+                        this.ecSubSelectedInvoices.push(i.doc_num);
+                    }
+                });
+            }
+        },
+
+        ecSubAllSelected() {
+            const filtered = this.ecSubFilteredInvoices();
+            if (filtered.length === 0) return false;
+            return filtered.every(i => this.ecSubSelectedInvoices.includes(i.doc_num));
+        },
+
+        ecSubSelectedCount() {
+            return this.ecSubSelectedInvoices.length;
+        },
+
+        ecSubSelectedTotalMXN() {
+            if (!this.ecSubClientData) return 0;
+            return this.ecSubClientData.invoices
+                .filter(i => this.ecSubSelectedInvoices.includes(i.doc_num) && (i.currency || 'MXN').toUpperCase() !== 'USD')
+                .reduce((s, i) => s + i.balance, 0);
+        },
+
+        ecSubSelectedTotalUSD() {
+            if (!this.ecSubClientData) return 0;
+            return this.ecSubClientData.invoices
+                .filter(i => this.ecSubSelectedInvoices.includes(i.doc_num) && (i.currency || 'MXN').toUpperCase() === 'USD')
+                .reduce((s, i) => s + i.balance, 0);
+        },
+
+        ecSubGenerateBill() {
+            if (this.ecSubSelectedCount() === 0) return;
+            const cardCode = this.ecSubSelectedClient.card_code;
+            const invoices = this.ecSubSelectedInvoices.join(',');
+            const url = `/orders/estado-cuenta?card_code=${cardCode}&invoices=${invoices}`;
+            window.open(url, '_blank');
         },
 
         pushUndo(action) {
@@ -191,7 +630,10 @@ function facturasApp() {
                 if (isSigned) {
                     this.signatures[area] = null;
                 } else {
-                    this.signatures[area] = { name: this.currentUserFullName };
+                    this.signatures[area] = { 
+                        name: this.currentUserFullName,
+                        signature_path: this.currentUserSignature
+                    };
                 }
             }
         },
@@ -317,18 +759,229 @@ function facturasApp() {
         loadColors() {},
 
         async addExtraInvoice() {
-            const num = prompt("Introduce el número de factura a añadir:");
-            if (num && !isNaN(num) && num.trim() !== "") {
-                const numInt = parseInt(num, 10);
-                if (!this.extraInvoices.includes(numInt)) {
-                    this.extraInvoices.push(numInt);
-                    await this.saveExtraInvoices();
-                    this.fetchInvoices();
-                } else {
-                    alert("Esa factura ya está en la lista.");
+            // Legacy fallback — now handled by the modal
+            this.showAddInvoiceModal();
+        },
+
+        // ══════════════════════════════════════════════════════
+        // Add Invoice Modal Methods
+        // ══════════════════════════════════════════════════════
+
+        async showAddInvoiceModal() {
+            this.addInvoiceModalOpen = true;
+            this.addInvoiceSearchQuery = '';
+            this.addInvoiceSelectedPending = [];
+            this.addInvoiceManualNum = '';
+            this.addInvoiceManualList = [];
+            this.addInvoiceOtherDaysPending = [];
+            
+            // Fetch pending invoices from other days
+            this.addInvoiceLoading = true;
+            try {
+                const res = await fetch(`${cfg.apiFacturasPendingSummaryUrl}?_=${Date.now()}`, { cache: 'no-store' });
+                const data = await res.json();
+                if (res.ok && data.days) {
+                    const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+                    const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+                    
+                    // Get current-day invoice numbers to exclude duplicates
+                    const currentDayNums = new Set(this.invoices.map(i => i.invoice_number));
+                    
+                    this.addInvoiceOtherDaysPending = data.days
+                        .filter(day => day.date !== this.selectedDate && day.invoices && day.invoices.length > 0)
+                        .map(day => {
+                            let label = day.date;
+                            try {
+                                const [y, m, d] = day.date.split('-').map(Number);
+                                const dateObj = new Date(y, m - 1, d);
+                                label = dayNames[dateObj.getDay()] + ' ' + d + ' ' + monthNames[m - 1] + ' ' + y;
+                            } catch(_) {}
+                            return {
+                                date: day.date,
+                                label: label,
+                                invoices: day.invoices.filter(inv => !currentDayNums.has(inv.invoice_number))
+                            };
+                        })
+                        .filter(day => day.invoices.length > 0);
                 }
+            } catch (e) {
+                console.error('Error fetching pending summary for modal:', e);
+            } finally {
+                this.addInvoiceLoading = false;
             }
         },
+
+        closeAddInvoiceModal() {
+            this.addInvoiceModalOpen = false;
+            this.addInvoiceSearchQuery = '';
+            this.addInvoiceSelectedPending = [];
+            this.addInvoiceManualNum = '';
+            this.addInvoiceManualList = [];
+            this.addInvoiceOtherDaysPending = [];
+        },
+
+        /**
+         * Returns list of pending invoices for the CURRENT date
+         * (invoices not yet selected for Relación and not cancelled).
+         */
+        get addInvoicePendingList() {
+            return this.invoices.filter(i => 
+                !i._selected && 
+                i.status !== 'Cancelada'
+            );
+        },
+
+        /**
+         * Returns all other-day pending invoices as a flat array
+         */
+        get addInvoiceOtherDaysFlat() {
+            const result = [];
+            for (const day of this.addInvoiceOtherDaysPending) {
+                for (const inv of day.invoices) {
+                    result.push({ ...inv, _fromDate: day.date, _fromLabel: day.label });
+                }
+            }
+            return result;
+        },
+
+        /**
+         * Combined: current-day + other-days, for total count
+         */
+        get addInvoiceAllPendingCombined() {
+            const current = this.addInvoicePendingList.map(i => ({ ...i, _fromDate: this.selectedDate, _fromLabel: 'Hoy' }));
+            return [...current, ...this.addInvoiceOtherDaysFlat];
+        },
+
+        get addInvoiceFilteredPendingList() {
+            const q = (this.addInvoiceSearchQuery || '').trim().toLowerCase();
+            if (!q) return this.addInvoicePendingList;
+            return this.addInvoicePendingList.filter(inv => 
+                String(inv.invoice_number).includes(q) ||
+                (inv.customer_name || '').toLowerCase().includes(q)
+            );
+        },
+
+        get addInvoiceFilteredOtherDays() {
+            const q = (this.addInvoiceSearchQuery || '').trim().toLowerCase();
+            if (!q) return this.addInvoiceOtherDaysPending;
+            return this.addInvoiceOtherDaysPending
+                .map(day => ({
+                    ...day,
+                    invoices: day.invoices.filter(inv =>
+                        String(inv.invoice_number).includes(q) ||
+                        (inv.customer_name || '').toLowerCase().includes(q)
+                    )
+                }))
+                .filter(day => day.invoices.length > 0);
+        },
+
+        get addInvoiceAllPendingSelected() {
+            const filtered = this.addInvoiceFilteredPendingList;
+            const otherFiltered = this.addInvoiceFilteredOtherDays.flatMap(d => d.invoices);
+            const allFiltered = [...filtered, ...otherFiltered];
+            return allFiltered.length > 0 && allFiltered.every(inv => 
+                this.addInvoiceSelectedPending.includes(inv.invoice_number)
+            );
+        },
+
+        get addInvoiceTotalSelected() {
+            return this.addInvoiceSelectedPending.length + this.addInvoiceManualList.length;
+        },
+
+        togglePendingForAdd(invoiceNum) {
+            const idx = this.addInvoiceSelectedPending.indexOf(invoiceNum);
+            if (idx >= 0) {
+                this.addInvoiceSelectedPending.splice(idx, 1);
+            } else {
+                this.addInvoiceSelectedPending.push(invoiceNum);
+            }
+        },
+
+        toggleAllPendingForAdd() {
+            const filtered = this.addInvoiceFilteredPendingList;
+            const otherFiltered = this.addInvoiceFilteredOtherDays.flatMap(d => d.invoices);
+            const allFiltered = [...filtered, ...otherFiltered];
+            const filteredNums = allFiltered.map(i => i.invoice_number);
+            const allSelected = filteredNums.every(n => this.addInvoiceSelectedPending.includes(n));
+            if (allSelected) {
+                this.addInvoiceSelectedPending = this.addInvoiceSelectedPending.filter(
+                    n => !filteredNums.includes(n)
+                );
+            } else {
+                const newSet = new Set([...this.addInvoiceSelectedPending, ...filteredNums]);
+                this.addInvoiceSelectedPending = [...newSet];
+            }
+        },
+
+        addManualInvoiceToList() {
+            const raw = (this.addInvoiceManualNum || '').trim();
+            if (!raw || isNaN(raw)) return;
+            const numInt = parseInt(raw, 10);
+            
+            // Check if already in the invoices list
+            if (this.invoices.some(i => i.invoice_number === numInt)) {
+                alert('Esa factura ya está en la lista del día.');
+                return;
+            }
+            // Check if already in manual list
+            if (this.addInvoiceManualList.includes(numInt)) {
+                alert('Esa factura ya fue agregada.');
+                return;
+            }
+            // Check if already in extra invoices
+            if (this.extraInvoices.includes(numInt)) {
+                alert('Esa factura ya está en las facturas extras.');
+                return;
+            }
+            
+            this.addInvoiceManualList.push(numInt);
+            this.addInvoiceManualNum = '';
+        },
+
+        removeManualInvoiceFromList(num) {
+            this.addInvoiceManualList = this.addInvoiceManualList.filter(n => n !== num);
+        },
+
+        async addSelectedInvoices() {
+            if (this.addInvoiceTotalSelected === 0) return;
+
+            let added = 0;
+            
+            // Collect invoice numbers from other-days pending that were selected
+            const currentDayNums = new Set(this.invoices.map(i => i.invoice_number));
+            const otherDaySelected = this.addInvoiceSelectedPending.filter(n => !currentDayNums.has(n));
+
+            // 1. Add manually entered invoices to extraInvoices
+            for (const numInt of this.addInvoiceManualList) {
+                if (!this.extraInvoices.includes(numInt)) {
+                    this.extraInvoices.push(numInt);
+                    added++;
+                }
+            }
+
+            // 2. Add other-day pending invoices as extra invoices too
+            for (const numInt of otherDaySelected) {
+                if (!this.extraInvoices.includes(numInt)) {
+                    this.extraInvoices.push(numInt);
+                    added++;
+                }
+            }
+
+            // 3. Save extras if we added any invoices
+            if (added > 0) {
+                await this.saveExtraInvoices();
+            }
+
+            // Close the modal
+            this.closeAddInvoiceModal();
+
+            // Refresh to pick up any new invoices from SAP
+            if (added > 0) {
+                this.fetchInvoices();
+            }
+        },
+
+        // ══════════════════════════════════════════════════════
 
         async saveExtraInvoices() {
             try {
@@ -428,6 +1081,24 @@ function facturasApp() {
             return this.sortInvoicesArray(result);
         },
 
+        get creditoTabInvoices() {
+            let result = this.invoices.filter(i => i.status !== 'Cancelada');
+            return this.sortInvoicesArray(result);
+        },
+
+        get creditoTabFilteredInvoices() {
+            let result = this.creditoTabInvoices;
+            if (this.creditoSubTab === 'Crédito') {
+                result = result.filter(i => this.isCredito(i));
+            } else if (this.creditoSubTab === 'Contado') {
+                result = result.filter(i => this.isContado(i));
+            }
+            if (this.searchQuery && this.searchQuery.trim() !== '') {
+                result = result.filter(i => this.isMatch(i));
+            }
+            return result;
+        },
+
         get pendingInvoices() {
             return this.invoices.filter(i => !i._selected && i.status !== 'Cancelada');
         },
@@ -506,19 +1177,25 @@ function facturasApp() {
         },
 
         get allSelected() {
-            return this.invoices.length > 0 && this.invoices.every(i => i._selected);
+            const authorizable = this.invoices.filter(i => this.canBeInRelation(i));
+            return authorizable.length > 0 && authorizable.every(i => i._selected);
+        },
+
+        canBeInRelation(inv) {
+            return inv.credito_authorized || inv.status === 'Cancelada';
         },
 
         toggleAll() {
             const state = !this.allSelected;
-            this.invoices.forEach(i => i._selected = state);
+            const authorizable = this.invoices.filter(i => this.canBeInRelation(i));
+            authorizable.forEach(i => i._selected = state);
             
             // Sync to local storage
             const selected = this.invoices.filter(i => i._selected).map(i => String(i.invoice_number));
             localStorage.setItem('qb_facturas_selected_' + this.selectedDate, JSON.stringify(selected));
             
             // Send bulk toggle to server
-            this.toggleInvoiceSelection(this.invoices, state);
+            this.toggleInvoiceSelection(authorizable, state);
         },
 
         saveSelection() {
@@ -531,6 +1208,11 @@ function facturasApp() {
         lastCheckedIndex: null,
 
         handleCheck(evt, inv) {
+            if (!this.canBeInRelation(inv)) {
+                evt.preventDefault();
+                alert('No puedes agregar esta factura a la relación porque no ha sido autorizada por Crédito y Cobranza.');
+                return;
+            }
             const targetState = evt.target.checked;
             let toggledInvoices = [inv];
             if (evt.shiftKey && this.lastCheckedIndex !== null) {
@@ -539,7 +1221,7 @@ function facturasApp() {
                 
                 toggledInvoices = [];
                 this.invoices.forEach(i => {
-                    if (i._global_index && i._global_index >= start && i._global_index <= end) {
+                    if (i._global_index && i._global_index >= start && i._global_index <= end && this.canBeInRelation(i)) {
                         i._selected = targetState;
                         toggledInvoices.push(i);
                     }
@@ -557,6 +1239,7 @@ function facturasApp() {
         handleRowClick(evt, inv) {
             if (['INPUT', 'BUTTON', 'A', 'TEXTAREA', 'SELECT', 'SVG', 'path'].includes(evt.target.tagName)) return;
             if (evt.target.closest('.drag-handle')) return;
+            if (!this.canBeInRelation(inv)) return;
             
             if (evt.ctrlKey || evt.metaKey) {
                 inv._selected = !inv._selected;
@@ -571,7 +1254,7 @@ function facturasApp() {
                 
                 const toggled = [];
                 this.invoices.forEach(i => {
-                    if (i._global_index && i._global_index >= start && i._global_index <= end) {
+                    if (i._global_index && i._global_index >= start && i._global_index <= end && this.canBeInRelation(i)) {
                         i._selected = targetState;
                         toggled.push(i);
                     }
@@ -579,7 +1262,7 @@ function facturasApp() {
                 this.lastCheckedIndex = inv._global_index;
                 window.getSelection().removeAllRanges();
                 this.saveSelection();
-                this.toggleInvoiceSelection(toggled, targetState);
+                if (toggled.length > 0) this.toggleInvoiceSelection(toggled, targetState);
             }
         },
 
@@ -929,6 +1612,14 @@ function facturasApp() {
                         this.highlightInvoice(data.invoice_number);
                     }
                 }
+            } else if (data.type === 'factura_credito_changed') {
+                const inv = this.invoices.find(i => String(i.invoice_number) === String(data.invoice_number));
+                if (inv) {
+                    inv.credito_authorized = data.authorized;
+                    inv.credito_revoked_from_relacion = data.revoked_from_relacion || false;
+                    this.invoices = [...this.invoices];
+                    this.highlightInvoice(data.invoice_number);
+                }
             } else if (data.type === 'factura_color_changed') {
                 if (data.client_id !== this.clientId) {
                     this.rowColors[data.invoice_number] = data.color;
@@ -991,6 +1682,20 @@ function facturasApp() {
                     const inv = this.invoices.find(i => i.invoice_number === data.invoice_number);
                     if (inv) {
                         inv.observaciones = data.observaciones;
+                        this.invoices = [...this.invoices];
+                    }
+                    if (this.pendingSummaryData) {
+                        this.pendingSummaryData.forEach(day => {
+                            const pInv = day.invoices.find(i => String(i.invoice_number) === String(data.invoice_number));
+                            if (pInv) pInv.observaciones = data.observaciones;
+                        });
+                    }
+                }
+            } else if (data.type === 'factura_credito_notes_changed') {
+                if (data.client_id !== this.clientId) {
+                    const inv = this.invoices.find(i => i.invoice_number === data.invoice_number);
+                    if (inv) {
+                        inv.credito_notes = data.notes;
                         this.invoices = [...this.invoices];
                     }
                 }
@@ -1261,7 +1966,8 @@ function facturasApp() {
                         this.invoices = newInvoices;
                     }
                     this.stats = data.stats || {};
-                    await this.fetchRelacionForDate();
+                    // Fire-and-forget: don't block invoice display waiting for relaciones
+                    this.fetchRelacionForDate();
                     this.isInitialized = true;
                 } else {
                     this.errorMsg = data.error || 'Error desconocido';
@@ -1274,6 +1980,135 @@ function facturasApp() {
                 this.loading = false;
                 this.timer = 30;
             }
+        },
+
+        async fetchPendingSummary() {
+            if (this.pendingSummaryLoading) return;
+            this.pendingSummaryLoading = true;
+            try {
+                const res = await fetch(`${cfg.apiFacturasPendingSummaryUrl}?_=${Date.now()}`, { cache: 'no-store' });
+                const data = await res.json();
+                if (res.ok) {
+                    this.pendingSummaryData = data.days || [];
+                }
+            } catch (e) {
+                console.error("Error fetching pending summary:", e);
+            } finally {
+                this.pendingSummaryLoading = false;
+            }
+        },
+
+        setPendingSubTab(tab) {
+            this.pendingSubTab = tab;
+            localStorage.setItem('qb_facturas_pending_subtab', tab);
+            if (tab === 'calendar' || tab === 'all') {
+                this.fetchPendingSummary();
+            }
+        },
+
+        prevPendingMonth() {
+            if (this.pendingCalendarMonth === 0) {
+                this.pendingCalendarMonth = 11;
+                this.pendingCalendarYear--;
+            } else {
+                this.pendingCalendarMonth--;
+            }
+        },
+
+        nextPendingMonth() {
+            if (this.pendingCalendarMonth === 11) {
+                this.pendingCalendarMonth = 0;
+                this.pendingCalendarYear++;
+            } else {
+                this.pendingCalendarMonth++;
+            }
+        },
+
+        getPendingCalendarDays() {
+            const year = this.pendingCalendarYear;
+            const month = this.pendingCalendarMonth;
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            
+            const days = [];
+            // Padding for first week
+            for (let i = 0; i < firstDay; i++) {
+                days.push(null);
+            }
+            
+            // Map data to days
+            const summaryMap = {};
+            this.pendingSummaryData.forEach(d => summaryMap[d.date] = d);
+            
+            for (let i = 1; i <= daysInMonth; i++) {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+                const data = summaryMap[dateStr] || { total_invoices: 0, pending: 0 };
+                days.push({
+                    day: i,
+                    dateStr: dateStr,
+                    data: data,
+                    isToday: dateStr === new Date().toISOString().split('T')[0]
+                });
+            }
+            return days;
+        },
+
+        getCalendarWeeks() {
+            const days = this.getPendingCalendarDays();
+            const weeks = [];
+            for (let i = 0; i < days.length; i += 7) {
+                const week = days.slice(i, i + 7);
+                // Pad last week to 7 cells
+                while (week.length < 7) week.push(null);
+                weeks.push(week);
+            }
+            return weeks;
+        },
+
+        getHeatColor(pendingCount) {
+            // Each level returns: bg (full style string), dayNumStyle, badgeStyle, amountStyle
+            if (!pendingCount || pendingCount <= 0) return {
+                bg: 'background-color: #ffffff;',
+                dayNumStyle: 'font-size: 13px; font-weight: 700; color: #64748b;',
+                badgeStyle: '',
+                amountStyle: ''
+            };
+            if (pendingCount <= 3) return {
+                bg: 'background-color: #fef9c3;',  // yellow-100
+                dayNumStyle: 'font-size: 13px; font-weight: 700; color: #713f12;',
+                badgeStyle: 'font-size: 12px; font-weight: 800; color: #92400e;',
+                amountStyle: 'font-size: 10px; font-weight: 600; color: #a16207;'
+            };
+            if (pendingCount <= 8) return {
+                bg: 'background-color: #fde68a;',  // amber-200
+                dayNumStyle: 'font-size: 13px; font-weight: 700; color: #78350f;',
+                badgeStyle: 'font-size: 12px; font-weight: 800; color: #78350f;',
+                amountStyle: 'font-size: 10px; font-weight: 600; color: #92400e;'
+            };
+            if (pendingCount <= 15) return {
+                bg: 'background-color: #fca5a5;',  // red-300
+                dayNumStyle: 'font-size: 13px; font-weight: 700; color: #450a0a;',
+                badgeStyle: 'font-size: 12px; font-weight: 800; color: #450a0a;',
+                amountStyle: 'font-size: 10px; font-weight: 600; color: #7f1d1d;'
+            };
+            if (pendingCount <= 25) return {
+                bg: 'background-color: #f472b6;',  // pink-400
+                dayNumStyle: 'font-size: 13px; font-weight: 800; color: #4a044e;',
+                badgeStyle: 'font-size: 12px; font-weight: 800; color: #4a044e;',
+                amountStyle: 'font-size: 10px; font-weight: 600; color: #701a75;'
+            };
+            if (pendingCount <= 40) return {
+                bg: 'background-color: #a855f7;',  // purple-500
+                dayNumStyle: 'font-size: 13px; font-weight: 800; color: #ffffff;',
+                badgeStyle: 'font-size: 12px; font-weight: 800; color: #f3e8ff;',
+                amountStyle: 'font-size: 10px; font-weight: 600; color: #e9d5ff;'
+            };
+            return {
+                bg: 'background-color: #4c1d95;',  // violet-900
+                dayNumStyle: 'font-size: 13px; font-weight: 800; color: #ffffff;',
+                badgeStyle: 'font-size: 12px; font-weight: 800; color: #ddd6fe;',
+                amountStyle: 'font-size: 10px; font-weight: 600; color: #c4b5fd;'
+            };
         },
 
         sortBy(column) {
@@ -1662,6 +2497,44 @@ function facturasApp() {
             }, 100);
         },
 
+        editCreditoNotes(inv) {
+            inv._temp_credito_notes = inv.credito_notes || '';
+            inv._editing_credito_notes = true;
+        },
+
+        async saveCreditoNotes(inv) {
+            if (!inv._editing_credito_notes) return;
+            inv._editing_credito_notes = false;
+            
+            if (inv._temp_credito_notes === (inv.credito_notes || '')) {
+                return;
+            }
+
+            const oldVal = inv.credito_notes;
+            inv.credito_notes = inv._temp_credito_notes;
+
+            try {
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+                const res = await fetch(`${cfg.ordersIndexUrl}api/facturas/${inv.invoice_number}/credito-notes`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({ notes: inv.credito_notes })
+                });
+                if (!res.ok) {
+                    const data = await res.json();
+                    alert(data.error || 'Error al guardar notas de crédito');
+                    inv.credito_notes = oldVal;
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Error de conexión al guardar notas de crédito');
+                inv.credito_notes = oldVal;
+            }
+        },
+
         async saveObservacion(inv) {
             if (!inv._editing) return; // Prevent double trigger from enter + blur
             inv._editing = false;
@@ -1844,6 +2717,7 @@ function facturasApp() {
                     payload.invoice_numbers = invoiceList.map(i => String(i.invoice_number));
                     payload.invoice_data = invoiceList.map(i => ({
                         invoice_number: String(i.invoice_number),
+                        order_number: i.order_number || '',
                         customer_name: i.customer_name,
                         total: i.total,
                         shipping_type: i.shipping_type || 'LOCAL',
@@ -1856,6 +2730,7 @@ function facturasApp() {
                     payload.invoice_number = String(i.invoice_number);
                     payload.invoice_data = {
                         invoice_number: String(i.invoice_number),
+                        order_number: i.order_number || '',
                         customer_name: i.customer_name,
                         total: i.total,
                         shipping_type: i.shipping_type || 'LOCAL',
@@ -1880,6 +2755,47 @@ function facturasApp() {
             }
         },
 
+        triggerAutoSaveRelacion() {
+            clearTimeout(this.autoSaveTimeout);
+            this.autoSaveTimeout = setTimeout(() => {
+                this.generateRelacion();
+            }, 500);
+        },
+
+        async generateRelacion() {
+            const dateVal = this.selectedDate;
+            if (!dateVal || !/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) return;
+
+            const hasSelected = this.invoices.some(i => i._selected);
+
+            // If nothing is selected and there's no relationship on the server, do nothing
+            if (!hasSelected && !this.currentRelacion) {
+                return;
+            }
+
+            // Otherwise, save exactly what is selected (which could be empty if a relationship exists)
+            let invoicesToSave = hasSelected
+                ? this.invoices.filter(i => i._selected && i.status !== 'Cancelada')
+                : [];
+
+            invoicesToSave = this.sortInvoicesArray(invoicesToSave);
+
+            try {
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+                const saveRes = await fetch('/orders/api/relaciones', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                    body: JSON.stringify({ date: dateVal, invoices: invoicesToSave, client_id: this.clientId })
+                });
+                if (saveRes.ok) {
+                    const saveData = await saveRes.json();
+                    this.currentRelacion = saveData.relacion;
+                }
+            } catch (e) {
+                console.error('Error autoguardando relacion:', e);
+            }
+        },
+
         async updateRelacionFromFacturas() {
             // Same as generateRelacion but called from the Relaciones tab
             // Updates the current relación with the latest facturas data
@@ -1889,7 +2805,11 @@ function facturasApp() {
                 return;
             }
 
-            let invoicesToSave = this.invoices.filter(i => i.status !== 'Cancelada');
+            let invoicesToSave = this.invoices.filter(i => {
+                if (i.status === 'Cancelada') return false;
+                if (!i.credito_authorized) return false;
+                return true;
+            });
             invoicesToSave = this.sortInvoicesArray(invoicesToSave);
 
             if (invoicesToSave.length === 0) {
@@ -1961,19 +2881,14 @@ function facturasApp() {
         },
 
         authorizationSummary() {
-            if (!this.currentRelacion || !this.currentRelacion.invoices) return { total: 0, authorized: 0, pending: 0 };
-            const invoices = this.currentRelacion.invoices;
+            if (!this.creditoTabInvoices) return { total: 0, authorized: 0, pending: 0 };
+            const invoices = this.creditoTabInvoices;
             const total = invoices.length;
             const authorized = invoices.filter(i => i.credito_authorized).length;
             return { total, authorized, pending: total - authorized };
         },
 
-        async authorizeInvoice(inv, type) {
-            if (!this.currentRelacion || !this.currentRelacion.folio) return;
-            // Only the applicable column can be clicked
-            const isApplicable = type === 'credito' ? this.isCredito(inv) : this.isContado(inv);
-            if (!isApplicable) return;
-
+        async authorizeInvoice(inv) {
             if (!this.canAuthorizarCredito) {
                 alert('Solo el departamento de Crédito y Cobranza puede autorizar envíos.');
                 return;
@@ -1982,7 +2897,7 @@ function facturasApp() {
             const newValue = !inv.credito_authorized;
 
             try {
-                const res = await fetch(`/orders/api/relaciones/${this.currentRelacion.folio}/authorize`, {
+                const res = await fetch(`/orders/api/facturas/${inv.invoice_number}/authorize`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({

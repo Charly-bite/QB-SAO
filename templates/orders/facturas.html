@@ -34,6 +34,16 @@
                         </span>
                     </template>
                 </button>
+                <button @click="activeTab = 'relaciones'; fetchRelaciones()" 
+                    class="px-3 py-1.5 rounded-md text-xs font-bold transition-all duration-200 flex items-center gap-1"
+                    :class="activeTab === 'relaciones' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'">
+                    📦 Relaciones
+                    <template x-if="currentRelacion">
+                        <span class="ml-1 text-[9px] px-1 py-0.2 rounded font-bold" 
+                            :class="activeTab === 'relaciones' ? 'bg-white text-indigo-700' : 'bg-indigo-100 text-indigo-600'" 
+                            x-text="currentRelacion.folio"></span>
+                    </template>
+                </button>
                 <button @click="activeTab = 'pendientes'" 
                     class="px-3 py-1.5 rounded-md text-xs font-bold transition-all duration-200 flex items-center gap-1"
                     :class="activeTab === 'pendientes' ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'">
@@ -43,16 +53,6 @@
                             :class="activeTab === 'pendientes' ? 'bg-white text-orange-700' : 'bg-orange-100 text-orange-600'"
                             x-text="pendingInvoices.length">
                         </span>
-                    </template>
-                </button>
-                <button @click="activeTab = 'relaciones'; fetchRelaciones()" 
-                    class="px-3 py-1.5 rounded-md text-xs font-bold transition-all duration-200 flex items-center gap-1"
-                    :class="activeTab === 'relaciones' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'">
-                    📦 Relaciones
-                    <template x-if="currentRelacion">
-                        <span class="ml-1 text-[9px] px-1 py-0.2 rounded font-bold" 
-                            :class="activeTab === 'relaciones' ? 'bg-white text-indigo-700' : 'bg-indigo-100 text-indigo-600'" 
-                            x-text="currentRelacion.folio"></span>
                     </template>
                 </button>
                 <button @click="activeTab = 'almacen'; fetchRelaciones()" 
@@ -98,8 +98,8 @@
             
             <!-- Left Side: Search & Filter Pills -->
             <div class="flex flex-wrap items-center gap-2 flex-1">
-                <!-- Search Input (Only shown on Facturas tab) -->
-                <div x-show="activeTab === 'facturas'" x-transition class="relative min-w-[200px] max-w-xs flex-1">
+                <!-- Search Input (Only shown on Facturas and Crédito tab) -->
+                <div x-show="['facturas', 'credito'].includes(activeTab)" x-transition class="relative min-w-[200px] max-w-xs flex-1">
                     <div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
                         <svg class="h-3.5 w-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
@@ -142,21 +142,55 @@
                         Canceladas <span class="text-[9px] opacity-70" x-text="'(' + (stats.cancelled_count || 0) + ')'"></span>
                     </button>
                 </div>
+
+                <!-- Crédito Sub-tabs (Only shown on Crédito tab) -->
+                <div x-show="activeTab === 'credito'" x-transition class="flex flex-wrap items-center gap-2">
+                    <div class="inline-flex p-0.5 bg-emerald-50 rounded-lg border border-emerald-200/60 shadow-inner shrink-0 h-7 items-center">
+                        <button @click="creditoSubTab = 'Todas'" 
+                            class="px-3 py-1 rounded-md text-xs font-bold transition-all duration-200"
+                            :class="creditoSubTab === 'Todas' ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-700 hover:bg-emerald-100'">
+                            Todas
+                        </button>
+                        <button @click="creditoSubTab = 'Crédito'" 
+                            class="px-3 py-1 rounded-md text-xs font-bold transition-all duration-200"
+                            :class="creditoSubTab === 'Crédito' ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-700 hover:bg-emerald-100'">
+                            Crédito
+                        </button>
+                        <button @click="creditoSubTab = 'Contado'" 
+                            class="px-3 py-1 rounded-md text-xs font-bold transition-all duration-200"
+                            :class="creditoSubTab === 'Contado' ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-700 hover:bg-emerald-100'">
+                            Contado
+                        </button>
+                    </div>
+                    
+                    <!-- Separated Estado de Cuenta Button -->
+                    <button @click="creditoSubTab = 'EstadoCuenta'" 
+                        class="px-3 py-1 rounded-lg border-2 text-xs font-bold transition-all duration-200 flex items-center gap-1 h-7 shadow-sm"
+                        :class="creditoSubTab === 'EstadoCuenta' ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300'">
+                        📄 Estado de Cuenta
+                    </button>
+                </div>
             </div>
 
             <!-- Right Side: Coincidences Count & Actions -->
             <div class="flex items-center gap-2.5 shrink-0 justify-end">
-                <!-- Coincidences count badge (Only shown on Facturas tab) -->
-                <div x-show="activeTab === 'facturas'" x-transition class="text-xs text-slate-500 font-semibold flex items-center gap-1">
+                <!-- Coincidences count badge -->
+                <div x-show="['facturas', 'credito'].includes(activeTab)" x-transition class="text-xs text-slate-500 font-semibold flex items-center gap-1">
                     <span>Total:</span>
-                    <span class="px-1.5 py-0.5 bg-slate-100 rounded-md font-bold text-slate-700 text-[10px]"
-                        x-text="searchQuery ? filteredInvoices.filter(i => isMatch(i)).length + ' / ' + filteredInvoices.length : filteredInvoices.length"></span>
+                    <template x-if="activeTab === 'facturas'">
+                        <span class="px-1.5 py-0.5 bg-slate-100 rounded-md font-bold text-slate-700 text-[10px]"
+                            x-text="searchQuery ? filteredInvoices.filter(i => isMatch(i)).length + ' / ' + filteredInvoices.length : filteredInvoices.length"></span>
+                    </template>
+                    <template x-if="activeTab === 'credito'">
+                        <span class="px-1.5 py-0.5 bg-slate-100 rounded-md font-bold text-slate-700 text-[10px]"
+                            x-text="searchQuery ? creditoTabFilteredInvoices.length + ' / ' + creditoTabInvoices.filter(i => creditoSubTab === 'Todas' ? true : (creditoSubTab === 'Crédito' ? isCredito(i) : isContado(i))).length : creditoTabFilteredInvoices.length"></span>
+                    </template>
                 </div>
 
                 <!-- Facturas Tab Actions -->
                 <div x-show="activeTab === 'facturas'" x-transition class="flex items-center gap-1.5">
-                    <button x-show="canEditFacturas" @click="addExtraInvoice()" :disabled="loading" 
-                        class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-white bg-slate-800 rounded-lg hover:bg-slate-700 shadow-sm transition-all duration-200 active:scale-95 h-8" title="Añadir factura manualmente">
+                    <button x-show="canEditFacturas" @click="showAddInvoiceModal()" :disabled="loading" 
+                        class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-white bg-slate-800 rounded-lg hover:bg-slate-700 shadow-sm transition-all duration-200 active:scale-95 h-8" title="Añadir factura">
                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                         Añadir Factura
                     </button>
@@ -193,6 +227,15 @@
     <!-- Relationship Map Modal -->
     {% include 'orders/partials/_relationship_map_modal.html' %}
 
+    <!-- Order Detail Floating Window -->
+    {% include 'orders/partials/_order_detail_modal.html' %}
+
+    <!-- Estado de Cuenta Modal -->
+    {% include 'orders/partials/_estado_cuenta_modal.html' %}
+
+    <!-- Add Invoice Modal -->
+    {% include 'orders/partials/_add_invoice_modal.html' %}
+
 </div>
 
 </div>
@@ -204,11 +247,13 @@
         canEditFacturas: {{ 'true' if current_user.can_edit_facturas() else 'false' }},
         currentUserUsername: '{{ current_user.username }}',
         currentUserFullName: '{{ current_user.full_name|default(current_user.username, true) }}',
+        currentUserSignature: {{ current_user.signature_path | tojson if current_user.signature_path else 'null' }},
         canSignFacturacion: {{ 'true' if current_user.can_sign_facturacion() else 'false' }},
         canSignCredito: {{ 'true' if current_user.can_sign_credito() else 'false' }},
         canSignAlmacen: {{ 'true' if current_user.can_sign_almacen() else 'false' }},
         canAuthorizarCredito: {{ 'true' if current_user.can_authorize_credito() else 'false' }},
         apiFacturasUrl: "{{ url_for('orders.api_facturas') }}",
+        apiFacturasPendingSummaryUrl: "{{ url_for('orders.api_facturas_pending_summary') }}",
         apiFacturasExportUrl: "{{ url_for('orders.api_facturas_export_custom') }}",
         ordersIndexUrl: "{{ url_for('orders.index') }}"
     };

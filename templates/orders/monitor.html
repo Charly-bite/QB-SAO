@@ -287,13 +287,6 @@
                                 <div class="card-order-id">
                                     <span class="order-hash">#</span><span x-text="order.order_id"></span>
                                 </div>
-                                <div class="card-aging" :class="getAgingClass(order)">
-                                    <svg class="aging-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    <span x-text="getAgingText(order)"></span>
-                                </div>
                             </div>
 
                             <!-- Customer info -->
@@ -303,6 +296,7 @@
                                     <span class="customer-code" x-text="order.customer_code"></span>
                                     <template x-if="order.created_by">
                                         <span class="customer-seller" x-text="order.created_by"></span>
+                                    </template>
                                 </div>
                             </div>
 
@@ -428,8 +422,7 @@
                                 </div>
                             </div>
                         </div>
-                    </template>
-                </div>
+                    </div>
             </template>
         </div>
 

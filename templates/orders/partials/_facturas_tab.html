@@ -103,9 +103,10 @@
                                 </div>
                             </td>
                             <!-- Checkbox -->
-                            <td class="px-2 py-1.5 border border-slate-400 text-center align-middle cursor-pointer" 
-                                @click.stop="if(canEditFacturas) { inv._selected = !inv._selected; lastCheckedIndex = inv._global_index; saveSelection(); toggleInvoiceSelection([inv], inv._selected); }">
-                                <input type="checkbox" :checked="inv._selected" :disabled="!canEditFacturas" class="w-4 h-4 text-amber-500 rounded focus:ring-amber-500 border-slate-300 pointer-events-none disabled:opacity-50">
+                            <td class="px-2 py-1.5 border border-slate-400 text-center align-middle" 
+                                :class="{'cursor-pointer': canEditFacturas && canBeInRelation(inv), 'cursor-not-allowed bg-red-50/50': !canBeInRelation(inv)}"
+                                @click.stop="if(canEditFacturas) { handleCheck({target: {checked: !inv._selected}, shiftKey: $event.shiftKey, preventDefault: () => {}}, inv); }">
+                                <input type="checkbox" :checked="inv._selected" :disabled="!canEditFacturas || !canBeInRelation(inv)" class="w-4 h-4 text-amber-500 rounded focus:ring-amber-500 border-slate-300 pointer-events-none disabled:opacity-50">
                             </td>
                             <!-- Posición -->
                             <td class="px-2 py-1.5 border border-slate-400 text-center align-middle font-bold text-slate-700 text-sm group">
@@ -150,6 +151,11 @@
                             </td>
                             <!-- Cliente -->
                             <td class="px-3 py-1.5 border border-slate-400 text-xs relative group">
+                                <template x-if="!inv.credito_authorized && inv.credito_revoked_from_relacion">
+                                    <div class="absolute inset-y-0 flex items-center justify-center pointer-events-none z-10" style="left: -150px; right: -300px; background: rgba(239, 68, 68, 0.15);">
+                                        <span class="text-red-600 font-black text-2xl tracking-[0.3em] uppercase transform -rotate-2 opacity-80" style="text-shadow: 2px 2px 0 rgba(255,255,255,0.8);">NO AUTORIZADO</span>
+                                    </div>
+                                </template>
                                 <template x-if="(inv.customer_name || '').includes('VENTAS MOSTRADOR')">
                                     <div @dblclick="if(canEditFacturas) editCustomerName(inv)" title="Doble clic para cambiar nombre (Venta de mostrador)">
                                         <template x-if="!inv._editing_customer">
