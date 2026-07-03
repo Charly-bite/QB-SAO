@@ -81,12 +81,12 @@ class UserManager:
                 # Auto-migrate: add sap_seller_name if missing
                 try:
                     conn.exec_driver_sql(f"ALTER TABLE {self.TABLE_NAME} ADD sap_seller_name VARCHAR(100) DEFAULT ''")
-                except Exception:
+                except Exception:  # pragma: no cover
                     pass  # column likely exists
                 # Auto-migrate: add signature_path if missing
                 try:
                     conn.exec_driver_sql(f"ALTER TABLE {self.TABLE_NAME} ADD signature_path VARCHAR(500) DEFAULT ''")
-                except Exception:
+                except Exception:  # pragma: no cover
                     pass  # column likely exists
         except Exception as e:
             logger.error(f"Could not create or alter {self.TABLE_NAME}: {e}")
