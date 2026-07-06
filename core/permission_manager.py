@@ -158,12 +158,12 @@ class PermissionManager:
             try:
                 with self._sql_engine.begin() as conn:
                     conn.exec_driver_sql(
-                        f"DELETE FROM {TABLE_NAME} WHERE role = ?", [role]
+                        f"DELETE FROM {TABLE_NAME} WHERE role = ?", (role,)
                     )
                     if perm_set:
                         conn.exec_driver_sql(
                             f"INSERT INTO {TABLE_NAME} (role, permissions_json) VALUES (?, ?)",
-                            [role, json.dumps(sorted(perm_set))]
+                            (role, json.dumps(sorted(perm_set)))
                         )
                 logger.info(f"[PermissionManager] Saved permissions for role '{role}'.")
             except Exception as e:
