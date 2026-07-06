@@ -46,6 +46,9 @@ class Config:
     TESTING = False
     SESSION_COOKIE_SECURE = False
 
+    # Disable static file caching so browsers always fetch fresh JS/CSS after deploys
+    SEND_FILE_MAX_AGE_DEFAULT = 0
+
 
 class DevelopmentConfig(Config):
     """Local development server."""
