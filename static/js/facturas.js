@@ -191,6 +191,9 @@ window.estadoCuentaWindowApp = function(winConfig) {
 function facturasApp() {
     const cfg = window.__facturasConfig || {};
     return {
+        // Tab visibility — populated from backend per user role
+        tabs: cfg.tabs || { facturas: true, credito: true, relaciones: true, pendientes: true, almacen: true },
+        
         invoices: [],
         isInitialized: false,
         stats: {},
@@ -217,7 +220,7 @@ function facturasApp() {
         // Relación de Envíos tracking
         activeTab: (() => {
             // Default to first permitted tab (respects permission config)
-            const tabs = (window.__facturasConfig || {}).tabs || {};
+            const tabs = cfg.tabs || {};
             const saved = localStorage.getItem('qb_facturas_active_tab');
             const order = ['facturas','credito','relaciones','pendientes','almacen'];
             // Use saved tab if still permitted, else pick first permitted
@@ -228,8 +231,8 @@ function facturasApp() {
         
         // Pending Summary Tracking
         pendingSubTab: localStorage.getItem('qb_facturas_pending_subtab') || 'current', // 'calendar', 'all', 'current'
-        pendingSummaryData: [],
-        pendingSummaryLoading: false,
+        pendingInvoices: [], // Sub-store for pending invoices across all dates
+        isPendingLoading: false,
         pendingCalendarMonth: new Date().getMonth(),
         pendingCalendarYear: new Date().getFullYear(),
         allPendingExpanded: false,
