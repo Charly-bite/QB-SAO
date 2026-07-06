@@ -38,7 +38,7 @@ class TestEnsureTableExists:
         um = _make_um()
         um.sql_engine = mock_engine
         um._ensure_table_exists()
-        mock_conn.exec_driver_sql.assert_called_once()
+        assert mock_conn.exec_driver_sql.call_count == 3
 
     def test_with_engine_exception(self):
         mock_engine = MagicMock()

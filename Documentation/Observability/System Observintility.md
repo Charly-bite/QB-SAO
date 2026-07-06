@@ -30,3 +30,7 @@ The `/health` endpoint provides a real-time heartbeat of the application's healt
 - **SAP Connectivity**: Whether the `SAPHanaConnector` is currently available and initialized.
 - **System Load**: The number of active orders loaded into the `OrderStatusManager`.
 
+
+
+---
+*Graph Context: Return to [[Home]] (Architecture)*

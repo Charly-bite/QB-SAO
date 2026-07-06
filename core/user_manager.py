@@ -10,6 +10,7 @@ import logging
 import secrets
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
+from werkzeug.security import generate_password_hash, check_password_hash
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ class UserRole(Enum):
     ADMIN = "admin"
     SELLER = "seller"
     SELL_MANAGER = "sell_manager"
+    BILLING = "billing"
 
 
 class UserManager:
@@ -71,11 +73,23 @@ class UserManager:
                         must_change_password BIT DEFAULT 0,
                         last_login VARCHAR(50),
                         created_at VARCHAR(50),
-                        warehouse VARCHAR(50) DEFAULT ''
+                        warehouse VARCHAR(50) DEFAULT '',
+                        sap_seller_name VARCHAR(100) DEFAULT '',
+                        signature_path VARCHAR(500) DEFAULT ''
                     )
                 """)
+                # Auto-migrate: add sap_seller_name if missing
+                try:
+                    conn.exec_driver_sql(f"ALTER TABLE {self.TABLE_NAME} ADD sap_seller_name VARCHAR(100) DEFAULT ''")
+                except Exception:  # pragma: no cover
+                    pass  # column likely exists
+                # Auto-migrate: add signature_path if missing
+                try:
+                    conn.exec_driver_sql(f"ALTER TABLE {self.TABLE_NAME} ADD signature_path VARCHAR(500) DEFAULT ''")
+                except Exception:  # pragma: no cover
+                    pass  # column likely exists
         except Exception as e:
-            logger.error(f"Could not create {self.TABLE_NAME}: {e}")
+            logger.error(f"Could not create or alter {self.TABLE_NAME}: {e}")
 
     def _load_users(self):
         """Load users from SQL table."""
@@ -104,8 +118,9 @@ class UserManager:
                         "created_at": user_data.get("created_at", ""),
                         "warehouse": user_data.get("warehouse", ""),
                         "sap_seller_name": user_data.get("sap_seller_name", ""),
+                        "signature_path": user_data.get("signature_path", ""),
                     }
-            logger.info(f"✅ Loaded {len(self.users)} users from {self.TABLE_NAME}")
+            logger.info(f"[OK] Loaded {len(self.users)} users from {self.TABLE_NAME}")
         except Exception as e:
             logger.warning(f"Could not load users from SQL: {e}")
 
@@ -126,13 +141,14 @@ class UserManager:
                         UPDATE {self.TABLE_NAME} SET
                             password_hash = ?, salt = ?, full_name = ?, email = ?,
                             role = ?, is_active = ?, must_change_password = ?,
-                            last_login = ?, created_at = ?, warehouse = ?
+                            last_login = ?, created_at = ?, warehouse = ?, sap_seller_name = ?,
+                            signature_path = ?
                         WHERE username = ?
                     ELSE
                         INSERT INTO {self.TABLE_NAME}
                             (username, password_hash, salt, full_name, email, role,
-                             is_active, must_change_password, last_login, created_at, warehouse)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             is_active, must_change_password, last_login, created_at, warehouse, sap_seller_name, signature_path)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                     [
                         # For EXISTS check
@@ -148,6 +164,8 @@ class UserManager:
                         user_data.get("last_login"),
                         user_data.get("created_at", ""),
                         user_data.get("warehouse", ""),
+                        user_data.get("sap_seller_name", ""),
+                        user_data.get("signature_path", ""),
                         user_data["username"],
                         # For INSERT
                         user_data["username"],
@@ -161,6 +179,8 @@ class UserManager:
                         user_data.get("last_login"),
                         user_data.get("created_at", ""),
                         user_data.get("warehouse", ""),
+                        user_data.get("sap_seller_name", ""),
+                        user_data.get("signature_path", ""),
                     ],
                 )
                 raw.commit()
@@ -170,9 +190,9 @@ class UserManager:
 
     def _create_default_admin(self):
         """Create default admin account."""
-        salt = secrets.token_hex(16)
+        salt = ""
         password = "admin123"
-        password_hash = hashlib.sha256((password + salt).encode()).hexdigest()
+        password_hash = generate_password_hash(password)
 
         admin_data = {
             "username": "admin",
@@ -190,7 +210,7 @@ class UserManager:
 
         self.users["admin"] = admin_data
         self._save_user_to_sql(admin_data)
-        print("✅ Default admin created (user: admin, pass: admin123)")
+        print("[OK] Default admin created (user: admin, pass: admin123)")
 
     def authenticate(self, username: str, password: str) -> bool:
         """Authenticate a user."""
@@ -203,9 +223,20 @@ class UserManager:
 
         salt = user.get("salt", "")
         expected_hash = user.get("password_hash", "")
-        actual_hash = hashlib.sha256((password + salt).encode()).hexdigest()
+        
+        valid = False
+        if expected_hash.startswith("scrypt:") or expected_hash.startswith("pbkdf2:"):
+            valid = check_password_hash(expected_hash, password)
+        else:
+            # Fallback for legacy hashes
+            actual_hash = hashlib.sha256((password + salt).encode()).hexdigest()
+            if actual_hash == expected_hash:
+                valid = True
+                # Auto-upgrade the hash transparently
+                user["salt"] = ""
+                user["password_hash"] = generate_password_hash(password)
 
-        if actual_hash == expected_hash:
+        if valid:
             # Update last login
             user["last_login"] = datetime.datetime.now().isoformat()
             self.current_user = user
@@ -250,8 +281,8 @@ class UserManager:
         if len(password) < 6:
             return False, "La contraseña debe tener al menos 6 caracteres"
 
-        salt = secrets.token_hex(16)
-        password_hash = hashlib.sha256((password + salt).encode()).hexdigest()
+        salt = ""
+        password_hash = generate_password_hash(password)
 
         user_data = {
             "username": username,
@@ -261,11 +292,12 @@ class UserManager:
             "email": email,
             "role": role,
             "is_active": True,
-            "must_change_password": False,
+            "must_change_password": True,
             "last_login": None,
             "created_at": datetime.datetime.now().isoformat(),
             "warehouse": "",
             "sap_seller_name": kwargs.get("sap_seller_name", ""),
+            "signature_path": kwargs.get("signature_path", ""),
         }
 
         self.users[username] = user_data
@@ -285,11 +317,8 @@ class UserManager:
             new_password = kwargs["password"]
             if len(new_password) < 6:
                 return False, "La contraseña debe tener al menos 6 caracteres"
-            salt = secrets.token_hex(16)
-            user["salt"] = salt
-            user["password_hash"] = hashlib.sha256(
-                (new_password + salt).encode()
-            ).hexdigest()
+            user["salt"] = ""
+            user["password_hash"] = generate_password_hash(new_password)
             user["must_change_password"] = False
 
         # Other fields
@@ -300,6 +329,7 @@ class UserManager:
             "is_active",
             "warehouse",
             "sap_seller_name",
+            "signature_path",
         ]:
             if field in kwargs:
                 user[field] = kwargs[field]

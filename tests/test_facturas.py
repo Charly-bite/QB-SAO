@@ -22,6 +22,8 @@ import pytest
 
 def _make_connector(**kwargs):
     from core.sap_connector import SAPHanaConnector
+    kwargs.setdefault("username", "test_user")
+    kwargs.setdefault("password", "test_pass")
     return SAPHanaConnector(**kwargs)
 
 
@@ -32,7 +34,8 @@ class TestGetTodaysInvoices:
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
         mock_cursor.fetchall.return_value = [
-            (5001, 1, "C001", "Customer A", "2026-05-21", 15000.0, "MXN", "O", "N", "Some comment", "Seller X"),
+            (5001, 1, "C1", "Cust 1", "2026-05-21", 100.50, "MXN", "O", "N", "Note", "Seller 1", 0.0, "LOCAL", "CONTADO", "WHS1", 17001, "2026-05-20"),
+            (5002, 2, "C2", "Cust 2", "2026-05-21", 200.00, "USD", "O", "N", "", "Seller 2", 200.0, "PAQUETERIA", "CREDITO", "WHS2", None, None),
         ]
         mock_conn.cursor.return_value = mock_cursor
         mock_dbapi.connect.return_value = mock_conn
@@ -41,14 +44,14 @@ class TestGetTodaysInvoices:
         c.connect()
         invoices = c.get_todays_invoices()
 
-        assert len(invoices) == 1
+        assert len(invoices) == 2
         inv = invoices[0]
         assert inv["invoice_number"] == 5001
-        assert inv["customer_name"] == "Customer A"
-        assert inv["total"] == 15000.0
+        assert inv["customer_name"] == "Cust 1"
+        assert inv["total"] == 100.50
         assert inv["currency"] == "MXN"
         assert inv["status"] == "Abierta"
-        assert inv["seller_name"] == "Seller X"
+        assert inv["seller_name"] == "Seller 1"
 
         # Verify CURRENT_DATE is used in query
         query = mock_cursor.execute.call_args[0][0]
@@ -76,7 +79,7 @@ class TestGetTodaysInvoices:
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
         mock_cursor.fetchall.return_value = [
-            (5002, 2, "C002", "Customer B", "2026-05-21", 8000.0, "USD", "C", "N", "", None),
+            (5002, 2, "C002", "Customer B", "2026-05-21", 8000.0, "USD", "C", "N", "", None, 0.0, "LOCAL", "CONTADO", "01", 1001, "2026-05-20"),
         ]
         mock_conn.cursor.return_value = mock_cursor
         mock_dbapi.connect.return_value = mock_conn
@@ -93,7 +96,7 @@ class TestGetTodaysInvoices:
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
         mock_cursor.fetchall.return_value = [
-            (5003, 3, None, None, "2026-05-21", None, None, None, "Y", None, None),
+            (5003, 3, None, None, "2026-05-21", None, None, None, "Y", None, None, 0.0, "LOCAL", "CONTADO", None, None, None),
         ]
         mock_conn.cursor.return_value = mock_cursor
         mock_dbapi.connect.return_value = mock_conn
@@ -264,7 +267,7 @@ class TestApiFacturas:
 
         resp = auth_client.get("/orders/api/facturas?date=2026-01-15")
         assert resp.status_code == 200
-        mock_sap.get_todays_invoices.assert_called_once_with(date_str="2026-01-15")
+        mock_sap.get_todays_invoices.assert_called_once_with(date_str="2026-01-15", extra_invoice_numbers=None)
 
     def test_empty_invoices(self, auth_client, app):
         app.sap_available = True
@@ -296,3 +299,56 @@ class TestApiFacturas:
         app.sap_available = True
         resp = client.get("/orders/api/facturas")
         assert resp.status_code in (302, 401)
+
+
+class TestApiFacturasRelationshipMap:
+    def test_requires_login(self, client):
+        resp = client.get("/orders/api/facturas/12345/relationship-map")
+        assert resp.status_code in (302, 401)
+
+    def test_sap_available_success(self, auth_client, app):
+        app.sap_available = True
+        mock_sap = MagicMock()
+        mock_sap.connected = True
+        mock_data = {
+            "invoice": {"doc_num": 12345, "status": "Abierto", "total": 150.0},
+            "delivery": None,
+            "order": None,
+            "payments": [],
+            "customer": {"card_code": "C1", "card_name": "Cust 1"}
+        }
+        mock_sap.get_invoice_relationship_map.return_value = mock_data
+        app.sap_connector = mock_sap
+
+        resp = auth_client.get("/orders/api/facturas/12345/relationship-map")
+        assert resp.status_code == 200
+        res_data = resp.get_json()
+        assert res_data["success"] is True
+        assert res_data["data"]["invoice"]["doc_num"] == 12345
+
+    def test_sap_available_not_found(self, auth_client, app):
+        app.sap_available = True
+        mock_sap = MagicMock()
+        mock_sap.connected = True
+        mock_sap.get_invoice_relationship_map.return_value = None
+        app.sap_connector = mock_sap
+
+        resp = auth_client.get("/orders/api/facturas/12345/relationship-map")
+        assert resp.status_code == 404
+        res_data = resp.get_json()
+        assert res_data["success"] is False
+        assert "no encontrada" in res_data["error"]
+
+    def test_sap_unavailable_fallback(self, auth_client, app):
+        app.sap_available = False
+        
+        # Test simulated fallback response
+        resp = auth_client.get("/orders/api/facturas/12345/relationship-map")
+        assert resp.status_code == 200
+        res_data = resp.get_json()
+        assert res_data["success"] is True
+        assert res_data["simulated"] is True
+        assert res_data["data"]["invoice"]["doc_num"] == 12345
+        assert res_data["data"]["order"]["doc_num"] == 12245  # fallback subtraction (invoice_number - 100)
+        app.sap_available = True
+

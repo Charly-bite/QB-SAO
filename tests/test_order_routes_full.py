@@ -818,7 +818,11 @@ class TestUpdateStatusEdgeCases:
         assert resp.status_code == 200
 
     def test_enum_name_fallback(self, auth_client, app):
-        """Status matched by enum member name (e.g. 'READY')."""
+        """Status matched by enum member name (e.g. 'READY').
+        Business rule: 'Relacion de envio' requires factura_number."""
+        # Give the order a factura so the business rule passes
+        order_mgr = app.order_status_mgr
+        order_mgr.orders["10001"]["factura_number"] = "F-TEST-001"
         resp = auth_client.post(
             "/orders/10001/status",
             data=json.dumps({"status": "READY"}),
@@ -842,3 +846,16 @@ class TestUpdateStatusEdgeCases:
             content_type="application/json",
         )
         assert resp.status_code == 200
+
+    def test_relacion_blocked_without_factura(self, auth_client, app):
+        """Cannot transition to 'Relacion de envio' without factura_number."""
+        order_mgr = app.order_status_mgr
+        order_mgr.orders["10001"]["factura_number"] = None
+        resp = auth_client.post(
+            "/orders/10001/status",
+            data=json.dumps({"status": "Relacion de envio"}),
+            content_type="application/json",
+        )
+        assert resp.status_code == 422
+        data = resp.get_json()
+        assert "factura" in data["error"].lower()

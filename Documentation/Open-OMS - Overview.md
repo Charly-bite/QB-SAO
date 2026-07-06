@@ -23,3 +23,7 @@ The application is built as a modular Flask service:
 - **Security**: Flask-Login, CSRF protection, Rate Limiting
 - **Monitoring**: Custom Request Logging Middleware
 
+
+
+---
+*Graph Context: Return to [[Home]] (Architecture)*

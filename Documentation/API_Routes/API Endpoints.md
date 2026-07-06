@@ -30,3 +30,7 @@ To ensure the integrity of the API, several layers of protection are applied:
 ## API Responses
 For programmatic access, the application provides JSON responses for any request containing `application/json` headers, returning structured errors or data payloads.
 
+
+
+---
+*Graph Context: Return to [[Home]] (Architecture)*

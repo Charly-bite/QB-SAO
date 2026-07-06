@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Novedades del Sistema - QB-SAO{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 py-8">
+    
+    <div class="mb-8">
+        <h1 class="text-3xl font-extrabold text-slate-800 tracking-tight flex items-center gap-3">
+            <svg class="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+            </svg>
+            Registro de Cambios y Novedades
+        </h1>
+        <p class="text-slate-500 mt-2 text-lg">Historial de actualizaciones, mejoras y correcciones del sistema Open-OMS.</p>
+    </div>
+
+    <div class="space-y-6">
+        {% if changelog %}
+            {% for version in changelog %}
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden transition hover:shadow-md">
+                <div class="bg-slate-50 border-b border-slate-100 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div class="flex items-center gap-3">
+                        <span class="bg-blue-100 text-blue-800 text-sm font-bold px-3 py-1 rounded-full shadow-sm">
+                            v{{ version.version }}
+                        </span>
+                        <h2 class="text-lg font-bold text-slate-800">{{ version.title }}</h2>
+                    </div>
+                    <div class="text-sm font-medium text-slate-500 flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                        {{ version.date }}
+                    </div>
+                </div>
+                <div class="p-6">
+                    <ul class="space-y-3">
+                        {% for change in version.changes %}
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-emerald-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            <span class="text-slate-700 leading-relaxed">{{ change }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="text-center py-12 bg-white rounded-2xl border border-slate-200 border-dashed">
+                <svg class="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                <p class="text-slate-500 text-lg font-medium">Aún no hay registros de cambios disponibles.</p>
+            </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

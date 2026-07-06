@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estado de Cuenta — {{ card_code }}</title>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f1f5f9;
+            color: #1e293b;
+            padding: 20px;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+        @page {
+            size: letter;
+            margin: 5mm;
+        }
+
+        .estado-cuenta-page {
+            max-width: 1100px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+            overflow: hidden;
+            position: relative;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            user-select: none;
+            min-height: 100vh;
+        }
+
+        /* ── Watermark Layer ── */
+        .ec-watermark-layer {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+            z-index: 1;
+            overflow: hidden;
+        }
+        .ec-watermark-text {
+            position: absolute;
+            font-size: 60px;
+            font-weight: 900;
+            color: rgba(16, 185, 129, 0.04);
+            transform: rotate(-35deg);
+            white-space: nowrap;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+        .ec-wm-1 { top: 5%; left: -5%; }
+        .ec-wm-2 { top: 30%; left: 10%; }
+        .ec-wm-3 { top: 55%; left: -2%; }
+        .ec-wm-4 { top: 80%; left: 15%; }
+
+        .ec-logo-watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0.03;
+            width: 400px;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .ec-content {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        /* ── Header ── */
+        .ec-header {
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid #10b981;
+            background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
+        }
+        .ec-header-logo img { height: 130px; }
+        .ec-header-info { text-align: right; }
+        .ec-header-info h1 {
+            font-size: 24px;
+            font-weight: 900;
+            color: #1e293b;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+        }
+        .ec-header-info p {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 2px;
+        }
+        .ec-header-info .ec-folio {
+            display: inline-block;
+            margin-top: 4px;
+            padding: 3px 10px;
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #16a34a;
+            letter-spacing: 0.04em;
+        }
+
+        /* ── Client Info ── */
+        .ec-client {
+            padding: 12px 24px;
+            background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .ec-client-block h3 {
+            font-size: 10px;
+            font-weight: 700;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 2px;
+        }
+        .ec-client-block p {
+            font-size: 15px;
+            font-weight: 600;
+            color: #334155;
+        }
+        .ec-client-block p.ec-big {
+            font-size: 20px;
+            font-weight: 800;
+        }
+        .ec-client-block p.ec-red { color: #dc2626; }
+        .ec-client-block p.ec-green { color: #16a34a; }
+
+        /* ── Table ── */
+        .ec-table-wrap {
+            padding: 12px 24px 6px;
+        }
+        .ec-table-wrap h2 {
+            font-size: 14px;
+            font-weight: 800;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 6px;
+        }
+        .ec-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .ec-table thead th {
+            padding: 6px 8px;
+            text-align: left;
+            font-weight: 700;
+            color: #475569;
+            border-bottom: 2px solid #10b981;
+            background: #f0fdf4;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .ec-table thead th.ec-sortable {
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.15s ease, color 0.15s ease;
+            position: relative;
+            padding-right: 18px;
+        }
+        .ec-table thead th.ec-sortable:hover {
+            background: #dcfce7;
+            color: #166534;
+        }
+        .ec-table thead th.ec-sortable.ec-sorted {
+            background: #dcfce7;
+            color: #166534;
+        }
+        .ec-sort-arrow {
+            display: inline-block;
+            margin-left: 3px;
+            font-size: 9px;
+            vertical-align: middle;
+            opacity: 0.7;
+        }
+        .ec-table tbody td {
+            padding: 5px 8px;
+            border-bottom: 1px solid #f1f5f9;
+            color: #334155;
+        }
+        .ec-table tbody tr:nth-child(even) { background: #fafbfc; }
+
+        .ec-table .text-right { text-align: right; }
+        .ec-table .text-center { text-align: center; }
+        .ec-table .font-bold { font-weight: 700; }
+        .ec-table .text-red { color: #dc2626; }
+        .ec-table .text-green { color: #16a34a; }
+
+        /* ── Totals ── */
+        .ec-totals {
+            padding: 10px 24px 12px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+        .ec-total-card {
+            padding: 10px 18px;
+            border-radius: 8px;
+            text-align: right;
+            min-width: 160px;
+        }
+        .ec-total-card.mxn { background: #fffbeb; border: 1px solid #fde68a; }
+        .ec-total-card.usd { background: #eff6ff; border: 1px solid #bfdbfe; }
+        .ec-total-card p.label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 2px;
+        }
+        .ec-total-card.mxn p.label { color: #d97706; }
+        .ec-total-card.usd p.label { color: #2563eb; }
+        .ec-total-card p.value {
+            font-size: 20px;
+            font-weight: 900;
+        }
+        .ec-total-card.mxn p.value { color: #b45309; }
+        .ec-total-card.usd p.value { color: #1d4ed8; }
+
+        /* ── Signature & Contact Block ── */
+        .ec-signature-block {
+            padding: 24px;
+            margin: 0 24px;
+            border-top: 2px solid #d1fae5;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 20px;
+        }
+        .ec-signature-person {
+            line-height: 1.45;
+        }
+        .ec-signature-person .sig-name {
+            font-size: 13px;
+            font-weight: 800;
+            color: #1e293b;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+        }
+        .ec-signature-person .sig-title {
+            font-size: 11px;
+            font-style: italic;
+            color: #475569;
+        }
+        .ec-signature-person .sig-company {
+            font-size: 11px;
+            font-weight: 700;
+            color: #059669;
+        }
+        .ec-signature-contact {
+            text-align: right;
+            font-size: 12px;
+            font-weight: 700;
+            color: #334155;
+            line-height: 1.6;
+        }
+        .ec-signature-contact .contact-company {
+            font-weight: 900;
+            color: #059669;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+        .ec-signature-contact .contact-email {
+            color: #2563eb;
+            font-weight: 800;
+            font-size: 13px;
+        }
+
+        /* ── Security Strip ── */
+        .ec-security-strip {
+            padding: 6px 24px;
+            background: repeating-linear-gradient(
+                90deg,
+                #f0fdf4 0px, #f0fdf4 10px,
+                #e6f7ed 10px, #e6f7ed 20px
+            );
+            border-top: 1px solid #bbf7d0;
+            border-bottom: 1px solid #bbf7d0;
+            text-align: center;
+            font-size: 8px;
+            color: #6b7280;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        /* ── Footer ── */
+        .ec-footer {
+            padding: 10px 24px;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .ec-footer-left {
+            font-size: 14px;
+            font-weight: 700;
+            color: #334155;
+            line-height: 1.5;
+        }
+        .ec-footer-right { text-align: right; }
+        .ec-footer-right img {
+            height: 32px;
+            opacity: 0.4;
+        }
+        .ec-footer-right p {
+            font-size: 9px;
+            color: #cbd5e1;
+            margin-top: 1px;
+        }
+
+        /* ── Verification ── */
+        .ec-verification {
+            font-size: 6px;
+            color: #e2e8f0;
+            text-align: center;
+            padding: 2px 20px 6px;
+            font-family: monospace;
+            letter-spacing: 0.05em;
+        }
+
+        /* ── Print Button ── */
+        .ec-print-bar {
+            max-width: 1100px;
+            margin: 16px auto 0;
+            text-align: center;
+        }
+        .ec-print-btn {
+            padding: 14px 40px;
+            font-size: 15px;
+            font-weight: 800;
+            border-radius: 12px;
+            border: none;
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 14px rgba(16,185,129,0.35);
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .ec-print-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(16,185,129,0.45);
+        }
+
+        /* ── Filter Bar ── */
+        .ec-filter-bar {
+            padding: 14px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border-bottom: 1px solid #e2e8f0;
+            border-top: 1px solid #e2e8f0;
+        }
+        .ec-filter-section {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .ec-filter-label {
+            font-size: 12px;
+            font-weight: 800;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            white-space: nowrap;
+        }
+        .ec-filter-label svg {
+            display: inline-block;
+            vertical-align: -2px;
+            margin-right: 3px;
+        }
+        .ec-filter-group {
+            display: flex;
+            border: 2px solid #cbd5e1;
+            border-radius: 10px;
+            overflow: hidden;
+            font-size: 13px;
+            font-weight: 700;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        }
+        .ec-filter-btn {
+            padding: 8px 16px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.15s;
+            background: white;
+            color: #64748b;
+            font-size: 13px;
+            font-weight: 700;
+        }
+        .ec-filter-btn:hover { background: #f1f5f9; }
+        .ec-filter-btn + .ec-filter-btn { border-left: 1px solid #e2e8f0; }
+        .ec-filter-btn.active-all { background: #334155; color: white; border-color: #334155; }
+        .ec-filter-btn.active-mxn { background: #b45309; color: white; border-color: #b45309; }
+        .ec-filter-btn.active-usd { background: #1d4ed8; color: white; border-color: #1d4ed8; }
+        .ec-filter-btn.active-overdue { background: #dc2626; color: white; border-color: #dc2626; }
+        .ec-filter-btn.active-current { background: #16a34a; color: white; border-color: #16a34a; }
+        .ec-filter-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 5px 12px;
+            background: #dbeafe;
+            border: 1px solid #93c5fd;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #1d4ed8;
+            margin-left: auto;
+        }
+        .ec-filter-badge svg { flex-shrink: 0; }
+
+        /* ── Back Button ── */
+        .ec-back-btn {
+            padding: 14px 32px;
+            font-size: 15px;
+            font-weight: 800;
+            border-radius: 12px;
+            border: 2px solid #cbd5e1;
+            background: white;
+            color: #475569;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .ec-back-btn:hover {
+            transform: translateY(-2px);
+            border-color: #94a3b8;
+            background: #f8fafc;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+        }
+
+        /* ── Print Styles ── */
+        @media print {
+            body { background: white; padding: 0; margin: 0; }
+            .estado-cuenta-page { box-shadow: none; border-radius: 0; max-width: none; width: 100%; min-height: 100vh; }
+            .ec-content { min-height: 100vh; }
+            .ec-table-wrap { flex: 1; }
+            .ec-print-bar { display: none !important; }
+            .ec-filter-bar { display: none !important; }
+            .no-print { display: none !important; }
+            .ec-not-selected { display: none !important; }
+            .ec-header { border-bottom: 2px solid #10b981; }
+            .ec-table { page-break-inside: auto; }
+            .ec-table tr { page-break-inside: avoid; }
+            .ec-watermark-text { color: rgba(16, 185, 129, 0.03) !important; }
+            .ec-logo-watermark { opacity: 0.025 !important; }
+            .ec-security-strip { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+
+        .ec-not-selected {
+            opacity: 0.4;
+            background-color: #f8fafc !important;
+            transition: all 0.2s ease;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body x-data="estadoCuentaPrint()" x-init="init()" oncontextmenu="return false;">
+
+    <!-- Loading state -->
+    <div x-show="loading" style="max-width: 900px; margin: 80px auto; text-align: center;">
+        <div style="display: inline-block; width: 40px; height: 40px; border: 3px solid #e2e8f0; border-top-color: #10b981; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+        <p style="color: #64748b; margin-top: 16px;">Cargando estado de cuenta...</p>
+    </div>
+
+    <!-- Content -->
+    <div x-show="!loading && data" class="estado-cuenta-page">
+
+        <!-- Watermark layer -->
+        <div class="ec-watermark-layer">
+            <div class="ec-watermark-text ec-wm-1">QUIMICA BOSS &nbsp; ESTADO DE CUENTA &nbsp; QUIMICA BOSS</div>
+            <div class="ec-watermark-text ec-wm-2">CONFIDENCIAL &nbsp; NO REPRODUCIR &nbsp; CONFIDENCIAL</div>
+            <div class="ec-watermark-text ec-wm-3">QUIMICA BOSS &nbsp; ESTADO DE CUENTA &nbsp; QUIMICA BOSS</div>
+            <div class="ec-watermark-text ec-wm-4">CONFIDENCIAL &nbsp; NO REPRODUCIR &nbsp; CONFIDENCIAL</div>
+            <img src="{{ url_for('static', filename='images/Logo_original.webp') }}" class="ec-logo-watermark" alt="" />
+        </div>
+
+        <div class="ec-content">
+            <!-- Header -->
+            <div class="ec-header">
+                <div class="ec-header-logo">
+                    <img src="{{ url_for('static', filename='images/Logo_original.webp') }}" alt="Quimica Boss" />
+                </div>
+                <div class="ec-header-info">
+                    <h1>Estado de Cuenta</h1>
+                    <p x-text="'Fecha de emisión: ' + generatedDate"></p>
+                    <span class="ec-folio" x-text="'Folio: EC-' + folioId"></span>
+                </div>
+            </div>
+
+            <!-- Client Info -->
+            <div class="ec-client" style="grid-template-columns: repeat(4, 1fr);">
+                <div class="ec-client-block">
+                    <h3>Cliente</h3>
+                    <p x-text="data ? data.customer.card_name : ''"></p>
+                </div>
+                <div class="ec-client-block">
+                    <h3>Código</h3>
+                    <p x-text="data ? data.customer.card_code : ''"></p>
+                </div>
+                <div class="ec-client-block" style="text-align: right;">
+                    <h3>Límite de Crédito</h3>
+                    <p class="ec-big ec-green" x-text="data ? '$' + Number(data.customer.credit_limit).toLocaleString('es-MX', {minimumFractionDigits: 2}) : ''"></p>
+                </div>
+                <div class="ec-client-block" style="text-align: right;">
+                    <h3>Saldo Total</h3>
+                    <p class="ec-big ec-red" x-text="data ? '$' + Number(data.customer.balance).toLocaleString('es-MX', {minimumFractionDigits: 2}) : ''"></p>
+                </div>
+            </div>
+
+            <!-- Invoices Table -->
+            <!-- Filter Bar (hidden on print) -->
+            <div class="ec-filter-bar">
+                <div class="ec-filter-section">
+                    <span class="ec-filter-label">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        Moneda:
+                    </span>
+                    <div class="ec-filter-group">
+                        <button class="ec-filter-btn" :class="filterCurrency === 'ALL' ? 'active-all' : ''" @click="filterCurrency = 'ALL'; applyFilters()">Todas</button>
+                        <button class="ec-filter-btn" :class="filterCurrency === 'MXN' ? 'active-mxn' : ''" @click="filterCurrency = 'MXN'; applyFilters()">MXN</button>
+                        <button class="ec-filter-btn" :class="filterCurrency === 'USD' ? 'active-usd' : ''" @click="filterCurrency = 'USD'; applyFilters()">USD</button>
+                    </div>
+                </div>
+                <div class="ec-filter-section">
+                    <span class="ec-filter-label">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        Estado:
+                    </span>
+                    <div class="ec-filter-group">
+                        <button class="ec-filter-btn" :class="filterOverdue === 'ALL' ? 'active-all' : ''" @click="filterOverdue = 'ALL'; applyFilters()">Todas</button>
+                        <button class="ec-filter-btn" :class="filterOverdue === 'OVERDUE' ? 'active-overdue' : ''" @click="filterOverdue = 'OVERDUE'; applyFilters()">Vencidas</button>
+                        <button class="ec-filter-btn" :class="filterOverdue === 'CURRENT' ? 'active-current' : ''" @click="filterOverdue = 'CURRENT'; applyFilters()">Al corriente</button>
+                    </div>
+                </div>
+                <div class="ec-filter-badge" x-show="filterCurrency !== 'ALL' || filterOverdue !== 'ALL'">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+                    <span x-text="'Mostrando ' + displayInvoices.length + ' de ' + filteredInvoices.length"></span>
+                </div>
+            </div>
+
+            <div class="ec-table-wrap">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                    <h2 x-text="'Facturas Pendientes (' + displayInvoices.length + ')'"></h2>
+                </div>
+                <table class="ec-table">
+                    <thead>
+                        <tr>
+                            <th class="no-print" style="width: 40px; text-align: center; padding-right: 0;">
+                                <input type="checkbox"
+                                       :checked="displayInvoices.length > 0 && displayInvoices.every(i => i.isSelected)"
+                                       @change="toggleSelectAll($event.target.checked)"
+                                       style="cursor: pointer; width: 14px; height: 14px; accent-color: #10b981;" title="Seleccionar/Deseleccionar Todas">
+                            </th>
+                            <th>#</th>
+                            <th class="ec-sortable" :class="{'ec-sorted': sortColumn === 'doc_num'}" @click="sortBy('doc_num')">
+                                No. Factura<span class="ec-sort-arrow" x-show="sortColumn === 'doc_num'" x-text="sortDirection === 'asc' ? '▲' : '▼'"></span>
+                            </th>
+                            <th class="ec-sortable" :class="{'ec-sorted': sortColumn === 'doc_date'}" @click="sortBy('doc_date')">
+                                Fecha<span class="ec-sort-arrow" x-show="sortColumn === 'doc_date'" x-text="sortDirection === 'asc' ? '▲' : '▼'"></span>
+                            </th>
+                            <th class="ec-sortable" :class="{'ec-sorted': sortColumn === 'due_date'}" @click="sortBy('due_date')">
+                                Vencimiento<span class="ec-sort-arrow" x-show="sortColumn === 'due_date'" x-text="sortDirection === 'asc' ? '▲' : '▼'"></span>
+                            </th>
+                            <th class="ec-sortable text-right" :class="{'ec-sorted': sortColumn === 'balance'}" @click="sortBy('balance')">
+                                Saldo Pendiente<span class="ec-sort-arrow" x-show="sortColumn === 'balance'" x-text="sortDirection === 'asc' ? '▲' : '▼'"></span>
+                            </th>
+                            <th class="ec-sortable text-center" :class="{'ec-sorted': sortColumn === 'currency'}" @click="sortBy('currency')">
+                                Moneda<span class="ec-sort-arrow" x-show="sortColumn === 'currency'" x-text="sortDirection === 'asc' ? '▲' : '▼'"></span>
+                            </th>
+                            <th x-show="hasUSD" class="text-center">T.C.</th>
+                            <th class="ec-sortable text-center" :class="{'ec-sorted': sortColumn === 'days_overdue'}" @click="sortBy('days_overdue')">
+                                Días Atraso<span class="ec-sort-arrow" x-show="sortColumn === 'days_overdue'" x-text="sortDirection === 'asc' ? '▲' : '▼'"></span>
+                            </th>
+                            <th x-show="hasUSD" class="text-right">Equivalente MXN</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="(inv, idx) in displayInvoices" :key="inv.doc_num">
+                            <tr :class="!inv.isSelected ? 'ec-not-selected' : ''">
+                                <td class="text-center no-print" style="padding-right: 0;">
+                                    <input type="checkbox" x-model="inv.isSelected" @change="applyFilters()"
+                                           style="cursor: pointer; width: 14px; height: 14px; accent-color: #10b981;">
+                                </td>
+                                <td style="color: #94a3b8; font-weight: 600;" x-text="idx + 1"></td>
+                                <td class="font-bold" x-text="inv.doc_num"></td>
+                                <td x-text="fmtDate(inv.doc_date)"></td>
+                                <td x-text="fmtDate(inv.due_date)"></td>
+                                <td class="text-right text-red font-bold" x-text="'$' + Number(inv.balance).toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})"></td>
+                                <td class="text-center" x-text="inv.currency"></td>
+                                <td x-show="hasUSD" class="text-center font-semibold text-slate-600"
+                                    @dblclick="editRate(inv)" style="cursor: pointer;" title="Doble clic para editar T.C."
+                                    x-text="(inv.currency || 'MXN').toUpperCase() === 'USD' ? (inv.doc_rate ? '$' + Number(inv.doc_rate).toFixed(4) : '-') : '-'"></td>
+                                <td class="text-center">
+                                    <span :style="inv.days_overdue > 0 ? 'color: #dc2626; font-weight: 700;' : 'color: #16a34a; font-weight: 600;'"
+                                          x-text="inv.days_overdue > 0 ? inv.days_overdue + ' días' : 'Al corriente'"></span>
+                                </td>
+                                <td x-show="hasUSD" class="text-right font-bold" style="color: #6d28d9;"
+                                    x-text="(inv.currency || 'MXN').toUpperCase() === 'USD' ? '$' + Number(inv.total_lc || 0).toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-'"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Totals -->
+            <div class="ec-totals" style="flex-wrap: wrap;">
+                <template x-if="totalMXN > 0">
+                    <div class="ec-total-card mxn">
+                        <p class="label">Total Pendiente MXN</p>
+                        <p class="value" x-text="'$' + totalMXN.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})"></p>
+                    </div>
+                </template>
+                <template x-if="totalUSD > 0">
+                    <div class="ec-total-card usd">
+                        <p class="label">Total Pendiente USD</p>
+                        <p class="value" x-text="'$' + totalUSD.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})"></p>
+                    </div>
+                </template>
+                <template x-if="totalUSD > 0 && totalMXN > 0">
+                    <div class="ec-total-card" style="background: #faf5ff; border: 2px solid #c084fc; min-width: 200px;">
+                        <p class="label" style="color: #7c3aed;">Total Combinado MXN</p>
+                        <p class="value" style="color: #6d28d9; font-size: 22px;" x-text="'$' + grandTotalMXN.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})"></p>
+                        <p style="font-size: 8px; color: #a78bfa; margin-top: 2px;">(USD al T.C. aplicado + MXN)</p>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Signature & Contact Block -->
+            <div class="ec-signature-block">
+                <div class="ec-signature-person">
+                    <div class="sig-name">Azucena Lopez Aguilera</div>
+                    <div class="sig-title">Encargada del Dpto. de Crédito y Cobranza</div>
+                    <div class="sig-company">Química Boss S.A. de C.V.</div>
+                </div>
+                <div class="ec-signature-contact">
+                    <div class="contact-company">QUÍMICA BOSS SA DE CV</div>
+                    <div>San Agustín No. 759 Col. El Briseño C.P. 45090</div>
+                    <div>Zapopan, Jal. Tels. (33) 3684-0505, 3684-9190</div>
+                    <div>Fax 01(33) 3684-6880, 3684-0256</div>
+                    <div class="contact-email">creditoycobranza@quimicaboss.com.mx</div>
+                </div>
+            </div>
+
+            <!-- Security Strip -->
+            <div class="ec-security-strip">
+                <span x-text="'DOCUMENTO GENERADO ELECTRÓNICAMENTE POR QB-SAO — FOLIO EC-' + folioId + ' — ' + generatedDate.toUpperCase()"></span>
+            </div>
+
+            <!-- Footer -->
+            <div class="ec-footer">
+                <div class="ec-footer-left">
+                    <p>Este documento es informativo y no tiene valor fiscal.</p>
+                    <p style="margin-top: 2px;">Cualquier duda comunicarse al departamento de Crédito y Cobranza.</p>
+                </div>
+                <div class="ec-footer-right">
+                    <img src="{{ url_for('static', filename='images/Logo_original.webp') }}" alt="QB" />
+                    <p>Sistema QB-SAO</p>
+                </div>
+            </div>
+
+            <!-- Verification hash (anti-tampering) -->
+            <div class="ec-verification" x-text="'Verificación: ' + verificationHash"></div>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div x-show="!loading && data" class="ec-print-bar" style="display: flex; justify-content: center; gap: 12px;">
+        <button @click="goBack()" class="ec-back-btn">
+            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+            Regresar al Selector
+        </button>
+        <button @click="window.print()" class="ec-print-btn">
+            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+            Imprimir / Guardar como PDF
+        </button>
+    </div>
+
+    <script>
+        function estadoCuentaPrint() {
+            return {
+                loading: true,
+                data: null,
+                filteredInvoices: [],
+                displayInvoices: [],
+                filterCurrency: 'ALL',
+                filterOverdue: 'ALL',
+                totalMXN: 0,
+                totalUSD: 0,
+                grandTotalMXN: 0,
+                exchangeRate: null,
+                exchangeRateDate: null,
+                hasUSD: false,
+                generatedDate: '',
+                folioId: '',
+                verificationHash: '',
+                sortColumn: 'doc_num',
+                sortDirection: 'asc',
+
+                editRate(inv) {
+                    if ((inv.currency || 'MXN').toUpperCase() !== 'USD') return;
+                    const currentRate = inv.doc_rate || this.exchangeRate || 0;
+                    const newRateStr = prompt(`Ingresa el nuevo Tipo de Cambio para la factura ${inv.doc_num} (Dejar vacío para aplicar a todas):`, currentRate.toFixed(4));
+                    if (newRateStr !== null && newRateStr.trim() !== '') {
+                        const newRate = parseFloat(newRateStr);
+                        if (!isNaN(newRate) && newRate > 0) {
+                            if (confirm(`¿Aplicar el tipo de cambio $${newRate.toFixed(4)} a todas las facturas en USD?`)) {
+                                this.data.invoices.forEach(i => {
+                                    if ((i.currency || 'MXN').toUpperCase() === 'USD') {
+                                        i.doc_rate = newRate;
+                                        i.total_lc = i.balance * newRate;
+                                    }
+                                });
+                            } else {
+                                inv.doc_rate = newRate;
+                                inv.total_lc = inv.balance * newRate;
+                            }
+                            this.applyFilters();
+                            this.verificationHash = this.generateHash(this.data);
+                        } else {
+                            alert('Tipo de cambio inválido.');
+                        }
+                    }
+                },
+
+                fmtDate(dateStr) {
+                    if (!dateStr || dateStr === 'None') return '';
+                    try {
+                        const parts = dateStr.split('-');
+                        if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+                        return dateStr;
+                    } catch (e) { return dateStr || ''; }
+                },
+
+                generateFolio() {
+                    const now = new Date();
+                    const y = now.getFullYear().toString().slice(-2);
+                    const m = String(now.getMonth() + 1).padStart(2, '0');
+                    const d = String(now.getDate()).padStart(2, '0');
+                    const h = String(now.getHours()).padStart(2, '0');
+                    const min = String(now.getMinutes()).padStart(2, '0');
+                    const rand = Math.floor(Math.random() * 9000 + 1000);
+                    return `${y}${m}${d}${h}${min}-${rand}`;
+                },
+
+                generateHash(data) {
+                    const str = JSON.stringify({
+                        c: data.customer.card_code,
+                        n: this.filteredInvoices.length,
+                        t: this.totalMXN + this.totalUSD,
+                        f: this.folioId
+                    });
+                    let hash = 0;
+                    for (let i = 0; i < str.length; i++) {
+                        const char = str.charCodeAt(i);
+                        hash = ((hash << 5) - hash) + char;
+                        hash |= 0;
+                    }
+                    return 'QB' + Math.abs(hash).toString(16).toUpperCase().padStart(12, '0');
+                },
+
+                async init() {
+                    const params = new URLSearchParams(window.location.search);
+                    const cardCode = params.get('card_code');
+                    const invoiceNums = params.get('invoices');
+
+                    if (!cardCode) {
+                        alert('No se especificó el código de cliente');
+                        this.loading = false;
+                        return;
+                    }
+
+                    try {
+                        const res = await fetch(`/orders/api/facturas/estado-cuenta/${cardCode}`);
+                        const json = await res.json();
+                        if (json.success && json.data) {
+                            this.data = json.data;
+
+                            // Exchange rate from SAP
+                            this.exchangeRate = json.data.exchange_rate || null;
+                            this.exchangeRateDate = json.data.exchange_rate_date || null;
+
+                            // Apply yesterday's exchange rate to USD invoices
+                            if (this.data && this.data.invoices) {
+                                this.data.invoices.forEach(inv => {
+                                    inv.isSelected = true; // Selected by default
+                                    if ((inv.currency || 'MXN').toUpperCase() === 'USD') {
+                                        if (this.exchangeRate) {
+                                            inv.doc_rate = this.exchangeRate;
+                                            inv.total_lc = inv.balance * this.exchangeRate;
+                                        }
+                                    }
+                                });
+                            }
+
+                            // Filter by selected invoice numbers if provided
+                            if (invoiceNums) {
+                                const selected = invoiceNums.split(',').map(n => parseInt(n));
+                                this.filteredInvoices = this.data.invoices.filter(
+                                    inv => selected.includes(inv.doc_num)
+                                );
+                            } else {
+                                this.filteredInvoices = this.data.invoices;
+                            }
+
+                            // Apply filters & recalculate totals
+                            this.applyFilters();
+
+                            // Generated date
+                            const now = new Date();
+                            this.generatedDate = now.toLocaleDateString('es-MX', {
+                                day: '2-digit', month: 'long', year: 'numeric',
+                                hour: '2-digit', minute: '2-digit'
+                            });
+
+                            // Folio & verification
+                            this.folioId = this.generateFolio();
+                            this.verificationHash = this.generateHash(this.data);
+
+                            // Set document title for PDF filename
+                            const clientName = this.data.customer.card_name.replace(/[^a-zA-Z0-9 ]/g, '').trim();
+                            const invoiceList = this.filteredInvoices.map(i => i.doc_num).join('_');
+                            document.title = `Estado de Cuenta - ${clientName} - FAC ${invoiceList}`;
+                        } else {
+                            alert(json.error || 'Error al obtener datos');
+                        }
+                    } catch (e) {
+                        console.error('Error:', e);
+                        alert('Error de conexión');
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                applyFilters() {
+                    // Filter the selected invoices by currency and overdue status
+                    let list = [...this.filteredInvoices];
+
+                    if (this.filterCurrency !== 'ALL') {
+                        list = list.filter(i => (i.currency || 'MXN').toUpperCase() === this.filterCurrency);
+                    }
+
+                    if (this.filterOverdue === 'OVERDUE') {
+                        list = list.filter(i => i.days_overdue > 0);
+                    } else if (this.filterOverdue === 'CURRENT') {
+                        list = list.filter(i => i.days_overdue <= 0);
+                    }
+
+                    // Apply sorting
+                    const col = this.sortColumn;
+                    const dir = this.sortDirection === 'asc' ? 1 : -1;
+                    list.sort((a, b) => {
+                        let valA = a[col];
+                        let valB = b[col];
+                        if (valA == null) valA = '';
+                        if (valB == null) valB = '';
+                        if (typeof valA === 'number' && typeof valB === 'number') {
+                            return (valA - valB) * dir;
+                        }
+                        return String(valA).localeCompare(String(valB), 'es', { numeric: true }) * dir;
+                    });
+
+                    this.displayInvoices = list;
+
+                    // Recalculate totals based on selected displayed invoices
+                    this.totalMXN = this.displayInvoices
+                        .filter(i => i.isSelected && (i.currency || 'MXN').toUpperCase() !== 'USD')
+                        .reduce((s, i) => s + i.balance, 0);
+                    this.totalUSD = this.displayInvoices
+                        .filter(i => i.isSelected && (i.currency || 'MXN').toUpperCase() === 'USD')
+                        .reduce((s, i) => s + i.balance, 0);
+
+                    this.hasUSD = this.displayInvoices.some(i => (i.currency || 'MXN').toUpperCase() === 'USD');
+
+                    const usdLcTotal = this.displayInvoices
+                        .filter(i => i.isSelected && (i.currency || 'MXN').toUpperCase() === 'USD')
+                        .reduce((s, i) => s + (i.total_lc || 0), 0);
+                    this.grandTotalMXN = this.totalMXN + usdLcTotal;
+                },
+
+                toggleSelectAll(checked) {
+                    this.displayInvoices.forEach(inv => inv.isSelected = checked);
+                    this.applyFilters();
+                },
+
+                sortBy(column) {
+                    if (this.sortColumn === column) {
+                        this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        this.sortColumn = column;
+                        this.sortDirection = 'asc';
+                    }
+                    this.applyFilters();
+                },
+
+                goBack() {
+                    // Navigate back to the facturas page where the selector modal lives
+                    if (window.opener) {
+                        window.close();
+                    } else {
+                        window.location.href = '/orders/facturas';
+                    }
+                }
+            };
+        }
+
+        // Disable Ctrl+U, Ctrl+S, F12 (basic deterrents)
+        document.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey && (e.key === 'u' || e.key === 's')) || e.key === 'F12') {
+                e.preventDefault();
+            }
+        });
+    </script>
+</body>
+</html>

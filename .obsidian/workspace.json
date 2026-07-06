@@ -1,0 +1,218 @@
+{
+  "main": {
+    "id": "ab9a5c1dc7fd45c1",
+    "type": "split",
+    "children": [
+      {
+        "id": "a2670a2acbc92d36",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "d9221e8b7f5b1e7c",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Vista gráfica"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "e51a4e59acfde620",
+    "type": "split",
+    "children": [
+      {
+        "id": "05e7c8bb104efef9",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "6e81f588296c5f0d",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Explorador de archivos"
+            }
+          },
+          {
+            "id": "055a8eec3a4c217b",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Buscar"
+            }
+          },
+          {
+            "id": "d1eae752f4d000b6",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Marcadores"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "6a262d25bf99ec47",
+    "type": "split",
+    "children": [
+      {
+        "id": "ac0e2f50c9f66f7f",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "d8ed2d7b4dece066",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Enlaces entrantes"
+            }
+          },
+          {
+            "id": "b773989eae5f2eed",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Enlaces salientes"
+            }
+          },
+          {
+            "id": "31a3379f30b9421a",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Etiquetas"
+            }
+          },
+          {
+            "id": "d411b5a04bc92987",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "Todas las propiedades"
+            }
+          },
+          {
+            "id": "92b30dfc0a1beb91",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Esquema"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Abrir selector rápido": false,
+      "graph:Abrir vista gráfica": false,
+      "canvas:Crear nuevo lienzo": false,
+      "daily-notes:Abrir la nota de hoy": false,
+      "templates:Insertar plantilla": false,
+      "command-palette:Abrir paleta de comandos": false,
+      "bases:Crear nueva base": false
+    }
+  },
+  "active": "d9221e8b7f5b1e7c",
+  "lastOpenFiles": [
+    "data/tmpm16s8v1e.tmp",
+    "data/tmp4hkp_i4o.tmp",
+    "data/tmp5y5vpnmp.tmp",
+    "data/tmp3rp3e1tg.tmp",
+    "data/tmpycfwh7f8.tmp",
+    "data/tmpg_wxikv2.tmp",
+    "data/tmpz8438azb.tmp",
+    "data/tmprwwgqsi8.tmp",
+    "data/tmphsm_hkuu.tmp",
+    "data/tmp3j29qlsa.tmp",
+    "data/tmp293ngyal.tmp",
+    "Architecture/Nodes/Node_middleware_request_logger_py.md",
+    "Architecture/Nodes/Node_static_js_Sortable_min_js.md",
+    "Architecture/Nodes/Node_static_js_tailwind_js.md",
+    "Architecture/Nodes/Node_static_js_alpine_min_js.md",
+    "Architecture/Nodes/Node_static_css_design_tokens_css.md",
+    "Architecture/Nodes/Node_static_css_facturas_css.md",
+    "Architecture/Nodes/Node_static_css_monitor_css.md",
+    "Architecture/Nodes/Node_static_js_index_js.md",
+    "Architecture/Nodes/Node_static_js_facturas_js.md",
+    "Architecture/Nodes/Node_templates_errors_500_html.md",
+    "Architecture/Nodes/Node_templates_errors_404_html.md",
+    "Architecture/Nodes/Node_templates_auth_change_password_html.md",
+    "Architecture/Nodes/Node_templates_auth_login_html.md",
+    "Architecture/Nodes/Node_templates_orders_partials__context_menu_html.md",
+    "Architecture/Nodes/Node_templates_orders_partials__relaciones_history_html.md",
+    "Architecture/Nodes/Node_templates_orders_partials__facturas_tab_html.md",
+    "Architecture/Nodes/Node_templates_orders_tiempos_tv_test_html.md",
+    "Architecture/Nodes/Node_templates_orders_tiempos_tv_html.md",
+    "Architecture/Nodes/Node_templates_orders_changelog_html.md",
+    "Architecture/Nodes/Node_templates_orders_auditoria_html.md",
+    "Architecture/Nodes/Node_templates_orders_visor_html.md",
+    "Architecture/Nodes/Node_templates_orders_dashboard_html.md",
+    "Architecture/Nodes/Node_templates_orders_detail_html.md",
+    "Architecture/Nodes/Node_templates_orders_facturas_html.md",
+    "Architecture/Nodes/Node_templates_orders_monitor_html.md"
+  ]
+}

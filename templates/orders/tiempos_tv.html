@@ -1,0 +1,601 @@
+{% extends "base.html" %}
+
+{% block title %}Tiempos de Atención{% endblock %}
+
+{% block extra_head %}
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+    /* ── Override base.html body ── */
+    @keyframes tv-gradient {
+        0%   { background-position: 0%   50%; }
+        25%  { background-position: 100% 50%; }
+        50%  { background-position: 100% 0%;  }
+        75%  { background-position: 0%   100%; }
+        100% { background-position: 0%   50%; }
+    }
+
+    /* ── Floating Orbs ── */
+    @keyframes float-orb-1 {
+        0%, 100% { transform: translate(0, 0) scale(1); }
+        33%  { transform: translate(60px, -40px) scale(1.1); }
+        66%  { transform: translate(-30px, 30px) scale(0.95); }
+    }
+    @keyframes float-orb-2 {
+        0%, 100% { transform: translate(0, 0) scale(1); }
+        33%  { transform: translate(-50px, 50px) scale(1.05); }
+        66%  { transform: translate(40px, -20px) scale(0.9); }
+    }
+    @keyframes float-orb-3 {
+        0%, 100% { transform: translate(0, 0) scale(1); }
+        50%  { transform: translate(30px, 60px) scale(1.15); }
+    }
+
+    /* ── Row entrance ── */
+    @keyframes slideInRow {
+        from { opacity: 0; transform: translateX(-40px); }
+        to   { opacity: 1; transform: translateX(0); }
+    }
+
+    /* ── Title shimmer ── */
+    @keyframes shimmer {
+        0%   { background-position: -200% center; }
+        100% { background-position: 200% center; }
+    }
+
+    /* ── Pulse glow for active row ── */
+    @keyframes pulseGlow {
+        0%, 100% { box-shadow: inset 0 0 0 0 rgba(59, 130, 246, 0); }
+        50%      { box-shadow: inset 0 0 20px 0 rgba(59, 130, 246, 0.08); }
+    }
+
+    /* ── Marquee ── */
+    @keyframes marqueeScroll {
+        0%   { transform: translateX(0); }
+        100% { transform: translateX(-50%); }
+    }
+
+    /* ── Breathing dot ── */
+    @keyframes breathe {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50%      { opacity: 0.5; transform: scale(0.85); }
+    }
+
+    /* ── Number count-up bounce ── */
+    @keyframes countBounce {
+        0%   { transform: scale(0.5); opacity: 0; }
+        60%  { transform: scale(1.15); opacity: 1; }
+        100% { transform: scale(1); }
+    }
+
+    /* Hide standard UI elements */
+    .qb-nav, .qb-breadcrumbs, .qb-page-title, .qb-toast-container, .qb-flash {
+        display: none !important;
+    }
+
+    main.max-w-7xl {
+        max-width: 100% !important;
+        width: 100%;
+        padding: 0 !important;
+        margin: 0 !important;
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: transparent !important;
+    }
+
+    /* ── Main Wrapper ── */
+    .tv-wrapper {
+        position: relative;
+        width: 100%;
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 28px;
+        box-sizing: border-box;
+        overflow: hidden;
+    }
+
+    /* ── Floating decorative orbs ── */
+    .tv-orb {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(80px);
+        pointer-events: none;
+        z-index: 0;
+    }
+    .tv-orb-1 {
+        width: 500px; height: 500px;
+        background: rgba(59, 130, 246, 0.15);
+        top: -120px; left: -100px;
+        animation: float-orb-1 20s ease-in-out infinite;
+    }
+    .tv-orb-2 {
+        width: 400px; height: 400px;
+        background: rgba(34, 211, 238, 0.12);
+        bottom: -80px; right: -60px;
+        animation: float-orb-2 25s ease-in-out infinite;
+    }
+    .tv-orb-3 {
+        width: 300px; height: 300px;
+        background: rgba(99, 102, 241, 0.1);
+        top: 40%; right: 20%;
+        animation: float-orb-3 18s ease-in-out infinite;
+    }
+
+    /* ── Main Card (Glassmorphism) ── */
+    .tv-card {
+        position: relative;
+        z-index: 1;
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 28px;
+        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.3),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+        width: 100%;
+        max-width: 1400px;
+        padding: 36px 40px 28px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    /* ── Header ── */
+    .tv-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-shrink: 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        padding-bottom: 16px;
+    }
+    .tv-header-title-container {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+    .tv-header-icon {
+        width: 42px;
+        height: 42px;
+        color: #22d3ee;
+        filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.5));
+        animation: breathe 3s ease-in-out infinite;
+    }
+    .tv-title {
+        font-size: 30px;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin: 0;
+        background: linear-gradient(90deg, #ffffff, #22d3ee, #60a5fa, #ffffff);
+        background-size: 200% auto;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: shimmer 4s linear infinite;
+    }
+    .tv-live-badge {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(16, 185, 129, 0.15);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        border-radius: 100px;
+        padding: 6px 16px;
+        font-size: 13px;
+        font-weight: 700;
+        color: #34d399;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+    }
+    .tv-live-dot {
+        width: 8px; height: 8px;
+        background: #10b981;
+        border-radius: 50%;
+        animation: breathe 2s ease-in-out infinite;
+    }
+
+    /* ── Table ── */
+    .tv-table-wrapper {
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 20px;
+        overflow: hidden;
+        background: rgba(255, 255, 255, 0.04);
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+    .tv-table {
+        width: 100%;
+        border-collapse: collapse;
+        flex: 1;
+    }
+    .tv-table th {
+        background: rgba(255, 255, 255, 0.06);
+        padding: 16px 28px;
+        font-size: 13px;
+        font-weight: 800;
+        color: rgba(255, 255, 255, 0.5);
+        text-align: left;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        font-family: 'Inter', sans-serif;
+    }
+    .tv-table th:last-child {
+        text-align: right;
+    }
+    .tv-table td {
+        padding: 20px 28px;
+        font-size: 22px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.9);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        vertical-align: middle;
+        font-family: 'Inter', sans-serif;
+        transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .tv-table tr:last-child td {
+        border-bottom: none;
+    }
+    .tv-table tbody tr {
+        opacity: 0;
+        animation: slideInRow 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        transition: background 0.3s ease;
+        border-radius: 12px;
+    }
+    .tv-table tbody tr:nth-child(1) { animation-delay: 0.2s; }
+    .tv-table tbody tr:nth-child(2) { animation-delay: 0.4s; }
+    .tv-table tbody tr:nth-child(3) { animation-delay: 0.6s; }
+    .tv-table tbody tr:nth-child(4) { animation-delay: 0.8s; }
+    .tv-table tbody tr:nth-child(5) { animation-delay: 1.0s; }
+
+    /* Active speaking row highlight */
+    .tv-table tbody tr.speaking-active {
+        background: rgba(59, 130, 246, 0.15);
+        animation: pulseGlow 2s ease-in-out infinite;
+        opacity: 1;
+        transform: translateX(0);
+    }
+    .tv-table tbody tr.speaking-active td {
+        color: #ffffff;
+    }
+    .tv-table tbody tr.speaking-active .time-col {
+        color: #22d3ee;
+        text-shadow: 0 0 20px rgba(34, 211, 238, 0.5);
+    }
+
+    /* Hover effect */
+    .tv-table tbody tr:hover {
+        background: rgba(255, 255, 255, 0.06);
+    }
+
+    .time-col {
+        color: #22d3ee;
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 800;
+        font-size: 28px;
+        text-align: right;
+        text-shadow: 0 0 12px rgba(34, 211, 238, 0.3);
+    }
+    .time-col .time-num {
+        display: inline-block;
+        animation: countBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    }
+    .time-sub {
+        font-size: 15px;
+        color: rgba(255, 255, 255, 0.4);
+        font-family: 'Inter', sans-serif;
+        font-weight: 500;
+        margin-left: 8px;
+    }
+    .time-sub-partida {
+        font-size: 13px;
+        color: rgba(245, 158, 11, 0.8);
+        font-family: 'Inter', sans-serif;
+        font-weight: 500;
+        margin-left: 8px;
+    }
+
+    /* Special highlight row (viscoso) */
+    .tv-row-highlight {
+        background: rgba(245, 158, 11, 0.08) !important;
+        border-left: 3px solid rgba(245, 158, 11, 0.6);
+    }
+    .tv-row-highlight td {
+        color: rgba(251, 191, 36, 0.95) !important;
+    }
+    .tv-row-highlight .time-col {
+        color: #fbbf24 !important;
+        text-shadow: 0 0 12px rgba(251, 191, 36, 0.3);
+    }
+
+    /* ── Row icon ── */
+    .row-icon {
+        width: 22px; height: 22px;
+        color: rgba(255, 255, 255, 0.35);
+        flex-shrink: 0;
+        margin-right: 12px;
+        vertical-align: middle;
+    }
+    .tv-row-highlight .row-icon {
+        color: rgba(251, 191, 36, 0.6);
+    }
+
+    /* ── Bottom Marquee ── */
+    .tv-marquee-bar {
+        flex-shrink: 0;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 10px 0;
+        overflow: hidden;
+        position: relative;
+    }
+    .tv-marquee-inner {
+        display: inline-block;
+        white-space: nowrap;
+        font-size: 16px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.5);
+        letter-spacing: 0.02em;
+        animation: marqueeScroll 45s linear infinite;
+    }
+    .tv-marquee-inner .marquee-sep {
+        display: inline-block;
+        width: 6px; height: 6px;
+        background: rgba(34, 211, 238, 0.5);
+        border-radius: 50%;
+        margin: 0 24px;
+        vertical-align: middle;
+    }
+
+    /* ── Progress Bar ── */
+    .return-progress-bar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #22d3ee, #3b82f6, #8b5cf6);
+        width: 0%;
+        transition: width 0.1s linear;
+        z-index: 999999;
+        box-shadow: 0 0 12px rgba(34, 211, 238, 0.5);
+    }
+
+    /* ── Sentence highlight in spoken text (HIDDEN — CC removed) ── */
+    .speaking-sentence {
+        display: none !important;
+    }
+    .speaking-sentence.visible {
+        display: none !important;
+    }
+
+    /* ── Fallback Audio Button ── */
+    .fallback-audio-btn {
+        display: none;
+        position: fixed;
+        top: 24px;
+        right: 24px;
+        background: rgba(59, 130, 246, 0.9);
+        backdrop-filter: blur(8px);
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        padding: 14px 28px;
+        border-radius: 16px;
+        font-size: 18px;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
+        z-index: 50;
+        transition: all 0.2s ease;
+        font-family: 'Inter', sans-serif;
+    }
+    .fallback-audio-btn:hover {
+        background: rgba(37, 99, 235, 0.95);
+        transform: translateY(-2px);
+        box-shadow: 0 12px 32px rgba(59, 130, 246, 0.5);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<script>
+    // Override body inline style from base.html
+    document.body.style.removeProperty('background');
+    document.body.style.setProperty('background-color', '#1e3a8a', 'important');
+    document.body.style.setProperty('background-image', 'linear-gradient(135deg, #1e3a8a, #1d4ed8, #2563eb, #3b82f6, #1d4ed8, #1e3a8a)', 'important');
+    document.body.style.setProperty('background-size', '400% 400%', 'important');
+    document.body.style.setProperty('animation', 'tv-gradient 18s ease infinite', 'important');
+    document.body.style.setProperty('overflow', 'hidden', 'important');
+    document.body.style.setProperty('margin', '0', 'important');
+    document.body.style.setProperty('padding', '0', 'important');
+    document.body.style.setProperty('height', '100vh', 'important');
+    document.body.style.setProperty('font-family', "'Inter', sans-serif", 'important');
+</script>
+
+<div class="tv-wrapper">
+    <!-- Floating decorative orbs -->
+    <div class="tv-orb tv-orb-1"></div>
+    <div class="tv-orb tv-orb-2"></div>
+    <div class="tv-orb tv-orb-3"></div>
+
+    <div class="tv-card">
+        <!-- Header -->
+        <div class="tv-header">
+            <div class="tv-header-title-container">
+                <svg class="tv-header-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <h1 class="tv-title">Tiempos de Atención</h1>
+            </div>
+            <div class="tv-live-badge">
+                <span class="tv-live-dot"></span>
+                EN VIVO
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="tv-table-wrapper">
+            <table class="tv-table">
+                <thead>
+                    <tr>
+                        <th>Tipo de Pedido</th>
+                        <th style="text-align: right;">Tiempo Estimado</th>
+                    </tr>
+                </thead>
+                <tbody id="tv-table-body">
+                    <tr data-sentence="0">
+                        <td>
+                            <svg class="row-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display:inline;vertical-align:middle;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                            1 partida de producto
+                        </td>
+                        <td class="time-col"><span class="time-num">6</span> min</td>
+                    </tr>
+                    <tr data-sentence="1">
+                        <td>
+                            <svg class="row-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display:inline;vertical-align:middle;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                            Hasta 5 partidas de producto
+                        </td>
+                        <td class="time-col"><span class="time-num">30</span> min <span class="time-sub">±10 min</span></td>
+                    </tr>
+                    <tr data-sentence="2">
+                        <td>
+                            <svg class="row-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display:inline;vertical-align:middle;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+                            Más de 10 partidas de producto
+                        </td>
+                        <td class="time-col">~<span class="time-num">1</span> hora</td>
+                    </tr>
+                    <tr class="tv-row-highlight" data-sentence="3">
+                        <td>
+                            <svg class="row-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display:inline;vertical-align:middle;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+                            Producto viscoso o en pasta (adicional)
+                        </td>
+                        <td class="time-col">+<span class="time-num">3</span> a <span class="time-num">5</span> min <span class="time-sub-partida">por partida</span></td>
+                    </tr>
+                    <tr data-sentence="4">
+                        <td>
+                            <svg class="row-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display:inline;vertical-align:middle;"><circle cx="12" cy="12" r="9" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v8M8 12h8"/></svg>
+                            Material en presentación de tambo
+                        </td>
+                        <td class="time-col"><span class="time-num">10</span> min <span class="time-sub">(según cantidad)</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Animated Marquee -->
+        <div class="tv-marquee-bar">
+            <div class="tv-marquee-inner">
+                Gracias por su preferencia <span class="marquee-sep"></span>
+                Los tiempos son estimados y pueden variar según la complejidad del pedido <span class="marquee-sep"></span>
+                Productos líquidos requieren proceso de trasvase <span class="marquee-sep"></span>
+                Preparamos su pedido con la calidad y seguridad que usted merece <span class="marquee-sep"></span>
+                Gracias por su preferencia <span class="marquee-sep"></span>
+                Los tiempos son estimados y pueden variar según la complejidad del pedido <span class="marquee-sep"></span>
+                Productos líquidos requieren proceso de trasvase <span class="marquee-sep"></span>
+                Preparamos su pedido con la calidad y seguridad que usted merece <span class="marquee-sep"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Speaking sentence subtitle -->
+<div class="speaking-sentence" id="speakingSentence"></div>
+
+<!-- Progress bar for return -->
+<div class="return-progress-bar" id="progressBar"></div>
+
+<!-- Fallback button and audio elements moved to parent monitor.html for reliable autoplay -->
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const tableBody = document.getElementById('tv-table-body');
+    const rows = tableBody ? tableBody.querySelectorAll('tr') : [];
+    const sentenceEl = document.getElementById('speakingSentence');
+
+    function highlightAllRows() {
+        rows.forEach(r => r.classList.add('speaking-active'));
+    }
+
+    function clearHighlights() {
+        rows.forEach(r => r.classList.remove('speaking-active'));
+    }
+
+    function showSubtitle(text) {
+        if (sentenceEl) {
+            sentenceEl.textContent = text;
+            sentenceEl.classList.add('visible');
+        }
+    }
+    
+    function hideSubtitle() {
+        if (sentenceEl) sentenceEl.classList.remove('visible');
+    }
+
+    // ── Return / progress / failsafe logic ──
+    const WAIT_TIME_AFTER_AUDIO_MS = 5000;
+    let returnTimer = null;
+    let progressBarInterval = null;
+    let failsafeTimer = null;
+
+    function setFailsafe(seconds) {
+        if (failsafeTimer) clearTimeout(failsafeTimer);
+        failsafeTimer = setTimeout(() => {
+            console.warn(`Failsafe triggered after ${seconds} seconds.`);
+            clearHighlights();
+            hideSubtitle();
+            startReturnCountdown(3000);
+        }, seconds * 1000);
+    }
+
+    setFailsafe(120); // Initial 2 minute failsafe
+
+    function startReturnCountdown(duration) {
+        if (failsafeTimer) clearTimeout(failsafeTimer);
+        clearHighlights();
+        hideSubtitle();
+
+        const progressBar = document.getElementById('progressBar');
+        const startTime = Date.now();
+
+        progressBarInterval = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            const percentage = Math.min((elapsed / duration) * 100, 100);
+            progressBar.style.width = percentage + '%';
+            if (percentage >= 100) clearInterval(progressBarInterval);
+        }, 50);
+
+        returnTimer = setTimeout(() => {
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage('announcement_done', '*');
+            } else {
+                window.location.href = "{{ url_for('orders.monitor') }}";
+            }
+        }, duration);
+    }
+
+    // Listen for audio events from parent (monitor.html) to synchronize visuals
+    window.addEventListener('message', (event) => {
+        if (event.data === 'audio_started') {
+            highlightAllRows();
+            showSubtitle("Reproduciendo anuncio...");
+            setFailsafe(120);
+        } else if (event.data === 'audio_ended') {
+            clearHighlights();
+            hideSubtitle();
+            startReturnCountdown(WAIT_TIME_AFTER_AUDIO_MS);
+        } else if (event.data === 'audio_failed') {
+            console.warn("Parent reported audio failure.");
+            // Just return early if parent can't play it
+            startReturnCountdown(5000);
+        }
+    });
+
+    // Parent will immediately try to play when iframe loads and sends 'audio_started'
+});
+</script>
+{% endblock %}
