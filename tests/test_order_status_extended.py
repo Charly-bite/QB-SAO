@@ -114,8 +114,8 @@ class TestLoadDatabase:
     def test_normalize_labels_on_load(self):
         orders = {"300": _sample_order("300", status="Preparando")}
         osm, path = _make_osm(orders=orders)
-        # "Preparando" should be migrated to "Terminado"
-        assert osm.orders["300"]["status"] == "Terminado"
+        # "Preparando" should be migrated to "Entregado"
+        assert osm.orders["300"]["status"] == "Entregado"
         os.unlink(path)
 
     def test_normalize_history_labels(self):
@@ -141,29 +141,34 @@ class TestSaveDatabase:
         os.unlink(path)
 
     def test_save_json_io_error(self):
+        """_save_database() returns False when the directory is not writable."""
+        import tempfile as _tempfile
         osm, path = _make_osm()
-        osm.db_path = "/nonexistent/dir/file.json"
+        # Point db_path at a file used as a directory — mkstemp will always fail
+        osm.db_path = path + "/not-a-dir/file.json"  # path is a file, not a dir
         result = osm._save_database()
         assert result is False
         os.unlink(path)
 
     def test_save_sql_success(self):
+        """_save_database() must use MERGE via exec_driver_sql, not TRUNCATE+executemany."""
         mock_engine = MagicMock()
         mock_conn = MagicMock()
-        mock_raw = MagicMock()
-        mock_cursor = MagicMock()
-        mock_raw.cursor.return_value = mock_cursor
-        mock_conn.connection = mock_raw
-        mock_engine.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
-        mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
+        mock_engine.begin.return_value.__enter__ = MagicMock(return_value=mock_conn)
+        mock_engine.begin.return_value.__exit__ = MagicMock(return_value=False)
 
         osm, path = _make_osm(orders={"500": _sample_order("500")})
         osm.sql_engine = mock_engine
-        osm._save_database()
+        osm._save_database(force=True)
 
-        mock_cursor.execute.assert_called()
-        mock_cursor.executemany.assert_called()
-        mock_raw.commit.assert_called()
+        # MERGE path: exec_driver_sql is called once per record
+        mock_conn.exec_driver_sql.assert_called()
+        # TRUNCATE must NOT have been called
+        truncate_calls = [
+            c for c in mock_conn.exec_driver_sql.call_args_list
+            if "TRUNCATE" in str(c).upper()
+        ]
+        assert truncate_calls == [], "TRUNCATE must not be called — use MERGE instead"
         os.unlink(path)
 
     def test_save_sql_exception(self):
@@ -234,19 +239,31 @@ class TestBulkImportFromSap:
 
 
 class TestReconcileStatuses:
-    def test_cerrado_to_ready(self):
+    def test_cerrado_to_ready_with_factura(self):
+        """Cerrado + factura_number → Facturacion."""
+        order = _sample_order("900", status="Pendiente", sap_status="Cerrado")
+        order["factura_number"] = "F-001"
+        orders = {"900": order}
+        osm, path = _make_osm(orders=orders)
+        fixed = osm.reconcile_statuses()
+        assert len(fixed) == 1
+        assert osm.orders["900"]["status"] == "Facturacion"
+        os.unlink(path)
+
+    def test_cerrado_to_facturacion_without_factura(self):
+        """Cerrado + no factura_number → Entregado (waiting for bill)."""
         orders = {"900": _sample_order("900", status="Pendiente", sap_status="Cerrado")}
         osm, path = _make_osm(orders=orders)
         fixed = osm.reconcile_statuses()
-        assert fixed == 1
-        assert osm.orders["900"]["status"] == "Relacion de envio"
+        assert len(fixed) == 1
+        assert osm.orders["900"]["status"] == "Entregado"
         os.unlink(path)
 
     def test_cancelado_to_cancelled(self):
         orders = {"901": _sample_order("901", status="En Proceso", sap_status="Cancelado")}
         osm, path = _make_osm(orders=orders)
         fixed = osm.reconcile_statuses()
-        assert fixed == 1
+        assert len(fixed) == 1
         assert osm.orders["901"]["status"] == "Cancelado"
         os.unlink(path)
 
@@ -254,14 +271,14 @@ class TestReconcileStatuses:
         orders = {"902": _sample_order("902", status="Cancelado", sap_status="Cancelado")}
         osm, path = _make_osm(orders=orders)
         fixed = osm.reconcile_statuses()
-        assert fixed == 0
+        assert len(fixed) == 0
         os.unlink(path)
 
     def test_cerrado_already_shipped(self):
         orders = {"903": _sample_order("903", status="Enviado al cliente", sap_status="Cerrado")}
         osm, path = _make_osm(orders=orders)
         fixed = osm.reconcile_statuses()
-        assert fixed == 0
+        assert len(fixed) == 0
         os.unlink(path)
 
 

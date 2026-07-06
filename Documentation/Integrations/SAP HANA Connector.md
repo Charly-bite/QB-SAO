@@ -23,3 +23,7 @@ The connector is designed with failure-aware logic:
 - If the connection fails, the application gracefully falls back to "Standalone Mode," where it relies on cached or local data.
 - The `app.py` factory includes checks (`SAP_AVAILABLE`) to prevent application crashes during startup if the HANA driver is missing.
 
+
+
+---
+*Graph Context: Return to [[Home]] (Architecture)*

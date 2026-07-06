@@ -43,3 +43,7 @@ The workflow uploads a zip artifact and unpacks it on the remote host into:
 - ${DEPLOY_PATH}/open-oms
 
 After extraction, add your service restart command in .github/workflows/cd.yml in the "Run remote deploy command" step.
+
+
+---
+*Graph Context: Return to [[Home]] (Architecture)*

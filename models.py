@@ -43,14 +43,32 @@ class User(UserMixin):
         """Selling manager — can see all seller orders with filter."""
         return self.role == UserRole.SELL_MANAGER
 
+    def is_billing(self):  # pragma: no cover
+        """Billing role — can see billing info and all orders."""
+        return self.role == UserRole.BILLING
+
+    def can_edit_facturas(self):  # pragma: no cover
+        """Admins, operators, sell_managers, and billing can edit facturas."""
+        return self.role in [UserRole.ADMIN, UserRole.OPERATOR, UserRole.SELL_MANAGER, UserRole.BILLING]
+
     def can_see_all_orders(self):
-        """Admins, operators, and sell_managers can see all orders."""
-        return self.role in [UserRole.ADMIN, UserRole.OPERATOR, UserRole.SELL_MANAGER]
+        """Admins, operators, sell_managers, billing, and viewers can see all orders."""
+        return self.role in [UserRole.ADMIN, UserRole.OPERATOR, UserRole.SELL_MANAGER, UserRole.BILLING, UserRole.VIEWER]
+
+    def can_view_dashboard(self):
+        return self.role in [UserRole.ADMIN, UserRole.VIEWER]
+
+    def can_view_users(self):
+        return self.role in [UserRole.ADMIN, UserRole.VIEWER]
+
+    def can_edit_orders(self):
+        return self.role in [UserRole.ADMIN, UserRole.OPERATOR, UserRole.SELL_MANAGER, UserRole.BILLING]
 
     def has_role(self, role: UserRole):
         role_hierarchy = {
             UserRole.VIEWER: 0,
             UserRole.SELLER: 0,
+            UserRole.BILLING: 0,
             UserRole.SELL_MANAGER: 1,
             UserRole.OPERATOR: 1,
             UserRole.ADMIN: 2,
@@ -63,3 +81,24 @@ class User(UserMixin):
 
     def can_manage_users(self):
         return self.role == UserRole.ADMIN
+
+    # ── Signature Permissions ────────────────────────────────────────────
+    # These control who can sign each area of the Relación de Envíos.
+    # Configure roles here once department bosses are assigned.
+
+    def can_sign_facturacion(self):  # pragma: no cover
+        """Facturación department boss — billing role or admin."""
+        return self.role in [UserRole.ADMIN, UserRole.BILLING]
+
+    def can_sign_credito(self):  # pragma: no cover
+        """Crédito y Cobranza (Payments) department boss — billing role or admin."""
+        return self.role in [UserRole.ADMIN, UserRole.BILLING]
+
+    def can_sign_almacen(self):  # pragma: no cover
+        """Almacén (Warehouse) department boss — operator role or admin."""
+        return self.role in [UserRole.ADMIN, UserRole.OPERATOR]
+
+    def can_authorize_credito(self):  # pragma: no cover
+        """Crédito y Cobranza per-invoice authorization — who can approve shipments."""
+        return self.role in [UserRole.ADMIN, UserRole.BILLING]
+

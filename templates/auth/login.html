@@ -3,28 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Iniciar Sesión — QB-OMS</title>
+    <title>Iniciar Sesión — QB-SAO</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logo_new.png') }}" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         :root {
-            --navy-900: #0f1b2d;
-            --navy-800: #1a2744;
-            --navy-700: #243556;
-            --navy-600: #2e4370;
-            --navy-500: #3b5998;
-            --accent-blue: #4a7dff;
-            --accent-cyan: #22d3ee;
+            --navy-900: #020617;
+            --navy-800: #0b1329;
+            --navy-700: #0f1b2d;
+            --navy-600: #1a2744;
+            --navy-500: #243556;
+            --accent-blue: #3b82f6;
+            --accent-cyan: #06b6d4;
             --glass-bg: rgba(255, 255, 255, 0.06);
             --glass-border: rgba(255, 255, 255, 0.12);
         }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
             min-height: 100vh;
-            background: var(--navy-900);
+            background: radial-gradient(circle at 50% 50%, #0b1329 0%, #020617 100%);
             display: flex;
             overflow: hidden;
         }
@@ -527,10 +527,10 @@
 
             <div class="hero-content">
                 <img src="{{ url_for('static', filename='images/logo_new.png') }}"
-                     alt="QB-OMS Logo"
+                     alt="QB-SAO Logo"
                      class="hero-logo" />
 
-                <h1 class="hero-title"><span>QB-OMS</span></h1>
+                <h1 class="hero-title"><span>QB-SAO</span></h1>
                 <p class="hero-subtitle">
                     Plataforma integral de gestión y seguimiento de pedidos en tiempo real
                 </p>
@@ -641,7 +641,7 @@
                 </form>
 
                 <p class="form-footer">
-                    QB-OMS &copy; {{ now().year if now is defined else '2026' }} — Química Boga
+                    QB-SAO &copy; {{ now().year if now is defined else '2026' }} — Química Boss
                 </p>
             </div>
         </div>

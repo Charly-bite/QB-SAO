@@ -4,7 +4,7 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="csrf-token" content="{{ csrf_token() }}" />
-        <title>{% block title %}QB-OMS{% endblock %}</title>
+        <title>{% block title %}QB-SAO{% endblock %}</title>
         <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logo_new.png') }}" />
         <link
             rel="stylesheet"
@@ -18,16 +18,70 @@
             defer
             src="{{ url_for('static', filename='js/Sortable.min.js') }}"
         ></script>
+        <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+        <!-- Flatpickr Date Picker (DD/MM/YYYY format) -->
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+        <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+        <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link
-            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+            href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap"
             rel="stylesheet"
         />
+
+        <!-- Prevent Theme FOUC (Flash of Unstyled Content) -->
+        <script>
+            (function() {
+                var theme = localStorage.getItem('theme') || 'light';
+                document.documentElement.setAttribute('data-theme', theme);
+            })();
+        </script>
+        
         <style>
+            :root {
+                --bg-body: radial-gradient(circle at 50% 50%, #0b1329 0%, #020617 100%);
+                --bg-nav: rgba(15, 23, 42, 0.45);
+                --bg-panel: rgba(15, 23, 42, 0.45);
+                --bg-input: rgba(15, 23, 42, 0.6);
+                --bg-hover: rgba(255, 255, 255, 0.05);
+                --bg-active: rgba(59, 130, 246, 0.15);
+                --border-color: rgba(255, 255, 255, 0.08);
+                --border-input: rgba(255, 255, 255, 0.1);
+                --text-primary: #e2e8f0;
+                --text-strong: #ffffff;
+                --text-muted: #94a3b8;
+                --text-link: #3b82f6;
+                --brand-text: #ffffff;
+                --shadow-color: rgba(0, 0, 0, 0.4);
+                --shadow-light: rgba(0, 0, 0, 0.3);
+                --row-hover: rgba(255, 255, 255, 0.03);
+            }
+
+            [data-theme="light"] {
+                --bg-body: radial-gradient(circle at 50% 50%, #f8fafc 0%, #e2e8f0 100%);
+                --bg-nav: rgba(255, 255, 255, 0.7);
+                --bg-panel: rgba(255, 255, 255, 0.65);
+                --bg-input: rgba(255, 255, 255, 0.8);
+                --bg-hover: rgba(0, 0, 0, 0.05);
+                --bg-active: rgba(59, 130, 246, 0.1);
+                --border-color: rgba(0, 0, 0, 0.08);
+                --border-input: rgba(0, 0, 0, 0.1);
+                --text-primary: #334155;
+                --text-strong: #0f172a;
+                --text-muted: #64748b;
+                --text-link: #2563eb;
+                --brand-text: #1e3a8a;
+                --shadow-color: rgba(0, 0, 0, 0.05);
+                --shadow-light: rgba(0, 0, 0, 0.1);
+                --row-hover: rgba(0, 0, 0, 0.03);
+            }
+
             body {
-                font-family: "Inter", sans-serif;
+                font-family: "Outfit", sans-serif;
                 -webkit-font-smoothing: antialiased;
+                background: var(--bg-body) !important;
+                color: var(--text-primary) !important;
             }
             [x-cloak] {
                 display: none !important;
@@ -35,190 +89,295 @@
 
             /* ── QB Navy Navigation ── */
             .qb-nav {
-                background: linear-gradient(135deg, #0f1b2d 0%, #1a2744 100%);
-                border-bottom: 1px solid rgba(255,255,255,0.06);
+                background: var(--bg-nav);
+                backdrop-filter: blur(12px);
+                -webkit-backdrop-filter: blur(12px);
+                border-bottom: 1px solid var(--border-color);
                 position: relative;
+                z-index: 9999;
             }
             .qb-nav::before {
                 content: '';
                 position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
+                top: 0; left: 0; right: 0;
                 height: 3px;
-                background: linear-gradient(90deg, #4a7dff, #22d3ee, #6366f1);
+                background: linear-gradient(90deg, #3b82f6, #06b6d4, #6366f1);
             }
 
             .qb-nav-link {
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                padding: 8px 14px;
-                border-radius: 10px;
-                font-size: 13px;
-                font-weight: 500;
-                color: rgba(148, 163, 184, 0.9);
+                display: flex; align-items: center; gap: 6px;
+                padding: 8px 14px; border-radius: 10px;
+                font-size: 13px; font-weight: 500;
+                color: var(--text-muted);
                 transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
                 text-decoration: none;
             }
             .qb-nav-link:hover {
-                background: rgba(255,255,255,0.08);
-                color: #e2e8f0;
+                background: var(--bg-hover);
+                color: var(--text-strong);
             }
             .qb-nav-link.active {
-                background: rgba(74, 125, 255, 0.15);
-                color: #4a7dff;
-                box-shadow: 0 0 12px rgba(74, 125, 255, 0.08);
+                background: var(--bg-active);
+                color: var(--text-link);
+                box-shadow: 0 0 12px var(--bg-active);
             }
             .qb-nav-link.active-emerald {
-                background: rgba(16, 185, 129, 0.12);
-                color: #34d399;
+                background: rgba(16, 185, 129, 0.15);
+                color: #10b981;
+                box-shadow: 0 0 12px rgba(16, 185, 129, 0.15);
             }
             .qb-nav-link.active-amber {
-                background: rgba(245, 158, 11, 0.12);
-                color: #fbbf24;
+                background: rgba(245, 158, 11, 0.15);
+                color: #d97706;
+                box-shadow: 0 0 12px rgba(245, 158, 11, 0.15);
             }
             .qb-nav-link.active-violet {
                 background: rgba(99, 102, 241, 0.15);
-                color: #818cf8;
+                color: #6366f1;
+                box-shadow: 0 0 12px rgba(99, 102, 241, 0.15);
             }
 
-            /* User menu */
             .qb-user-btn {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                padding: 6px 12px;
-                border-radius: 10px;
-                font-size: 13px;
-                font-weight: 500;
-                color: #94a3b8;
-                background: transparent;
-                border: none;
-                cursor: pointer;
-                transition: all 0.2s;
+                display: flex; align-items: center; gap: 8px;
+                padding: 6px 12px; border-radius: 10px;
+                font-size: 13px; font-weight: 500;
+                color: var(--text-muted);
+                background: transparent; border: none;
+                cursor: pointer; transition: all 0.2s;
             }
             .qb-user-btn:hover {
-                background: rgba(255,255,255,0.06);
-                color: #e2e8f0;
+                background: var(--bg-hover);
+                color: var(--text-strong);
             }
             .qb-avatar {
-                width: 32px;
-                height: 32px;
-                border-radius: 50%;
-                background: linear-gradient(135deg, #4a7dff, #6366f1);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                color: #fff;
-                font-size: 11px;
-                font-weight: 700;
-                flex-shrink: 0;
+                width: 32px; height: 32px; border-radius: 50%;
+                background: linear-gradient(135deg, #3b82f6, #6366f1);
+                display: flex; align-items: center; justify-content: center;
+                color: #fff; font-size: 11px; font-weight: 700; flex-shrink: 0;
             }
 
             .qb-dropdown {
-                position: absolute;
-                right: 0;
-                margin-top: 8px;
-                width: 200px;
-                background: #1a2744;
-                border: 1px solid rgba(255,255,255,0.1);
+                position: absolute; right: 0; margin-top: 8px; width: 200px;
+                background: var(--bg-panel);
+                backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+                border: 1px solid var(--border-color);
                 border-radius: 12px;
-                box-shadow: 0 16px 48px rgba(0,0,0,0.4);
-                padding: 4px;
-                z-index: 50;
+                box-shadow: 0 16px 48px var(--shadow-color);
+                padding: 4px; z-index: 99999;
             }
             .qb-dropdown-header {
-                padding: 12px;
-                border-bottom: 1px solid rgba(255,255,255,0.06);
+                padding: 12px; border-bottom: 1px solid var(--border-color);
             }
-            .qb-dropdown-header p:first-child {
-                font-size: 13px;
-                font-weight: 600;
-                color: #e2e8f0;
-            }
-            .qb-dropdown-header p:last-child {
-                font-size: 11px;
-                color: #64748b;
-                margin-top: 2px;
-            }
+            .qb-dropdown-header p:first-child { font-size: 13px; font-weight: 600; color: var(--text-strong); }
+            .qb-dropdown-header p:last-child { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
             .qb-dropdown a {
-                display: block;
-                padding: 10px 12px;
-                font-size: 13px;
-                color: #94a3b8;
-                border-radius: 8px;
-                text-decoration: none;
-                transition: all 0.15s;
+                display: block; padding: 10px 12px; font-size: 13px;
+                color: var(--text-muted); border-radius: 8px; text-decoration: none; transition: all 0.15s;
             }
-            .qb-dropdown a:hover {
-                background: rgba(255,255,255,0.06);
-                color: #e2e8f0;
-            }
-            .qb-dropdown a.danger {
-                color: #f87171;
-            }
-            .qb-dropdown a.danger:hover {
-                background: rgba(248, 113, 113, 0.1);
-            }
+            .qb-dropdown a:hover { background: var(--bg-hover); color: var(--text-strong); }
+            .qb-dropdown a.danger { color: #ef4444; }
+            .qb-dropdown a.danger:hover { background: rgba(239, 68, 68, 0.1); }
 
-            /* Flash messages */
             .qb-flash {
-                padding: 12px 16px;
-                border-radius: 12px;
-                font-size: 13px;
-                font-weight: 500;
-                margin-bottom: 8px;
-                display: flex;
-                align-items: center;
-                gap: 8px;
+                padding: 12px 16px; border-radius: 12px; font-size: 13px; font-weight: 500;
+                margin-bottom: 8px; display: flex; align-items: center; gap: 8px;
                 animation: flashSlide 0.3s ease-out;
             }
-            @keyframes flashSlide {
-                from { opacity: 0; transform: translateY(-6px); }
-                to { opacity: 1; transform: translateY(0); }
-            }
+            @keyframes flashSlide { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
 
-            /* Page title */
             .qb-page-title {
-                font-size: 1.5rem;
-                font-weight: 800;
-                color: #0f1b2d;
-                letter-spacing: -0.02em;
-                margin-bottom: 1.5rem;
+                font-size: 1.5rem; font-weight: 800; color: var(--text-strong) !important;
+                letter-spacing: -0.02em; margin-bottom: 1.5rem;
             }
 
-            /* ── Breadcrumbs ── */
             .qb-breadcrumbs {
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                font-size: 13px;
-                font-weight: 500;
-                margin-bottom: 20px;
-                flex-wrap: wrap;
+                display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500;
+                margin-bottom: 20px; flex-wrap: wrap;
             }
-            .qb-breadcrumbs a {
-                color: #94a3b8;
-                text-decoration: none;
-                transition: color 0.15s;
+            .qb-breadcrumbs a { color: var(--text-muted); text-decoration: none; transition: color 0.15s; }
+            .qb-breadcrumbs a:hover { color: var(--text-link); }
+            .qb-breadcrumbs .bc-sep { color: var(--border-color); font-size: 10px; user-select: none; }
+            .qb-breadcrumbs .bc-current { color: var(--text-strong); font-weight: 700; }
+
+            .qb-toast-container {
+                position: fixed; top: 16px; right: 16px; z-index: 9999;
+                display: flex; flex-direction: column; gap: 10px; pointer-events: none; max-width: 420px;
             }
-            .qb-breadcrumbs a:hover {
-                color: #4a7dff;
+            .qb-toast {
+                pointer-events: auto;
+                background: var(--bg-panel) !important;
+                backdrop-filter: blur(12px) !important; -webkit-backdrop-filter: blur(12px) !important;
+                border: 1px solid var(--border-color) !important;
+                border-left: 4px solid #3b82f6 !important;
+                border-radius: 12px; padding: 14px 18px;
+                box-shadow: 0 8px 32px var(--shadow-color), 0 2px 8px var(--shadow-light);
+                display: flex; align-items: flex-start; gap: 12px;
+                animation: qb-toast-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+                cursor: pointer; transition: opacity 0.3s, transform 0.3s;
             }
-            .qb-breadcrumbs .bc-sep {
-                color: #cbd5e1;
-                font-size: 10px;
-                user-select: none;
+            .qb-toast.qb-toast-out { animation: qb-toast-out 0.3s ease-in forwards; }
+            .qb-toast-icon {
+                width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center;
+                justify-content: center; flex-shrink: 0; font-size: 18px; background: rgba(59, 130, 246, 0.15);
             }
-            .qb-breadcrumbs .bc-current {
-                color: #1e293b;
-                font-weight: 700;
+            .qb-toast-body { flex: 1; min-width: 0; }
+            .qb-toast-title { font-size: 13px; font-weight: 700; color: var(--text-strong) !important; margin-bottom: 2px; }
+            .qb-toast-msg { font-size: 12px; color: var(--text-primary) !important; line-height: 1.4; }
+            .qb-toast-time { font-size: 10px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; margin-top: 4px; }
+
+            /* Global Loading Overlay */
+            .qb-loading-overlay {
+                position: fixed; inset: 0; z-index: 99999;
+                background: rgba(15, 23, 42, 0.6);
+                backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+                display: flex; flex-direction: column; align-items: center; justify-content: center;
+                opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
             }
+            .qb-loading-overlay.active { opacity: 1; pointer-events: auto; }
+            [data-theme="light"] .qb-loading-overlay { background: rgba(255, 255, 255, 0.6); }
+
+            .qb-spinner {
+                width: 48px; height: 48px;
+                border: 4px solid rgba(59, 130, 246, 0.2);
+                border-top-color: #3b82f6;
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+            }
+            @keyframes spin { to { transform: rotate(360deg); } }
+            .qb-loading-text {
+                margin-top: 16px; font-weight: 600; font-size: 14px;
+                color: #ffffff; letter-spacing: 0.05em; text-transform: uppercase;
+            }
+            [data-theme="light"] .qb-loading-text { color: #0f172a; }
+
+            /* Global Glassmorphic Card & Container Overrides */
+            .bg-white, .kpi-card, .search-input, .filter-date-input, .filter-select-sm, .filter-clear-btn, .qb-table-wrap, .refresh-badge {
+                background: var(--bg-panel) !important;
+                backdrop-filter: blur(12px) !important; -webkit-backdrop-filter: blur(12px) !important;
+                border: 1px solid var(--border-color) !important;
+                color: var(--text-primary) !important;
+            }
+            .kpi-card:hover {
+                transform: translateY(-2px) !important;
+                box-shadow: 0 8px 24px var(--shadow-color) !important;
+                background: var(--bg-hover) !important;
+                border-color: var(--border-input) !important;
+            }
+            .kpi-card.is-active {
+                border-color: #3b82f6 !important;
+                box-shadow: 0 0 15px rgba(59, 130, 246, 0.3) !important;
+            }
+
+            .search-input, .filter-date-input, .filter-select-sm, .filter-clear-btn {
+                background: var(--bg-input) !important;
+                color: var(--text-strong) !important;
+                border-color: var(--border-input) !important;
+                outline: none !important; box-shadow: none !important;
+            }
+            .search-input:focus, .filter-date-input:focus, .filter-select-sm:focus {
+                border-color: #3b82f6 !important;
+                box-shadow: 0 0 10px rgba(59, 130, 246, 0.25) !important;
+                background: var(--bg-panel) !important;
+            }
+            .search-input::placeholder { color: var(--text-muted) !important; }
+
+            .qb-table-wrap { box-shadow: 0 10px 30px var(--shadow-color) !important; }
+            .qb-table thead { background: var(--bg-input) !important; }
+            .qb-table thead th { color: var(--text-muted) !important; }
+            .qb-table tbody tr { border-bottom: 1px solid var(--border-color) !important; }
+            .qb-table tbody tr:hover { background: var(--row-hover) !important; }
+            .qb-table td { color: var(--text-primary) !important; }
+            .qb-order-link { color: var(--text-link) !important; font-weight: 600; }
+            .qb-order-link:hover { color: #60a5fa !important; }
+            .qb-customer-name { color: var(--text-strong) !important; }
+
+            .qb-page-btn {
+                background: var(--bg-input) !important;
+                border-color: var(--border-color) !important;
+                color: var(--text-primary) !important;
+            }
+            .qb-page-btn:hover:not(:disabled):not(.qb-page-active) {
+                background: var(--bg-hover) !important;
+                color: var(--text-strong) !important;
+            }
+            .qb-page-active {
+                background: linear-gradient(135deg, #3b82f6, #6366f1) !important;
+                border-color: #3b82f6 !important; color: #ffffff !important;
+                box-shadow: 0 0 15px rgba(59, 130, 246, 0.4) !important;
+            }
+
+            .bg-slate-100 { background-color: var(--bg-hover) !important; }
+            .focus-within\:bg-white:focus-within { background-color: var(--bg-input) !important; }
+            .text-slate-700 { color: var(--text-primary) !important; }
+            .text-slate-400 { color: var(--text-muted) !important; }
+            .bg-white.rounded-xl.shadow-lg {
+                background: var(--bg-panel) !important;
+                border-color: var(--border-input) !important;
+                backdrop-filter: blur(16px) !important;
+                box-shadow: 0 20px 40px var(--shadow-color) !important;
+            }
+            .hover\:bg-slate-50:hover { background-color: var(--bg-hover) !important; }
+            .text-slate-800 { color: var(--text-strong) !important; }
+            .border-slate-200 { border-color: var(--border-color) !important; }
+            .border-slate-50 { border-color: var(--border-color) !important; }
+
+            .badge-pendiente { background: rgba(148, 163, 184, 0.15) !important; color: #64748b !important; border: 1px solid rgba(148, 163, 184, 0.2) !important; }
+            [data-theme="dark"] .badge-pendiente { color: #94a3b8 !important; }
+            .badge-proceso { background: rgba(59, 130, 246, 0.15) !important; color: #2563eb !important; border: 1px solid rgba(59, 130, 246, 0.2) !important; }
+            [data-theme="dark"] .badge-proceso { color: #60a5fa !important; }
+            .badge-terminado { background: rgba(245, 158, 11, 0.15) !important; color: #d97706 !important; border: 1px solid rgba(245, 158, 11, 0.2) !important; }
+            [data-theme="dark"] .badge-terminado { color: #fbbf24 !important; }
+            .badge-facturado { background: rgba(16, 185, 129, 0.15) !important; color: #059669 !important; border: 1px solid rgba(16, 185, 129, 0.2) !important; }
+            [data-theme="dark"] .badge-facturado { color: #34d399 !important; }
+            .badge-relacion { background: rgba(6, 182, 212, 0.15) !important; color: #0891b2 !important; border: 1px solid rgba(6, 182, 212, 0.2) !important; }
+            [data-theme="dark"] .badge-relacion { color: #22d3ee !important; }
+            .badge-enviado { background: rgba(99, 102, 241, 0.15) !important; color: #4f46e5 !important; border: 1px solid rgba(99, 102, 241, 0.2) !important; }
+            [data-theme="dark"] .badge-enviado { color: #818cf8 !important; }
+            .badge-cancelado { background: rgba(239, 68, 68, 0.15) !important; color: #dc2626 !important; border: 1px solid rgba(239, 68, 68, 0.2) !important; }
+            [data-theme="dark"] .badge-cancelado { color: #f87171 !important; }
+            .badge-espera { background: rgba(234, 179, 8, 0.15) !important; color: #ca8a04 !important; border: 1px solid rgba(234, 179, 8, 0.2) !important; }
+            [data-theme="dark"] .badge-espera { color: #facc15 !important; }
+
+            @keyframes qb-toast-in { from { opacity: 0; transform: translateX(60px) scale(0.95); } to { opacity: 1; transform: translateX(0) scale(1); } }
+            @keyframes qb-toast-out { from { opacity: 1; transform: translateX(0) scale(1); } to { opacity: 0; transform: translateX(60px) scale(0.9); } }
+
+            body, input, select, textarea, button, .search-input, .filter-date-input, .filter-select-sm, .filter-clear-btn, .qb-breadcrumbs, .qb-nav, .qb-page-title, .qb-table, .kpi-card, .qb-user-btn, .qb-dropdown, .qb-toast, .qb-visor-panel, .qb-visor-table, .qb-visor-cust, .qb-progress-status, .filter-vendor-select {
+                font-family: "Outfit", sans-serif !important;
+            }
+
+            .qb-visor-panel {
+                background: var(--bg-panel) !important;
+                backdrop-filter: blur(12px) !important; -webkit-backdrop-filter: blur(12px) !important;
+                border: 1px solid var(--border-color) !important;
+                box-shadow: 0 10px 30px var(--shadow-color) !important;
+                color: var(--text-primary) !important;
+            }
+            .qb-visor-table thead { background: var(--bg-input) !important; }
+            .qb-visor-table thead th { color: var(--text-muted) !important; }
+            .qb-visor-table tbody tr { border-bottom: 1px solid var(--border-color) !important; }
+            .qb-visor-table tbody tr:hover { background: var(--row-hover) !important; }
+            .qb-visor-table td { color: var(--text-primary) !important; }
+            .qb-visor-cust { color: var(--text-strong) !important; }
+            .qb-visor-oid { color: var(--text-link) !important; }
+            .filter-vendor-select {
+                background: var(--bg-input) !important;
+                color: var(--text-strong) !important;
+                border-color: var(--border-input) !important;
+                outline: none !important;
+            }
+            .filter-vendor-select:focus {
+                border-color: #3b82f6 !important;
+                box-shadow: 0 0 10px rgba(59, 130, 246, 0.25) !important;
+            }
+
+            .text-slate-900, .text-gray-900, .text-slate-800, .text-gray-800 { color: var(--text-strong) !important; }
+            .text-slate-700, .text-gray-700, .text-slate-600, .text-gray-600 { color: var(--text-primary) !important; }
+            .text-slate-500, .text-gray-500, .text-slate-400, .text-gray-400 { color: var(--text-muted) !important; }
         </style>
+
         {% block extra_head %}{% endblock %}
     </head>
-    <body class="bg-[#f0f2f5] min-h-screen">
+    <body class="min-h-screen font-sans transition-colors duration-300" style="background: var(--bg-body) !important; color: var(--text-primary);" x-data="globalNotifications()" :data-theme="theme">
         <!-- Navigation -->
         <nav class="qb-nav">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -230,11 +389,12 @@
                             class="flex items-center gap-2.5"
                         >
                             <img src="{{ url_for('static', filename='images/logo_new.png') }}" alt="Logo" style="height: 34px; width: auto;" />
-                            <span style="font-size: 17px; font-weight: 800; color: #ffffff; letter-spacing: -0.02em;">QB-OMS</span>
+                            <span style="font-size: 17px; font-weight: 800; color: var(--brand-text); letter-spacing: -0.02em;">QB-SAO</span>
                         </a>
 
                         {% if current_user.is_authenticated %}
                         <div class="flex items-center gap-1 flex-wrap">
+                            {% if current_user.username.lower() != 'mostrador' %}
                             <a
                                 href="{{ url_for('orders.index') }}"
                                 class="qb-nav-link {% if request.endpoint == 'orders.index' or request.endpoint == 'orders.detail' %}active{% endif %}"
@@ -245,16 +405,7 @@
                                 </svg>
                                 Pedidos
                             </a>
-                            <a
-                                href="{{ url_for('orders.visor') }}"
-                                class="qb-nav-link {% if request.endpoint == 'orders.visor' %}active-emerald{% endif %}"
-                            >
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                </svg>
-                                Visor
-                            </a>
+
                             <a
                                 href="{{ url_for('orders.facturas') }}"
                                 class="qb-nav-link {% if request.endpoint == 'orders.facturas' %}active-amber{% endif %}"
@@ -265,6 +416,7 @@
                                 </svg>
                                 Facturas
                             </a>
+                            {% endif %}
                             <a
                                 href="{{ url_for('orders.monitor') }}"
                                 class="qb-nav-link {% if request.endpoint == 'orders.monitor' %}active-violet{% endif %}"
@@ -275,13 +427,86 @@
                                 </svg>
                                 Monitor
                             </a>
+                            {% if current_user.username.lower() != 'mostrador' %}
+                            {% if current_user.can_view_dashboard() %}
+                            <a
+                                href="{{ url_for('orders.dashboard') }}"
+                                class="qb-nav-link {% if request.endpoint == 'orders.dashboard' %}active-amber{% endif %}"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                                </svg>
+                                Dashboard
+                            </a>
+                            {% endif %}
+                            {% if current_user.can_view_users() %}
+                            <a
+                                href="{{ url_for('users.index') }}"
+                                class="qb-nav-link {% if request.endpoint and request.endpoint.startswith('users.') %}active{% endif %}"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                                </svg>
+                                Usuarios
+                            </a>
+                            <a
+                                href="{{ url_for('orders.render_auditoria') }}"
+                                class="qb-nav-link {% if request.endpoint == 'orders.render_auditoria' %}active-amber{% endif %}"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                Auditoría
+                            </a>
+                            {% endif %}
+                            {% endif %}
                         </div>
                         {% endif %}
                     </div>
 
-                    <!-- Right: User menu -->
+                    <!-- Right: User menu & Search -->
                     <div class="flex items-center gap-4">
                         {% if current_user.is_authenticated %}
+                        
+                        {% if current_user.username.lower() != 'mostrador' %}
+                        <!-- Omnibox Search -->
+                        <div class="relative hidden sm:block" x-data="omniboxSearch()" @click.away="close()">
+                            <div class="flex items-center bg-slate-100 rounded-lg px-3 py-1.5 focus-within:ring-2 focus-within:ring-[#4a7dff] focus-within:bg-white transition-colors w-64 border border-transparent focus-within:border-[#4a7dff]/20">
+                                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                <input type="text" x-model="query" @input.debounce.300ms="search()" @focus="if(query.length >= 2) isOpen = true" placeholder="Buscar pedido, cliente..." class="bg-transparent border-none focus:ring-0 text-sm ml-2 w-full text-slate-700 placeholder-slate-400 outline-none p-0">
+                            </div>
+                            
+                            <div x-show="isOpen" style="display: none;" class="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg border border-slate-200 z-50 overflow-hidden" x-transition>
+                                <div x-show="loading" class="p-4 text-center text-sm text-slate-500">Buscando...</div>
+                                <div x-show="!loading && results.length === 0" class="p-4 text-center text-sm text-slate-500">No se encontraron resultados</div>
+                                <div x-show="!loading && results.length > 0" class="max-h-96 overflow-y-auto py-2">
+                                    <template x-for="res in results" :key="res.id">
+                                        <a :href="res.url" class="block px-4 py-3 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0">
+                                            <div class="flex justify-between items-start">
+                                                <div>
+                                                    <p class="text-sm font-bold text-slate-800" x-text="res.title"></p>
+                                                    <p class="text-xs text-slate-500 mt-0.5 truncate max-w-[180px]" x-text="res.customer"></p>
+                                                    <p class="text-[10px] text-slate-400 mt-0.5" x-show="res.factura" x-text="'Factura: ' + res.factura"></p>
+                                                </div>
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700" x-text="res.status"></span>
+                                            </div>
+                                        </a>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        
+                        <!-- Theme Toggle -->
+                        <button @click="toggleTheme()" class="qb-user-btn" style="padding: 6px; border-radius: 50%;" title="Toggle Light/Dark Theme">
+                            <svg x-show="theme === 'dark'" class="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                            <svg x-show="theme === 'light'" x-cloak class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                        </button>
+
                         <div class="flex items-center" x-data="{ open: false }">
                             <div class="relative">
                                 <button
@@ -312,6 +537,10 @@
                                         <p>{{ current_user.full_name or current_user.username }}</p>
                                         <p>{{ current_user.role.value }}</p>
                                     </div>
+                                    <a href="{{ url_for('orders.changelog') }}" class="flex items-center gap-2">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                                        Novedades
+                                    </a>
                                     <a href="{{ url_for('auth.change_password') }}">Cambiar Contraseña</a>
                                     <a href="{{ url_for('auth.logout') }}" class="danger">Cerrar Sesión</a>
                                 </div>
@@ -336,6 +565,24 @@
             {% endfor %}
         </div>
         {% endif %} {% endwith %}
+
+        <!-- System Alerts -->
+        <div x-cloak x-show="!sapOnline || !sgaOnline" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+            <div class="bg-red-50 text-red-700 border border-red-200 rounded-xl p-4 flex items-center gap-3 shadow-sm qb-flash mb-0">
+                <svg class="w-6 h-6 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                <div>
+                    <p class="font-bold">Advertencia del Sistema</p>
+                    <p class="text-sm">
+                        <template x-if="!sapOnline">
+                            <span class="block">El sistema SAP no está disponible en este momento.</span>
+                        </template>
+                        <template x-if="!sgaOnline">
+                            <span class="block">El sistema SGA no está disponible o no responde.</span>
+                        </template>
+                    </p>
+                </div>
+            </div>
+        </div>
 
         <!-- Page Content -->
         <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -366,6 +613,233 @@
                     return _origFetch.call(this, input, init);
                 };
             })();
+        </script>
+        
+        {% if current_user.is_authenticated and current_user.username|lower == 'mostrador' %}
+        <!-- Global keyboard shortcuts (e.g. CTRL+C to sign out) -->
+        <script>
+            (function() {
+                window.addEventListener('keydown', function(e) {
+                    if (e.altKey && e.key.toLowerCase() === 'c') {
+                        // Avoid triggering if copying text in an input or textarea
+                        const activeEl = document.activeElement;
+                        const isInput = activeEl && (
+                            activeEl.tagName === 'INPUT' || 
+                            activeEl.tagName === 'TEXTAREA' || 
+                            activeEl.isContentEditable
+                        );
+                        if (!isInput) {
+                            e.preventDefault();
+                            console.log("🔒 Sign out triggered via Ctrl+C shortcut.");
+                            window.location.href = "{{ url_for('auth.logout') }}";
+                        }
+                    }
+                });
+            })();
+        </script>
+        {% endif %}
+        
+        <!-- Global Notifications App -->
+        <div class="qb-toast-container" id="qbGlobalToastContainer">        </div>
+
+        <!-- Global Loading Overlay -->
+        <div class="qb-loading-overlay" :class="{ 'active': isLoading }">
+            <div class="qb-spinner"></div>
+            <div class="qb-loading-text" x-text="loadingMessage">CARGANDO...</div>
+        </div>
+
+        <script>
+        function globalNotifications() {
+            return {
+                isLoading: false,
+                loadingMessage: 'CARGANDO...',
+                _audioCtx: null,
+                _soundEnabled: true,
+                isMostrador: {{ 'true' if current_user.is_authenticated and current_user.username|lower == 'mostrador' else 'false' }},
+                isTiemposTv: {{ 'true' if request.endpoint in ['orders.tiempos_tv', 'orders.tiempos_tv_test'] or 'tiempos-tv' in request.path else 'false' }},
+                sapOnline: {{ 'true' if sap_available else 'false' }},
+                sgaOnline: {{ 'true' if sga_available else 'false' }},
+                theme: localStorage.getItem('theme') || 'light',
+                toggleTheme() {
+                    this.theme = this.theme === 'dark' ? 'light' : 'dark';
+                    localStorage.setItem('theme', this.theme);
+                },
+                
+                init() {
+                    if (this.isTiemposTv) {
+                        console.log("📺 On waiting times TV screen: disabling global SSE notifications and sound.");
+                        return;
+                    }
+                    this.setupGlobalSSE();
+                    setInterval(() => this.checkSystemsHealth(), 30000);
+
+                    // Show loading overlay on form submissions
+                    window.addEventListener('submit', (e) => {
+                        this.isLoading = true;
+                        this.loadingMessage = 'GUARDANDO...';
+                    });
+                    
+                    // Listen for custom loading events
+                    window.addEventListener('start-loading', (e) => {
+                        this.isLoading = true;
+                        this.loadingMessage = e.detail || 'CARGANDO...';
+                    });
+                    window.addEventListener('stop-loading', () => {
+                        this.isLoading = false;
+                    });
+                },
+                
+                async checkSystemsHealth() {
+                    try {
+                        const res = await fetch('/health');
+                        if (res.ok) {
+                            const data = await res.json();
+                            this.sapOnline = data.sap_available;
+                            this.sgaOnline = data.sga_available;
+                        }
+                    } catch (e) {
+                        console.error("Health check failed", e);
+                    }
+                },
+                
+                setupGlobalSSE() {
+                    const eventSource = new EventSource('/orders/stream_web');
+                    eventSource.onmessage = (e) => {
+                        const data = JSON.parse(e.data);
+                        
+                        // Emit raw SSE data so child pages don't need their own SSE connection
+                        window.dispatchEvent(new CustomEvent('sse-message', { detail: data }));
+                        
+                        if (data.type === 'sync_completed') {
+                            // Tell current page to refresh its data
+                            window.dispatchEvent(new CustomEvent('refresh-data'));
+                        }
+                        else if (data.type === 'status_changed') {
+                            // Tell current page to refresh
+                            window.dispatchEvent(new CustomEvent('refresh-data'));
+                            // Play sound and show toast
+                            this._playNotificationSound();
+                            this._showStatusToast(data);
+                        }
+                    };
+                    eventSource.onerror = () => {
+                        console.error("Global SSE Connection lost. Reconnecting in 5s...");
+                        eventSource.close();
+                        setTimeout(() => this.setupGlobalSSE(), 5000);
+                    };
+                },
+                
+                _playNotificationSound() {
+                    // Nokia notification sound disabled globally by user request
+                    return;
+                },
+                
+                _showStatusToast(change) {
+                    const container = document.getElementById('qbGlobalToastContainer');
+                    if (!container) return;
+
+                    const iconMap = {
+                        'Pendiente': '📋',
+                        'En Proceso': '⚙️',
+                        'Entregado': '✅',
+                        'Preparando': '📦',
+                        'Facturacion': '🧾',
+                        'Relacion de envio': '🚚',
+                        'Recibido por almacen': '📥',
+                        'Enviado al cliente': '✈️',
+                        'Cancelado': '❌',
+                        'En Espera': '⏸️',
+                    };
+
+                    const toast = document.createElement('div');
+                    toast.className = 'qb-toast';
+                    toast.innerHTML = `
+                        <div class="qb-toast-icon">${iconMap[change.to] || '🔔'}</div>
+                        <div class="qb-toast-body">
+                            <div class="qb-toast-title">Pedido #${change.order_id}</div>
+                            <div class="qb-toast-msg">${change.from} → <strong>${change.to}</strong></div>
+                            <div class="qb-toast-msg" style="margin-top:2px;color:#94a3b8;">${change.customer}</div>
+                            <div class="qb-toast-time">${new Date().toLocaleTimeString('es-MX')}</div>
+                        </div>
+                    `;
+                    toast.addEventListener('click', () => {
+                        window.location.href = `/orders/${change.order_id}`;
+                    });
+                    container.appendChild(toast);
+
+                    setTimeout(() => {
+                        toast.classList.add('qb-toast-out');
+                        setTimeout(() => toast.remove(), 300);
+                    }, 8000);
+                }
+            }
+        }
+        
+        function omniboxSearch() {
+            return {
+                query: '',
+                results: [],
+                isOpen: false,
+                loading: false,
+                
+                async search() {
+                    if (this.query.trim().length < 2) {
+                        this.results = [];
+                        this.isOpen = false;
+                        return;
+                    }
+                    this.loading = true;
+                    this.isOpen = true;
+                    try {
+                        const res = await fetch(`/orders/api/search?q=${encodeURIComponent(this.query.trim())}`);
+                        if (res.ok) {
+                            const data = await res.json();
+                            this.results = data.results;
+                        }
+                    } catch (e) {
+                        console.error("Omnibox search failed:", e);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                close() {
+                    this.isOpen = false;
+                }
+            }
+        }
+
+        /* ── Global Flatpickr initialization for DD/MM/YYYY date display ── */
+        // Wait for Alpine.js to finish rendering so x-model values are set
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                document.querySelectorAll('input[type="date"]').forEach(function(el) {
+                    _initFlatpickr(el);
+                });
+            }, 100);
+        });
+
+        function _initFlatpickr(el) {
+            if (el._flatpickr) return; // Already initialized
+
+            const currentValue = el.value; // YYYY-MM-DD from Alpine x-model
+
+            // Do NOT change el.type here. Flatpickr will hide the original input
+            // and create a new visible text input for altInput.
+            
+            const fp = flatpickr(el, {
+                altInput: true,
+                altFormat: 'd/m/Y',
+                dateFormat: 'Y-m-d', // The real value format for Alpine/Backend
+                locale: 'es',
+                allowInput: true,
+                defaultDate: currentValue || null,
+                onChange: function(selectedDates, dateStr, instance) {
+                    // Trigger Alpine.js updates
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+        }
         </script>
     </body>
 </html>

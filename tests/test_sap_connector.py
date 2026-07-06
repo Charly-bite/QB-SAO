@@ -15,8 +15,13 @@ import pytest
 # ---------------------------------------------------------------------------
 
 def _make_connector(**kwargs):
-    """Create a SAPHanaConnector with mocked hdbcli."""
+    """Create a SAPHanaConnector with mocked hdbcli.
+    Provides test credentials by default so connect() works on CI where
+    no .env file is present.
+    """
     from core.sap_connector import SAPHanaConnector
+    kwargs.setdefault("username", "test_user")
+    kwargs.setdefault("password", "test_pass")
     return SAPHanaConnector(**kwargs)
 
 
@@ -27,11 +32,13 @@ def _make_connector(**kwargs):
 
 class TestSAPHanaConnectorInit:
     def test_defaults(self):
-        c = _make_connector()
-        assert c.host == "20.0.1.9"
-        assert c.port == 30015
-        assert c.schema == "SBO_QUIMICABOSS"
-        assert c.username == "SYSTEM"
+        """Verify the constructor reads defaults from class-level DEFAULT_* attributes."""
+        from core.sap_connector import SAPHanaConnector
+        c = SAPHanaConnector()  # raw constructor — no test defaults
+        assert c.host == SAPHanaConnector.DEFAULT_HOST
+        assert c.port == SAPHanaConnector.DEFAULT_PORT
+        assert c.schema == SAPHanaConnector.DEFAULT_SCHEMA
+        assert c.username == SAPHanaConnector.DEFAULT_USER
 
     def test_custom_params(self):
         c = _make_connector(host="10.0.0.1", port=30013, username="u", password="p", schema="S")
@@ -205,21 +212,38 @@ class TestGetRecentOrders:
     def test_get_recent_orders(self, mock_dbapi):
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
-        mock_cursor.fetchall.return_value = [(100, 1), (101, 2)]
+
+        # The batch implementation calls execute 3 times:
+        # 1. Header query → returns full header rows (13 columns)
+        # 2. Invoice query → returns (BaseEntry, DocNum) pairs
+        # 3. Items query → returns line item rows (13 columns)
+        header_rows = [
+            # order_number, customer_code, customer_name, order_date, order_time,
+            # delivery_date, total, currency, doc_entry, doc_status, canceled, printed, creator_name
+            (100, "C001", "Customer A", "2026-01-01", 1430, "2026-01-10", 5000.0, "MXN", 1, "O", "N", "Y", "John"),
+            (101, "C002", "Customer B", "2026-01-02", 0, "2026-01-11", 3000.0, "MXN", 2, "C", "N", "N", None),
+        ]
+        invoice_rows = [(1, 5001)]  # doc_entry=1 has invoice 5001
+        delivery_rows = [(1, 6001)]  # doc_entry=1 has delivery 6001
+        item_rows = [
+            # doc_entry, line, item_code, desc, qty, unit, price, total, whs, tara, etiqueta, presentacion, kilos
+            (1, 0, "ITEM-A", "Product A", 10.0, "KG", 100.0, 1000.0, "WH01", 0.5, 3, "25KG", 25.0),
+        ]
+
+        # Mock sequential fetchall calls
+        mock_cursor.fetchall.side_effect = [header_rows, invoice_rows, delivery_rows, item_rows]
         mock_conn.cursor.return_value = mock_cursor
         mock_dbapi.connect.return_value = mock_conn
 
         c = _make_connector()
         c.connect()
 
-        # Mock get_order_details to return something
-        c.get_order_details = MagicMock(side_effect=[
-            {"header": {"order_number": 100}, "items": []},
-            None,  # second order not found
-        ])
-
         orders = c.get_recent_orders(limit=5, only_open=False)
-        assert len(orders) == 1  # Only first returned data
+        assert len(orders) == 2
+        assert orders[0]["header"]["order_number"] == 100
+        assert orders[0]["header"]["factura_number"] == "5001"
+        assert len(orders[0]["items"]) == 1
+        assert orders[1]["header"]["sap_status"] == "Cerrado"
 
     @patch("core.sap_connector.dbapi")
     def test_get_recent_orders_only_open(self, mock_dbapi):
@@ -424,3 +448,89 @@ class TestGetOrdersStatusBatch:
 
         result = c.get_orders_status_batch([100])
         assert result == {}
+
+
+class TestGetInvoiceRelationshipMap:
+    @patch("core.sap_connector.dbapi")
+    def test_get_relationship_map_not_found(self, mock_dbapi):
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = None
+        mock_conn.cursor.return_value = mock_cursor
+        mock_dbapi.connect.return_value = mock_conn
+
+        c = _make_connector()
+        c.connect()
+        result = c.get_invoice_relationship_map(12345)
+        assert result is None
+
+    @patch("core.sap_connector.dbapi")
+    def test_get_relationship_map_success(self, mock_dbapi):
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+
+        # Mock fetchone calls
+        inv_row = (
+            10,         # DocEntry
+            12345,      # DocNum
+            "2026-06-19", # DocDate
+            15000.0,    # DocTotal
+            "MXN",      # DocCur
+            "O",        # DocStatus
+            "N",        # CANCELED
+            5000.0,     # PaidToDate
+            "CL-TEST",  # CardCode
+            "Test Customer" # CardName
+        )
+        del_row = (
+            20,         # DocEntry
+            54321,      # DocNum
+            "2026-06-18", # DocDate
+            15000.0,    # DocTotal
+            "MXN",      # DocCur
+            "C",        # DocStatus
+            "N"         # CANCELED
+        )
+        ord_row = (
+            30,         # DocEntry
+            98765,      # DocNum
+            "2026-06-17", # DocDate
+            15000.0,    # DocTotal
+            "MXN",      # DocCur
+            "C",        # DocStatus
+            "N"         # CANCELED
+        )
+        mock_cursor.fetchone.side_effect = [inv_row, del_row, ord_row]
+
+        # Mock fetchall call for payments
+        pay_rows = [
+            (
+                40,          # DocEntry
+                2222,        # DocNum
+                "2026-06-19", # DocDate
+                5000.0,      # DocTotal
+                "MXN",       # DocCur
+                "N",         # Canceled
+                5000.0       # SumApplied
+            )
+        ]
+        mock_cursor.fetchall.return_value = pay_rows
+
+        mock_conn.cursor.return_value = mock_cursor
+        mock_dbapi.connect.return_value = mock_conn
+
+        c = _make_connector()
+        c.connect()
+        result = c.get_invoice_relationship_map(12345)
+
+        assert result is not None
+        assert result["invoice"]["doc_num"] == 12345
+        assert result["invoice"]["status"] == "Abierto"
+        assert result["delivery"]["doc_num"] == 54321
+        assert result["delivery"]["status"] == "Cerrado"
+        assert result["order"]["doc_num"] == 98765
+        assert len(result["payments"]) == 1
+        assert result["payments"][0]["doc_num"] == 2222
+        assert result["payments"][0]["applied_total"] == 5000.0
+        assert result["customer"]["card_name"] == "Test Customer"
+

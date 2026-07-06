@@ -450,3 +450,7 @@ All variables are loaded from a `.env` file at startup via `python-dotenv`.
 6. **Role hierarchy** — `has_role()` uses a numeric hierarchy dict so permissions compose cleanly.
 7. **Status label migration** — `STATUS_LABEL_MIGRATIONS` dict allows renaming statuses in the enum without breaking historical data.
 
+
+
+---
+*Graph Context: Return to [[Home]] (Architecture)*

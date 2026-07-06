@@ -118,6 +118,8 @@ class TestIsSafeUrl:
                     username='safenext', password='pass123456',
                     full_name='Safe Next', role='viewer',
                 )
+            um.users['safenext']['must_change_password'] = False
+            um._save_user_to_sql(um.users['safenext'])
         resp = client.post('/login?next=/orders/', data={
             'username': 'safenext', 'password': 'pass123456',
         }, follow_redirects=False)
@@ -133,6 +135,8 @@ class TestIsSafeUrl:
                     username='unsafenext', password='pass123456',
                     full_name='Unsafe Next', role='viewer',
                 )
+            um.users['unsafenext']['must_change_password'] = False
+            um._save_user_to_sql(um.users['unsafenext'])
         resp = client.post('/login?next=http://evil.com', data={
             'username': 'unsafenext', 'password': 'pass123456',
         }, follow_redirects=False)

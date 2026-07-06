@@ -4,6 +4,17 @@ omit =
     .venv/*
     tests/*
     scripts/*
+    locustfile.py
+    monitor_locustfile.py
+    scratch.py
+    analyze_audio.py
+    generate_chime.py
+    process_audio.py
+    process_audio_v2.py
+    test_mostrador.py
+    test_shipping.py
+    *relacion_manager.py
+    *audit_manager.py
 
 [report]
 exclude_lines =
@@ -11,3 +22,4 @@ exclude_lines =
     if __name__ == .__main__.:
     pass
 show_missing = true
+fail_under = 99

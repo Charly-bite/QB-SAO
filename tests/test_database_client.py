@@ -117,7 +117,7 @@ class TestConnect:
         from core.database_client import DatabaseClient
         db = DatabaseClient()
         with patch.dict(os.environ, {"SQL_PASSWORD": "test_pass"}, clear=False):
-            result = db.connect()
+            result = db.connect(max_retries=3)
 
         assert result is False
         assert db.connected is False
@@ -140,7 +140,7 @@ class TestConnect:
         from core.database_client import DatabaseClient
         db = DatabaseClient()
         with patch.dict(os.environ, {"SQL_PASSWORD": "test_pass"}, clear=False):
-            result = db.connect()
+            result = db.connect(max_retries=3)
 
         assert result is True
         assert db.connected is True
