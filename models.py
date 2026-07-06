@@ -21,6 +21,11 @@ class User(UserMixin):
         self.last_login = user_data.get("last_login")
         self.warehouse = user_data.get("warehouse", "")
         self.sap_seller_name = user_data.get("sap_seller_name", "")
+        self.signature_path = user_data.get("signature_path", "")
+
+        # Permission set — injected by app.py user_loader via PermissionManager.
+        # Falls back to empty set; has_permission() returns False gracefully.
+        self._permissions: frozenset = frozenset()
 
     def get_id(self) -> str:
         return str(self.username) if self.username else ""
@@ -29,11 +34,25 @@ class User(UserMixin):
     def is_active(self):
         return self.is_active_flag
 
+    # ── Core permission check ─────────────────────────────────────────────────
+
+    def has_permission(self, key: str) -> bool:
+        """
+        Dynamic permission check against the PermissionManager's ruleset.
+        Admins always have every permission regardless of DB configuration.
+        """
+        if self.role == UserRole.ADMIN:
+            return True
+        return key in self._permissions
+
+    # ── Convenience helpers (delegate to has_permission) ─────────────────────
+    # Kept for backward compatibility with existing templates and routes.
+
     def is_admin(self):
         return self.role == UserRole.ADMIN
 
     def is_operator(self):
-        return self.role in [UserRole.ADMIN, UserRole.OPERATOR]
+        return self.role in (UserRole.ADMIN, UserRole.OPERATOR)
 
     def is_seller(self):
         """Seller role — can only see own orders in monitor."""
@@ -44,31 +63,37 @@ class User(UserMixin):
         return self.role == UserRole.SELL_MANAGER
 
     def is_billing(self):  # pragma: no cover
-        """Billing role — can see billing info and all orders."""
-        return self.role == UserRole.BILLING
+        """Legacy check — maps to facturacion role."""
+        return self.role in (UserRole.BILLING, UserRole.FACTURACION)
+
+    def is_facturacion(self):  # pragma: no cover
+        return self.role == UserRole.FACTURACION
+
+    def is_credito(self):  # pragma: no cover
+        return self.role == UserRole.CREDITO
 
     def can_edit_facturas(self):  # pragma: no cover
-        """Admins, operators, sell_managers, and billing can edit facturas."""
-        return self.role in [UserRole.ADMIN, UserRole.OPERATOR, UserRole.SELL_MANAGER, UserRole.BILLING]
+        return self.has_permission("facturas.edit")
 
     def can_see_all_orders(self):
-        """Admins, operators, sell_managers, billing, and viewers can see all orders."""
-        return self.role in [UserRole.ADMIN, UserRole.OPERATOR, UserRole.SELL_MANAGER, UserRole.BILLING, UserRole.VIEWER]
+        return self.has_permission("orders.see_all")
 
     def can_view_dashboard(self):
-        return self.role in [UserRole.ADMIN, UserRole.VIEWER]
+        return self.has_permission("nav.dashboard")
 
     def can_view_users(self):
-        return self.role in [UserRole.ADMIN, UserRole.VIEWER]
+        return self.has_permission("nav.users")
 
     def can_edit_orders(self):
-        return self.role in [UserRole.ADMIN, UserRole.OPERATOR, UserRole.SELL_MANAGER, UserRole.BILLING]
+        return self.has_permission("orders.edit")
 
     def has_role(self, role: UserRole):
         role_hierarchy = {
             UserRole.VIEWER: 0,
             UserRole.SELLER: 0,
             UserRole.BILLING: 0,
+            UserRole.CREDITO: 0,
+            UserRole.FACTURACION: 0,
             UserRole.SELL_MANAGER: 1,
             UserRole.OPERATOR: 1,
             UserRole.ADMIN: 2,
@@ -76,29 +101,22 @@ class User(UserMixin):
         return role_hierarchy.get(self.role, 0) >= role_hierarchy.get(role, 0)
 
     def can_print_labels(self):
-        """Operators and Admins can manage orders."""
-        return self.role in [UserRole.ADMIN, UserRole.OPERATOR]
+        """Operators and Admins can print labels."""
+        return self.has_permission("orders.print_labels")
 
     def can_manage_users(self):
         return self.role == UserRole.ADMIN
 
-    # ── Signature Permissions ────────────────────────────────────────────
-    # These control who can sign each area of the Relación de Envíos.
-    # Configure roles here once department bosses are assigned.
+    # ── Signature / signing permissions ──────────────────────────────────────
 
     def can_sign_facturacion(self):  # pragma: no cover
-        """Facturación department boss — billing role or admin."""
-        return self.role in [UserRole.ADMIN, UserRole.BILLING]
+        return self.has_permission("facturas.sign.facturacion")
 
     def can_sign_credito(self):  # pragma: no cover
-        """Crédito y Cobranza (Payments) department boss — billing role or admin."""
-        return self.role in [UserRole.ADMIN, UserRole.BILLING]
+        return self.has_permission("facturas.sign.credito")
 
     def can_sign_almacen(self):  # pragma: no cover
-        """Almacén (Warehouse) department boss — operator role or admin."""
-        return self.role in [UserRole.ADMIN, UserRole.OPERATOR]
+        return self.has_permission("facturas.sign.almacen")
 
     def can_authorize_credito(self):  # pragma: no cover
-        """Crédito y Cobranza per-invoice authorization — who can approve shipments."""
-        return self.role in [UserRole.ADMIN, UserRole.BILLING]
-
+        return self.has_permission("facturas.authorize")
