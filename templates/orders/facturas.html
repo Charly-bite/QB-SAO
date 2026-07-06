@@ -14,14 +14,16 @@
         
         <!-- Controls and Tab Switcher -->
         <div class="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
-            <!-- Segmented Tab Switcher -->
+            <!-- Segmented Tab Switcher — buttons shown based on user permissions -->
             <div class="inline-flex p-0.5 bg-slate-100 dark:bg-slate-800/60 rounded-lg border border-slate-200/50 dark:border-slate-700/50 shadow-inner shrink-0">
-                <button @click="activeTab = 'facturas'" 
+                <button x-show="$store.tabs.facturas"
+                    @click="activeTab = 'facturas'" 
                     class="px-3 py-1.5 rounded-md text-xs font-bold transition-all duration-200 flex items-center gap-1"
                     :class="activeTab === 'facturas' ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'">
                     📋 Facturas
                 </button>
-                <button @click="activeTab = 'credito'; fetchRelaciones()" 
+                <button x-show="$store.tabs.credito"
+                    @click="activeTab = 'credito'; fetchRelaciones()" 
                     class="px-3 py-1.5 rounded-md text-xs font-bold transition-all duration-200 flex items-center gap-1"
                     :class="activeTab === 'credito' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'">
                     🏦 Crédito
@@ -34,7 +36,8 @@
                         </span>
                     </template>
                 </button>
-                <button @click="activeTab = 'relaciones'; fetchRelaciones()" 
+                <button x-show="$store.tabs.relaciones"
+                    @click="activeTab = 'relaciones'; fetchRelaciones()" 
                     class="px-3 py-1.5 rounded-md text-xs font-bold transition-all duration-200 flex items-center gap-1"
                     :class="activeTab === 'relaciones' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'">
                     📦 Relaciones
@@ -44,7 +47,8 @@
                             x-text="currentRelacion.folio"></span>
                     </template>
                 </button>
-                <button @click="activeTab = 'pendientes'" 
+                <button x-show="$store.tabs.pendientes"
+                    @click="activeTab = 'pendientes'" 
                     class="px-3 py-1.5 rounded-md text-xs font-bold transition-all duration-200 flex items-center gap-1"
                     :class="activeTab === 'pendientes' ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'">
                     ⏰ Pendientes
@@ -55,7 +59,8 @@
                         </span>
                     </template>
                 </button>
-                <button @click="activeTab = 'almacen'; fetchRelaciones()" 
+                <button x-show="$store.tabs.almacen"
+                    @click="activeTab = 'almacen'; fetchRelaciones()" 
                     class="px-3 py-1.5 rounded-md text-xs font-bold transition-all duration-200 flex items-center gap-1"
                     :class="activeTab === 'almacen' ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'">
                     🚚 Almacén
@@ -255,7 +260,15 @@
         apiFacturasUrl: "{{ url_for('orders.api_facturas') }}",
         apiFacturasPendingSummaryUrl: "{{ url_for('orders.api_facturas_pending_summary') }}",
         apiFacturasExportUrl: "{{ url_for('orders.api_facturas_export_custom') }}",
-        ordersIndexUrl: "{{ url_for('orders.index') }}"
+        ordersIndexUrl: "{{ url_for('orders.index') }}",
+        // Tab visibility — controlled by PermissionManager (admin checkbox UI)
+        tabs: {
+            facturas:   {{ current_user.has_permission('facturas.tab.facturas')   | tojson }},
+            credito:    {{ current_user.has_permission('facturas.tab.credito')    | tojson }},
+            relaciones: {{ current_user.has_permission('facturas.tab.relaciones') | tojson }},
+            pendientes: {{ current_user.has_permission('facturas.tab.pendientes') | tojson }},
+            almacen:    {{ current_user.has_permission('facturas.tab.almacen')    | tojson }},
+        }
     };
 </script>
 <script src="{{ url_for('static', filename='js/facturas.js') }}"></script>

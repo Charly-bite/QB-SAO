@@ -2,13 +2,14 @@
 User management routes for Open-OMS
 """
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 import os
 from werkzeug.utils import secure_filename
 from flask_login import current_user, login_required
 
 from extensions import current_app
 from core.user_manager import UserRole
+from core.permission_manager import PERMISSION_LABELS
 
 users_bp = Blueprint("users", __name__, url_prefix="/users")
 
@@ -104,7 +105,7 @@ def create():  # pragma: no cover
         else:
             flash(f"Error: {message}", "error")
 
-    return render_template("users/form.html", user=None, roles=list(UserRole))
+    return render_template("users/form.html", user=None, roles=UserRole.active_roles())
 
 @users_bp.route("/<username>/edit", methods=["GET", "POST"])
 def edit(username):  # pragma: no cover
@@ -157,7 +158,7 @@ def edit(username):  # pragma: no cover
         else:
             flash(f"Error: {message}", "error")
 
-    return render_template("users/form.html", user=user, roles=list(UserRole))
+    return render_template("users/form.html", user=user, roles=UserRole.active_roles())
 
 @users_bp.route("/<username>/delete", methods=["POST"])
 def delete(username):  # pragma: no cover
@@ -178,3 +179,58 @@ def delete(username):  # pragma: no cover
         flash(f"Error: {message}", "error")
 
     return redirect(url_for("users.index"))
+
+
+# ── Permission management routes (admin only) ─────────────────────────────────
+
+@users_bp.route("/permissions")
+def permissions():  # pragma: no cover
+    """Render the role permission matrix page."""
+    if not current_user.is_admin():
+        flash("Solo los administradores pueden gestionar permisos.", "error")
+        return redirect(url_for("users.index"))
+
+    pm = current_app.permission_manager
+    all_permissions = pm.get_all()
+    # Only show active roles (no legacy billing)
+    active_roles = [r for r in UserRole.active_roles() if r.value != "billing"]
+
+    return render_template(
+        "users/permissions.html",
+        roles=active_roles,
+        all_permissions=all_permissions,
+        permission_labels=PERMISSION_LABELS,
+    )
+
+
+@users_bp.route("/permissions/api")
+def permissions_api():  # pragma: no cover
+    """Return full permission matrix as JSON."""
+    if not current_user.is_admin():
+        return jsonify({"error": "Forbidden"}), 403
+
+    pm = current_app.permission_manager
+    data = {role: sorted(perms) for role, perms in pm.get_all().items()}
+    return jsonify({"permissions": data, "labels": PERMISSION_LABELS})
+
+
+@users_bp.route("/permissions/<role>", methods=["POST"])
+def update_permissions(role):  # pragma: no cover
+    """Persist permissions for one role. Body: {permissions: [key, ...]}"""
+    if not current_user.is_admin():
+        return jsonify({"error": "Forbidden"}), 403
+
+    data = request.get_json(silent=True) or {}
+    permissions = data.get("permissions", [])
+    if not isinstance(permissions, list):
+        return jsonify({"error": "Invalid payload"}), 400
+
+    # Prevent modifying admin — always has all permissions
+    if role == "admin":
+        return jsonify({"error": "Admin permissions cannot be modified"}), 400
+
+    pm = current_app.permission_manager
+    ok = pm.set_permissions(role, permissions)
+    if ok:
+        return jsonify({"success": True, "role": role, "count": len(permissions)})
+    return jsonify({"error": "Failed to save permissions"}), 500

@@ -215,7 +215,15 @@ function facturasApp() {
         undoStack: [],
         eventSource: null,
         // Relación de Envíos tracking
-        activeTab: localStorage.getItem('qb_facturas_active_tab') || 'facturas',
+        activeTab: (() => {
+            // Default to first permitted tab (respects permission config)
+            const tabs = (window.__facturasConfig || {}).tabs || {};
+            const saved = localStorage.getItem('qb_facturas_active_tab');
+            const order = ['facturas','credito','relaciones','pendientes','almacen'];
+            // Use saved tab if still permitted, else pick first permitted
+            if (saved && tabs[saved]) return saved;
+            return order.find(t => tabs[t]) || 'facturas';
+        })(),
         creditoSubTab: 'Todas',
         
         // Pending Summary Tracking
@@ -1045,6 +1053,16 @@ function facturasApp() {
         },
 
         init() {
+            // Register Alpine store for tab visibility (permissions-driven)
+            const tabsCfg = (window.__facturasConfig || {}).tabs || {
+                facturas: true, credito: true, relaciones: true, pendientes: true, almacen: true
+            };
+            if (window.Alpine && Alpine.store) {
+                Alpine.store('tabs', tabsCfg);
+            } else {
+                document.addEventListener('alpine:init', () => Alpine.store('tabs', tabsCfg));
+            }
+
             window.addEventListener('storage', (e) => {
                 if (e.key === 'qb_facturas_sort_state') {
                     try {
