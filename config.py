@@ -65,7 +65,7 @@ class StagingConfig(Config):
 class ProductionConfig(Config):
     """Production deployment."""
     DEBUG = False
-    SESSION_COOKIE_SECURE = True  # Requires HTTPS
+    SESSION_COOKIE_SECURE = False  # Set False because we run on raw HTTP (Waitress on IP)
 
     @classmethod
     def init_app(cls, app):
