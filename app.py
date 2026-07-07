@@ -70,6 +70,7 @@ from flask_wtf.csrf import CSRFError, CSRFProtect  # noqa: E402
 from config import config_by_name, get_config  # noqa: E402
 from core.order_status_manager import OrderStatus, OrderStatusManager  # noqa: E402
 from core.user_manager import UserManager, UserRole  # noqa: E402
+from core.permission_manager import PermissionManager  # noqa: E402
 from extensions import limiter as _limiter  # noqa: E402
 
 # Optional SAP connector
@@ -88,6 +89,7 @@ class OpenOMSApp(Flask):
     """Flask subclass that declares custom app-level attributes for type safety."""
 
     user_manager: "UserManager"
+    permission_manager: "PermissionManager"
     order_status_mgr: "OrderStatusManager"
     sap_connector: "Optional[_SAPHanaConnectorType]"
     sap_available: bool
@@ -166,6 +168,8 @@ def create_app(config_name: Optional[str] = None) -> "OpenOMSApp":
     
     # Initialize managers
     app.user_manager = UserManager()
+    app.permission_manager = PermissionManager()
+    app.permission_manager.load(app.user_manager.sql_engine)
     app.order_status_mgr = OrderStatusManager()
     app.factura_metadata_mgr = FacturaMetadataManager()
     app.relacion_mgr = RelacionManager()
@@ -199,7 +203,12 @@ def create_app(config_name: Optional[str] = None) -> "OpenOMSApp":
 
         user_data = app.user_manager.get_user(user_id)
         if user_data:
-            return User(user_data)
+            user = User(user_data)
+            # Inject permission set so has_permission() works on every request
+            user._permissions = frozenset(
+                app.permission_manager.get_permissions(user.role.value)
+            )
+            return user
         return None  # pragma: no cover
 
     # Register blueprints

@@ -394,7 +394,7 @@
 
                         {% if current_user.is_authenticated %}
                         <div class="flex items-center gap-1 flex-wrap">
-                            {% if current_user.username.lower() != 'mostrador' %}
+                        {% if current_user.has_permission('nav.pedidos') %}
                             <a
                                 href="{{ url_for('orders.index') }}"
                                 class="qb-nav-link {% if request.endpoint == 'orders.index' or request.endpoint == 'orders.detail' %}active{% endif %}"
@@ -405,7 +405,9 @@
                                 </svg>
                                 Pedidos
                             </a>
+                            {% endif %}
 
+                            {% if current_user.has_permission('nav.facturas') %}
                             <a
                                 href="{{ url_for('orders.facturas') }}"
                                 class="qb-nav-link {% if request.endpoint == 'orders.facturas' %}active-amber{% endif %}"
@@ -417,6 +419,8 @@
                                 Facturas
                             </a>
                             {% endif %}
+
+                            {% if current_user.has_permission('nav.monitor') %}
                             <a
                                 href="{{ url_for('orders.monitor') }}"
                                 class="qb-nav-link {% if request.endpoint == 'orders.monitor' %}active-violet{% endif %}"
@@ -427,8 +431,9 @@
                                 </svg>
                                 Monitor
                             </a>
-                            {% if current_user.username.lower() != 'mostrador' %}
-                            {% if current_user.can_view_dashboard() %}
+                            {% endif %}
+
+                            {% if current_user.has_permission('nav.dashboard') %}
                             <a
                                 href="{{ url_for('orders.dashboard') }}"
                                 class="qb-nav-link {% if request.endpoint == 'orders.dashboard' %}active-amber{% endif %}"
@@ -440,7 +445,8 @@
                                 Dashboard
                             </a>
                             {% endif %}
-                            {% if current_user.can_view_users() %}
+
+                            {% if current_user.has_permission('nav.users') %}
                             <a
                                 href="{{ url_for('users.index') }}"
                                 class="qb-nav-link {% if request.endpoint and request.endpoint.startswith('users.') %}active{% endif %}"
@@ -461,7 +467,6 @@
                                 </svg>
                                 Auditoría
                             </a>
-                            {% endif %}
                             {% endif %}
                         </div>
                         {% endif %}
