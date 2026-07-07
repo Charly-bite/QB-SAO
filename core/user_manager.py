@@ -21,7 +21,17 @@ class UserRole(Enum):
     ADMIN = "admin"
     SELLER = "seller"
     SELL_MANAGER = "sell_manager"
+    # Legacy alias — kept so existing DB rows load without crashing.
+    # Run scripts/migrate_roles.py to upgrade all users.
     BILLING = "billing"
+    # New roles (post-migration)
+    FACTURACION = "facturacion"
+    CREDITO = "credito"
+
+    @classmethod
+    def active_roles(cls):
+        """Return roles available for new user creation (excludes legacy BILLING)."""
+        return [r for r in cls if r != cls.BILLING]
 
 
 class UserManager:
