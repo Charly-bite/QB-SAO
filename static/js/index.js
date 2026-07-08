@@ -282,6 +282,7 @@ function indexData() {
 
         formatDate(s) {
             if (!s) return '-';
+            // Handle YYYY-MM-DD or YYYY-MM-DD HH:MM:SS
             const clean = String(s).split('T')[0].split(' ')[0];
             if (clean.match(/^\d{4}-\d{2}-\d{2}$/)) {
                 const [y, m, d] = clean.split('-');

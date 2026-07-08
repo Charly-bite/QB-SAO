@@ -27,7 +27,13 @@ class TestBuildConnectionString:
     def test_with_sql_driver_env(self, _ld, _pyodbc):
         from core.database_client import DatabaseClient
         db = DatabaseClient()
-        with patch.dict(os.environ, {"SQL_DRIVER": "{Custom Driver}", "SQL_PASSWORD": "pass123"}):
+        with patch.dict(os.environ, {
+            "SQL_DRIVER": "{Custom Driver}",
+            "SQL_SERVER": "127.0.0.1",
+            "SQL_DATABASE": "DB",
+            "SQL_USER": "usr",
+            "SQL_PASSWORD": "pass123"
+        }):
             cs = db._build_connection_string()
         assert "Custom Driver" in cs
         assert "pass123" in cs
@@ -42,7 +48,13 @@ class TestBuildConnectionString:
         ]
         from core.database_client import DatabaseClient
         db = DatabaseClient()
-        with patch.dict(os.environ, {"SQL_DRIVER": "", "SQL_PASSWORD": "p"}, clear=False):
+        with patch.dict(os.environ, {
+            "SQL_DRIVER": "",
+            "SQL_SERVER": "127.0.0.1",
+            "SQL_DATABASE": "DB",
+            "SQL_USER": "usr",
+            "SQL_PASSWORD": "p"
+        }, clear=False):
             cs = db._build_connection_string()
         assert "ODBC Driver 18 for SQL Server" in cs
 
@@ -52,7 +64,13 @@ class TestBuildConnectionString:
         mock_pyodbc.drivers.return_value = ["Some SQL Server Driver"]
         from core.database_client import DatabaseClient
         db = DatabaseClient()
-        with patch.dict(os.environ, {"SQL_DRIVER": "", "SQL_PASSWORD": "p"}, clear=False):
+        with patch.dict(os.environ, {
+            "SQL_DRIVER": "",
+            "SQL_SERVER": "127.0.0.1",
+            "SQL_DATABASE": "DB",
+            "SQL_USER": "usr",
+            "SQL_PASSWORD": "p"
+        }, clear=False):
             cs = db._build_connection_string()
         assert "Some SQL Server Driver" in cs
 
@@ -62,7 +80,13 @@ class TestBuildConnectionString:
         mock_pyodbc.drivers.return_value = []
         from core.database_client import DatabaseClient
         db = DatabaseClient()
-        with patch.dict(os.environ, {"SQL_DRIVER": "", "SQL_PASSWORD": "p"}, clear=False):
+        with patch.dict(os.environ, {
+            "SQL_DRIVER": "",
+            "SQL_SERVER": "127.0.0.1",
+            "SQL_DATABASE": "DB",
+            "SQL_USER": "usr",
+            "SQL_PASSWORD": "p"
+        }, clear=False):
             cs = db._build_connection_string()
         assert "ODBC Driver 17" in cs
 
@@ -72,7 +96,13 @@ class TestBuildConnectionString:
         mock_pyodbc.drivers.side_effect = Exception("No ODBC")
         from core.database_client import DatabaseClient
         db = DatabaseClient()
-        with patch.dict(os.environ, {"SQL_DRIVER": "", "SQL_PASSWORD": "p"}, clear=False):
+        with patch.dict(os.environ, {
+            "SQL_DRIVER": "",
+            "SQL_SERVER": "127.0.0.1",
+            "SQL_DATABASE": "DB",
+            "SQL_USER": "usr",
+            "SQL_PASSWORD": "p"
+        }, clear=False):
             cs = db._build_connection_string()
         assert "ODBC Driver 17" in cs
 
@@ -81,8 +111,13 @@ class TestBuildConnectionString:
     def test_missing_password_raises(self, _ld, _pyodbc):
         from core.database_client import DatabaseClient
         db = DatabaseClient()
-        with patch.dict(os.environ, {"SQL_PASSWORD": ""}, clear=False):
-            with pytest.raises(ValueError, match="Missing SQL_PASSWORD"):
+        with patch.dict(os.environ, {
+            "SQL_SERVER": "127.0.0.1",
+            "SQL_DATABASE": "DB",
+            "SQL_USER": "usr",
+            "SQL_PASSWORD": ""
+        }, clear=False):
+            with pytest.raises(ValueError, match="Missing required SQL environment config"):
                 db._build_connection_string()
 
 
@@ -99,7 +134,12 @@ class TestConnect:
 
         from core.database_client import DatabaseClient
         db = DatabaseClient()
-        with patch.dict(os.environ, {"SQL_PASSWORD": "test_pass"}, clear=False):
+        with patch.dict(os.environ, {
+            "SQL_SERVER": "127.0.0.1",
+            "SQL_DATABASE": "DB",
+            "SQL_USER": "usr",
+            "SQL_PASSWORD": "test_pass"
+        }, clear=False):
             result = db.connect()
 
         assert result is True
@@ -116,7 +156,12 @@ class TestConnect:
 
         from core.database_client import DatabaseClient
         db = DatabaseClient()
-        with patch.dict(os.environ, {"SQL_PASSWORD": "test_pass"}, clear=False):
+        with patch.dict(os.environ, {
+            "SQL_SERVER": "127.0.0.1",
+            "SQL_DATABASE": "DB",
+            "SQL_USER": "usr",
+            "SQL_PASSWORD": "test_pass"
+        }, clear=False):
             result = db.connect(max_retries=3)
 
         assert result is False
@@ -139,7 +184,12 @@ class TestConnect:
 
         from core.database_client import DatabaseClient
         db = DatabaseClient()
-        with patch.dict(os.environ, {"SQL_PASSWORD": "test_pass"}, clear=False):
+        with patch.dict(os.environ, {
+            "SQL_SERVER": "127.0.0.1",
+            "SQL_DATABASE": "DB",
+            "SQL_USER": "usr",
+            "SQL_PASSWORD": "test_pass"
+        }, clear=False):
             result = db.connect(max_retries=3)
 
         assert result is True

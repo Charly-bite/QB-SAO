@@ -44,7 +44,7 @@ class Config:
     # Defaults
     DEBUG = False
     TESTING = False
-    SESSION_COOKIE_SECURE = False
+    SESSION_COOKIE_SECURE = os.environ.get('SESSION_COOKIE_SECURE', 'False').lower() == 'true'
 
     # Disable static file caching so browsers always fetch fresh JS/CSS after deploys
     SEND_FILE_MAX_AGE_DEFAULT = 0

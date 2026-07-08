@@ -39,16 +39,17 @@ class DatabaseClient:
                     driver = '{ODBC Driver 17 for SQL Server}'
             except Exception:
                 driver = '{ODBC Driver 17 for SQL Server}'
-        server = os.getenv("SQL_SERVER", "192.168.2.237")
-        database = os.getenv("SQL_DATABASE", "SGA_Database")
-        user = os.getenv("SQL_USER", "sga_app_user")
+        server = os.getenv("SQL_SERVER", "")
+        database = os.getenv("SQL_DATABASE", "")
+        user = os.getenv("SQL_USER", "")
         password = os.getenv("SQL_PASSWORD", "")
         trust = os.getenv("SQL_TRUST_CERTIFICATE", "yes").lower()
         timeout = os.getenv("SQL_TIMEOUT", "5")
 
-        if not password:
-            logger.error("CRITICAL: SQL_PASSWORD is empty!")
-            raise ValueError("Missing SQL_PASSWORD in environment config.")
+        if not all([server, database, user, password]):
+            missing = [k for k, v in {"SQL_SERVER": server, "SQL_DATABASE": database, "SQL_USER": user, "SQL_PASSWORD": password}.items() if not v]
+            logger.error(f"CRITICAL: Missing SQL configuration: {', '.join(missing)}")
+            raise ValueError(f"Missing required SQL environment config: {', '.join(missing)}")
 
         return (
             f"DRIVER={driver};SERVER={server};DATABASE={database};"
