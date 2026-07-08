@@ -28,6 +28,13 @@ _hdbcli_mock = MagicMock()
 sys.modules.setdefault("hdbcli", _hdbcli_mock)
 sys.modules.setdefault("hdbcli.dbapi", _hdbcli_mock.dbapi)
 
+# pyodbc requires system-level drivers (unixODBC) which may be missing in CI/Sandbox
+try:
+    import pyodbc
+except ImportError:
+    _pyodbc_mock = MagicMock()
+    sys.modules.setdefault("pyodbc", _pyodbc_mock)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
