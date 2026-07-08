@@ -174,3 +174,47 @@ class TestHasRole:
         assert u.has_role(UserRole.SELLER) is True
         assert u.has_role(UserRole.VIEWER) is True
         assert u.has_role(UserRole.OPERATOR) is False
+
+
+class TestCanViewDashboard:
+    """can_view_dashboard — viewer and admin have nav.dashboard."""
+
+    def test_viewer_can_view(self):
+        u = _make_user(role='viewer')
+        assert u.can_view_dashboard() is True
+
+    def test_seller_cannot_view(self):
+        u = _make_user(role='seller')
+        assert u.can_view_dashboard() is False
+
+    def test_admin_can_view(self):
+        u = _make_user(role='admin')
+        assert u.can_view_dashboard() is True
+
+
+class TestCanViewUsers:
+    """can_view_users — only admin has nav.users."""
+
+    def test_admin_can_view(self):
+        u = _make_user(role='admin')
+        assert u.can_view_users() is True
+
+    def test_viewer_cannot_view(self):
+        u = _make_user(role='viewer')
+        assert u.can_view_users() is False
+
+
+class TestCanEditOrders:
+    """can_edit_orders — operators and admins have orders.edit."""
+
+    def test_admin_can_edit(self):
+        u = _make_user(role='admin')
+        assert u.can_edit_orders() is True
+
+    def test_operator_can_edit(self):
+        u = _make_user(role='operator')
+        assert u.can_edit_orders() is True
+
+    def test_viewer_cannot_edit(self):
+        u = _make_user(role='viewer')
+        assert u.can_edit_orders() is False
