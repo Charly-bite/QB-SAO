@@ -244,7 +244,7 @@ block page_title %}Estado de Pedidos{% endblock %}
 {% endblock %}
 
 {% block content %}
-<div x-data="indexData()" @refresh-data.window="refreshData()">
+<div x-data="indexData()" @refresh-data.window.debounce.500ms="refreshData()">
     <!-- ═══════ KPI CARDS ═══════ -->
     <section class="kpi-bar">
         <div class="kpi-inner">

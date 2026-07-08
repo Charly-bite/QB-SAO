@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/facturas.css') }}">
-<div class="space-y-3" x-data="facturasApp()" x-init="init()" @refresh-data.window="fetchInvoices()" @keydown.window="handleGlobalKeydown($event)" :class="{'print-selected-only': invoices.some(i => i._selected)}">
+<div class="space-y-3" x-data="facturasApp()" x-init="init()" @refresh-data.window.debounce.500ms="fetchInvoices()" @keydown.window="handleGlobalKeydown($event)" :class="{'print-selected-only': invoices.some(i => i._selected)}">
 
     <!-- Global Header -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 print-hide pb-1">
@@ -220,7 +220,9 @@
     <!-- Relaciones Tab -->
     <div x-show="activeTab === 'relaciones'" x-cloak class="space-y-6">
         {% include 'orders/partials/_relaciones_tab.html' %}
+        {% if current_user.is_admin() %}
         {% include 'orders/partials/_relaciones_history.html' %}
+        {% endif %}
     </div>
 
     <!-- ═══════ ALMACÉN Y LOGÍSTICA TAB ═══════ -->
@@ -255,7 +257,6 @@
         currentUserSignature: {{ current_user.signature_path | tojson if current_user.signature_path else 'null' }},
         canSignFacturacion: {{ 'true' if current_user.can_sign_facturacion() else 'false' }},
         canSignCredito: {{ 'true' if current_user.can_sign_credito() else 'false' }},
-        canSignAlmacen: {{ 'true' if current_user.can_sign_almacen() else 'false' }},
         canAuthorizarCredito: {{ 'true' if current_user.can_authorize_credito() else 'false' }},
         apiFacturasUrl: "{{ url_for('orders.api_facturas') }}",
         apiFacturasPendingSummaryUrl: "{{ url_for('orders.api_facturas_pending_summary') }}",
@@ -271,5 +272,5 @@
         }
     };
 </script>
-<script src="{{ url_for('static', filename='js/facturas.js') }}?v=2"></script>
+<script src="{{ url_for('static', filename='js/facturas.js') }}?v=3"></script>
 {% endblock %}

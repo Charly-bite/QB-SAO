@@ -232,7 +232,8 @@ function facturasApp() {
         // Pending Summary Tracking
         pendingSubTab: localStorage.getItem('qb_facturas_pending_subtab') || 'current', // 'calendar', 'all', 'current'
         pendingInvoices: [], // Sub-store for pending invoices across all dates
-        isPendingLoading: false,
+        pendingSummaryLoading: false,
+        pendingSummaryData: [],
         pendingCalendarMonth: new Date().getMonth(),
         pendingCalendarYear: new Date().getFullYear(),
         allPendingExpanded: false,
@@ -247,10 +248,9 @@ function facturasApp() {
         currentUserUsername: cfg.currentUserUsername,
         currentUserFullName: cfg.currentUserFullName,
         currentUserSignature: cfg.currentUserSignature,
-        signatures: { facturacion: null, credito: null, almacen: null },
+        signatures: { facturacion: null, credito: null },
         canSignFacturacion: cfg.canSignFacturacion,
         canSignCredito: cfg.canSignCredito,
-        canSignAlmacen: cfg.canSignAlmacen,
         canAuthorizarCredito: cfg.canAuthorizarCredito || false,
         clientId: Math.random().toString(36).substring(2) + Date.now().toString(36),
         _suppressRelacionHighlight: false,
@@ -606,13 +606,11 @@ function facturasApp() {
                 const canSign = {
                     facturacion: this.canSignFacturacion,
                     credito: this.canSignCredito,
-                    almacen: this.canSignAlmacen,
                 };
                 if (!canSign[area]) {
                     const labels = {
                         facturacion: 'Facturación',
                         credito: 'Crédito y Cobranza',
-                        almacen: 'Almacén',
                     };
                     alert(`Solo el jefe de ${labels[area]} puede firmar esta área.`);
                     return;
@@ -630,7 +628,6 @@ function facturasApp() {
                     this.signatures = {
                         facturacion: data.signatures.facturacion || null,
                         credito: data.signatures.credito || null,
-                        almacen: data.signatures.almacen || null,
                     };
                 } else {
                     alert(data.error || 'Error al actualizar firma');
@@ -1726,7 +1723,6 @@ function facturasApp() {
                     this.signatures = {
                         facturacion: data.signatures.facturacion || null,
                         credito: data.signatures.credito || null,
-                        almacen: data.signatures.almacen || null,
                     };
                 }
             } else if (data.type === 'dia_cerrado') {
@@ -2281,17 +2277,31 @@ function facturasApp() {
                 });
                 const data = await res.json();
                 if (!res.ok) {
-                    alert(data.error || 'Error al actualizar estado');
-                    const inv = this.invoices.find(i => i.invoice_number === invoiceNum);
+                    alert((data.error || 'Error al actualizar estado') + (data.trace ? '\n\n' + data.trace : ''));
+                    const inv = this.invoices.find(i => String(i.invoice_number) === String(invoiceNum));
                     if (inv) inv[field] = !value; // revert
+                    if (this.currentRelacion && this.currentRelacion.invoices) {
+                        const relInv = this.currentRelacion.invoices.find(i => String(i.invoice_number) === String(invoiceNum));
+                        if (relInv) relInv[field] = !value;
+                    }
                 } else {
+                    const inv = this.invoices.find(i => String(i.invoice_number) === String(invoiceNum));
+                    if (inv) inv[field] = value;
+                    if (this.currentRelacion && this.currentRelacion.invoices) {
+                        const relInv = this.currentRelacion.invoices.find(i => String(i.invoice_number) === String(invoiceNum));
+                        if (relInv) relInv[field] = value;
+                    }
                     this.triggerAutoSaveRelacion();
                 }
             } catch (e) {
                 console.error(e);
                 alert('Error de conexión');
-                const inv = this.invoices.find(i => i.invoice_number === invoiceNum);
+                const inv = this.invoices.find(i => String(i.invoice_number) === String(invoiceNum));
                 if (inv) inv[field] = !value; // revert
+                if (this.currentRelacion && this.currentRelacion.invoices) {
+                    const relInv = this.currentRelacion.invoices.find(i => String(i.invoice_number) === String(invoiceNum));
+                    if (relInv) relInv[field] = !value;
+                }
             }
         },
 
@@ -2623,6 +2633,23 @@ function facturasApp() {
                         i._selected = isSelectedNow;
                     });
                     
+                    // Sync metadata (credito_notes, rebote, observaciones, etc.) from master list to relacion invoices
+                    this.currentRelacion.invoices.forEach(relInv => {
+                        const masterInv = this.invoices.find(i => String(i.invoice_number) === String(relInv.invoice_number));
+                        if (masterInv) {
+                            relInv.credito_notes = masterInv.credito_notes;
+                            relInv.credito_authorized = masterInv.credito_authorized;
+                            relInv.credito_authorized_name = masterInv.credito_authorized_name;
+                            relInv.credito_authorized_by = masterInv.credito_authorized_by;
+                            relInv.credito_authorized_at = masterInv.credito_authorized_at;
+                            relInv.shipping_type = masterInv.shipping_type;
+                            relInv.observaciones = masterInv.observaciones;
+                            relInv.rebote = masterInv.rebote;
+                            relInv.recibido = masterInv.recibido;
+                            relInv.entrega = masterInv.entrega;
+                        }
+                    });
+
                     // Sync to localStorage
                     const selected = this.invoices.filter(i => i._selected).map(i => String(i.invoice_number));
                     localStorage.setItem('qb_facturas_selected_' + this.selectedDate, JSON.stringify(selected));
@@ -2654,10 +2681,9 @@ function facturasApp() {
                     this.signatures = {
                         facturacion: sigs.facturacion || null,
                         credito: sigs.credito || null,
-                        almacen: sigs.almacen || null,
                     };
                 } else {
-                    this.signatures = { facturacion: null, credito: null, almacen: null };
+                    this.signatures = { facturacion: null, credito: null };
                 }
             } catch (e) {
                 console.error('Error fetching relacion:', e);
@@ -2867,7 +2893,7 @@ function facturasApp() {
         },
 
         allSigned() {
-            return !!this.signatures.facturacion && !!this.signatures.credito && !!this.signatures.almacen;
+            return !!this.signatures.facturacion && !!this.signatures.credito;
         },
 
         // ── Crédito y Cobranza Per-Invoice Authorization ──────────────────
