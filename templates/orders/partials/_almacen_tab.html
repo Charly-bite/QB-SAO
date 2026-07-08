@@ -41,13 +41,15 @@
                 <thead class="pendientes-thead">
                     <tr>
                         <th class="text-left" style="width: 40px;">#</th>
+                        <th class="text-center w-20">Extra</th>
                         <th class="text-left">No. Factura</th>
                         <th class="text-left">Cliente</th>
                         <th class="text-right">Importe</th>
                         <th class="text-center">Tipo de Envío</th>
                         <th class="text-center w-48">Notas de Crédito</th>
                         <th class="text-center">Crédito</th>
-                        <th class="text-center w-28">Entrega</th>
+                        <th class="text-center w-28">Rebote</th>
+                        <th class="text-center w-28">Entregado</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -55,6 +57,10 @@
                         <tr class="pendientes-row" x-show="true" :style="idx % 2 === 0 ? '' : 'background-color: #f8fafc;'">
                             <!-- # -->
                             <td style="color: #94a3b8; font-size: 12px; font-weight: 600;" x-text="idx + 1"></td>
+                            <!-- Extra -->
+                            <td class="text-center">
+                                <span class="text-slate-600 text-xs font-medium" x-text="inv.nota || inv.observaciones || '-'"></span>
+                            </td>
                             <!-- No. Factura -->
                             <td><span class="pendientes-invoice-num" x-text="inv.invoice_number || ''"></span></td>
                             <!-- Cliente -->
@@ -67,8 +73,8 @@
                             <!-- Tipo de Envío -->
                             <td class="text-center">
                                 <span class="inline-flex items-center gap-1"
-                                    :class="(inv.observaciones || inv.nota || inv.shipping_type || 'LOCAL').toUpperCase().includes('FOR') ? 'pendientes-badge-foraneo' : 'pendientes-badge-local'"
-                                    x-text="inv.observaciones || inv.nota || inv.shipping_type || 'LOCAL'">
+                                    :class="(inv.shipping_type || 'LOCAL').toUpperCase().includes('FOR') ? 'pendientes-badge-foraneo' : 'pendientes-badge-local'"
+                                    x-text="inv.shipping_type || 'LOCAL'">
                                 </span>
                             </td>
                             <!-- Notas de Crédito -->
@@ -104,12 +110,24 @@
                                     </span>
                                 </template>
                             </td>
+                            <!-- Rebote -->
+                            <td class="text-center">
+                                <label class="inline-flex items-center gap-2 cursor-pointer select-none group">
+                                    <input type="checkbox" :checked="inv.rebote"
+                                        @change="inv.rebote = $event.target.checked; toggleFactura(inv.invoice_number, 'rebote', inv.rebote)"
+                                        :disabled="!canEditFacturas"
+                                        class="w-5 h-5 rounded border-slate-300 text-orange-500 focus:ring-orange-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                                    <span class="text-xs font-medium transition-colors"
+                                        :class="inv.rebote ? 'text-orange-700' : 'text-slate-400'"
+                                        x-text="inv.rebote ? 'Sí' : 'No'"></span>
+                                </label>
+                            </td>
                             <!-- Entrega -->
                             <td class="text-center">
                                 <label class="inline-flex items-center gap-2 cursor-pointer select-none group">
                                     <input type="checkbox" :checked="inv.entrega"
                                         @change="inv.entrega = $event.target.checked; toggleFactura(inv.invoice_number, 'entrega', inv.entrega)"
-                                        :disabled="!canEditFacturas"
+                                        :disabled="!canEditFacturas || inv.rebote"
                                         class="w-5 h-5 rounded border-slate-300 text-green-500 focus:ring-green-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all">
                                     <span class="text-xs font-medium transition-colors"
                                         :class="inv.entrega ? 'text-green-700' : 'text-slate-400'"

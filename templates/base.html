@@ -695,6 +695,7 @@
                 },
                 
                 async checkSystemsHealth() {
+                    if (document.hidden) return;
                     try {
                         const res = await fetch('/health');
                         if (res.ok) {
