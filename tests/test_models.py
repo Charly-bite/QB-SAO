@@ -4,6 +4,7 @@ User model tests — verifies role predicates, hierarchy, and property accessors
 import pytest
 
 from core.user_manager import UserRole
+from core.permission_manager import DEFAULT_PERMISSIONS
 from models import User
 
 
@@ -21,7 +22,11 @@ def _make_user(**overrides):
         'sap_seller_name': '',
     }
     data.update(overrides)
-    return User(data)
+    user = User(data)
+    # Inject default permissions so has_permission() works without a live app
+    role = data['role']
+    user._permissions = frozenset(DEFAULT_PERMISSIONS.get(role, set()))
+    return user
 
 
 class TestUserInit:

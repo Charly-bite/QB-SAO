@@ -84,7 +84,6 @@ DEFAULT_PERMISSIONS: Dict[str, Set[str]] = {
 
     "seller": {
         "nav.pedidos",
-        "orders.see_all",
     },
 
     "viewer": {
