@@ -1342,8 +1342,15 @@ function facturasApp() {
                 'ANEXADAS MTY', 'ANEXADAS GDL', 'ANEXADAS IRP'
             ];
 
+            const invoiceMap = new Map();
+            if (this.invoices && this.invoices.length > 0) {
+                for (let i = 0; i < this.invoices.length; i++) {
+                    invoiceMap.set(String(this.invoices[i].invoice_number), this.invoices[i]);
+                }
+            }
+
             this.currentRelacion.invoices.forEach(inv => {
-                const liveInv = this.invoices.find(i => String(i.invoice_number) === String(inv.invoice_number));
+                const liveInv = invoiceMap.get(String(inv.invoice_number));
                 const resolvedInv = liveInv ? { ...inv, ...liveInv } : inv;
 
                 let cat = (resolvedInv.shipping_type || resolvedInv.observaciones || resolvedInv.nota || 'LOCAL').toUpperCase();
