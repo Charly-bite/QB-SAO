@@ -1335,6 +1335,7 @@ function facturasApp() {
             const _trackManual = this.manualOrder;
 
             if (!this.currentRelacion || !this.currentRelacion.invoices) return [];
+
             const groups = {};
             const categoryOrder = [
                 'LOCAL', 'ENVIO LOCAL', 'PAQUETERIA', 'PASE A PAQUETERIA', 
@@ -1342,8 +1343,12 @@ function facturasApp() {
                 'ANEXADAS MTY', 'ANEXADAS GDL', 'ANEXADAS IRP'
             ];
 
+            // Create a lookup map for faster invoice matching (O(1) instead of O(N))
+            const invoicesMap = new Map();
+            this.invoices.forEach(i => invoicesMap.set(String(i.invoice_number), i));
+
             this.currentRelacion.invoices.forEach(inv => {
-                const liveInv = this.invoices.find(i => String(i.invoice_number) === String(inv.invoice_number));
+                const liveInv = invoicesMap.get(String(inv.invoice_number));
                 const resolvedInv = liveInv ? { ...inv, ...liveInv } : inv;
 
                 let cat = (resolvedInv.shipping_type || resolvedInv.observaciones || resolvedInv.nota || 'LOCAL').toUpperCase();
@@ -1362,7 +1367,7 @@ function facturasApp() {
                 invoiceIndexMap.set(String(inv.invoice_number), idx);
             });
 
-            return Object.values(groups).sort((a, b) => {
+            const result = Object.values(groups).sort((a, b) => {
                 const ai = categoryOrder.indexOf(a.category);
                 const bi = categoryOrder.indexOf(b.category);
                 const aIdx = ai >= 0 ? ai : 100;
@@ -1377,6 +1382,8 @@ function facturasApp() {
                 });
                 return g;
             });
+
+            return result;
         },
 
         isMatch(i) {
@@ -2634,8 +2641,11 @@ function facturasApp() {
                     });
                     
                     // Sync metadata (credito_notes, rebote, observaciones, etc.) from master list to relacion invoices
+                    const invoicesMap = new Map();
+                    this.invoices.forEach(i => invoicesMap.set(String(i.invoice_number), i));
+
                     this.currentRelacion.invoices.forEach(relInv => {
-                        const masterInv = this.invoices.find(i => String(i.invoice_number) === String(relInv.invoice_number));
+                        const masterInv = invoicesMap.get(String(relInv.invoice_number));
                         if (masterInv) {
                             relInv.credito_notes = masterInv.credito_notes;
                             relInv.credito_authorized = masterInv.credito_authorized;
