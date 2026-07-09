@@ -2634,8 +2634,13 @@ function facturasApp() {
                     });
                     
                     // Sync metadata (credito_notes, rebote, observaciones, etc.) from master list to relacion invoices
+                    const masterInvoicesMap = new Map();
+                    for (let i = 0; i < this.invoices.length; i++) {
+                        masterInvoicesMap.set(String(this.invoices[i].invoice_number), this.invoices[i]);
+                    }
+
                     this.currentRelacion.invoices.forEach(relInv => {
-                        const masterInv = this.invoices.find(i => String(i.invoice_number) === String(relInv.invoice_number));
+                        const masterInv = masterInvoicesMap.get(String(relInv.invoice_number));
                         if (masterInv) {
                             relInv.credito_notes = masterInv.credito_notes;
                             relInv.credito_authorized = masterInv.credito_authorized;
