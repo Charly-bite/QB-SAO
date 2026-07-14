@@ -589,6 +589,9 @@
                             <th class="ec-sortable" :class="{'ec-sorted': sortColumn === 'due_date'}" @click="sortBy('due_date')">
                                 Vencimiento<span class="ec-sort-arrow" x-show="sortColumn === 'due_date'" x-text="sortDirection === 'asc' ? '▲' : '▼'"></span>
                             </th>
+                            <th class="ec-sortable text-right" :class="{'ec-sorted': sortColumn === 'total'}" @click="sortBy('total')">
+                                Adeudo<span class="ec-sort-arrow" x-show="sortColumn === 'total'" x-text="sortDirection === 'asc' ? '▲' : '▼'"></span>
+                            </th>
                             <th class="ec-sortable text-right" :class="{'ec-sorted': sortColumn === 'balance'}" @click="sortBy('balance')">
                                 Saldo Pendiente<span class="ec-sort-arrow" x-show="sortColumn === 'balance'" x-text="sortDirection === 'asc' ? '▲' : '▼'"></span>
                             </th>
@@ -613,6 +616,7 @@
                                 <td class="font-bold" x-text="inv.doc_num"></td>
                                 <td x-text="fmtDate(inv.doc_date)"></td>
                                 <td x-text="fmtDate(inv.due_date)"></td>
+                                <td class="text-right font-semibold text-slate-600" x-text="'$' + Number(inv.total).toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})"></td>
                                 <td class="text-right text-red font-bold" x-text="'$' + Number(inv.balance).toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})"></td>
                                 <td class="text-center" x-text="inv.currency"></td>
                                 <td x-show="hasUSD" class="text-center font-semibold text-slate-600"
@@ -655,6 +659,20 @@
 
             <!-- Signature & Contact Block -->
             <div class="ec-signature-block">
+                {% if current_user.username.lower() == 'rubenh' %}
+                <div class="ec-signature-person">
+                    <div class="sig-name">Ruben Herrera</div>
+                    <div class="sig-title">Auxiliar Crédito y Cobranza</div>
+                    <div class="sig-company">Química Boss S.A. de C.V.</div>
+                </div>
+                <div class="ec-signature-contact">
+                    <div class="contact-company">QUÍMICA BOSS SA DE CV</div>
+                    <div>San Agustín No. 759 Col. El Briseño C.P. 45090</div>
+                    <div>Zapopan, Jal. Tels. (33) 3684-0505, 3684-9190 Ext. 122</div>
+                    <div>Fax 01(33) 3684-6880, 3684-0256</div>
+                    <div class="contact-email">capturacion@quimicaboss.com.mx</div>
+                </div>
+                {% else %}
                 <div class="ec-signature-person">
                     <div class="sig-name">Azucena Lopez Aguilera</div>
                     <div class="sig-title">Encargada del Dpto. de Crédito y Cobranza</div>
@@ -667,6 +685,7 @@
                     <div>Fax 01(33) 3684-6880, 3684-0256</div>
                     <div class="contact-email">creditoycobranza@quimicaboss.com.mx</div>
                 </div>
+                {% endif %}
             </div>
 
             <!-- Security Strip -->

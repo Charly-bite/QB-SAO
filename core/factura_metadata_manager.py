@@ -65,6 +65,10 @@ class FacturaMetadataManager:
                     BEGIN
                         ALTER TABLE {self.TABLE_NAME} ADD credito_notes VARCHAR(MAX) NULL;
                     END
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('{self.TABLE_NAME}') AND name = 'sent_to_credito')
+                    BEGIN
+                        ALTER TABLE {self.TABLE_NAME} ADD sent_to_credito BIT NULL;
+                    END
                 END
                 
                 IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='factura_daily_order' and xtype='U')
@@ -216,20 +220,21 @@ class FacturaMetadataManager:
         auths = {}
         # 1. Load from local fallback
         for k, v in self.local_metadata.items():
-            if isinstance(v, dict) and v.get("credito_authorized") is not None:
+            if isinstance(v, dict) and (v.get("credito_authorized") is not None or v.get("sent_to_credito") is not None):
                 auths[int(k)] = {
                     "credito_authorized": v.get("credito_authorized"),
                     "credito_authorized_by": v.get("credito_authorized_by"),
                     "credito_authorized_at": v.get("credito_authorized_at"),
                     "credito_revoked_from_relacion": v.get("credito_revoked_from_relacion", False),
-                    "credito_notes": v.get("credito_notes", "")
+                    "credito_notes": v.get("credito_notes", ""),
+                    "sent_to_credito": v.get("sent_to_credito", False)
                 }
         
         # 2. Try SQL
         if self.db_client.engine:
             try:
                 with self.db_client.engine.connect() as conn:
-                    result = conn.exec_driver_sql(f"SELECT invoice_number, credito_authorized, credito_authorized_by, credito_authorized_at, credito_revoked_from_relacion, credito_notes FROM {self.TABLE_NAME} WHERE credito_authorized IS NOT NULL OR credito_revoked_from_relacion = 1 OR credito_notes IS NOT NULL").fetchall()
+                    result = conn.exec_driver_sql(f"SELECT invoice_number, credito_authorized, credito_authorized_by, credito_authorized_at, credito_revoked_from_relacion, credito_notes, sent_to_credito FROM {self.TABLE_NAME} WHERE credito_authorized IS NOT NULL OR credito_revoked_from_relacion = 1 OR credito_notes IS NOT NULL OR sent_to_credito = 1").fetchall()
                     for row in result:
                         inv = row[0]
                         auths[inv] = {
@@ -237,7 +242,8 @@ class FacturaMetadataManager:
                             "credito_authorized_by": row[2],
                             "credito_authorized_at": row[3],
                             "credito_revoked_from_relacion": bool(row[4]) if len(row) > 4 and row[4] is not None else False,
-                            "credito_notes": row[5] if len(row) > 5 and row[5] is not None else ""
+                            "credito_notes": row[5] if len(row) > 5 and row[5] is not None else "",
+                            "sent_to_credito": bool(row[6]) if len(row) > 6 and row[6] is not None else False
                         }
                         if str(inv) not in self.local_metadata or not isinstance(self.local_metadata[str(inv)], dict):
                             self.local_metadata[str(inv)] = {"category": "", "color": "", "custom_customer_name": ""}
@@ -271,7 +277,7 @@ class FacturaMetadataManager:
                         END
                     """
                     auth_bit = 1 if authorized else 0
-                    conn.exec_driver_sql(query, [auth_bit, by, at, invoice_number, invoice_number, auth_bit, by, at])
+                    conn.exec_driver_sql(query, (auth_bit, by, at, invoice_number, invoice_number, auth_bit, by, at))
             except Exception as e:
                 logger.error(f"Error saving credito auth to SQL: {e}")
         return True
@@ -292,7 +298,7 @@ class FacturaMetadataManager:
                         WHERE invoice_number = ?
                     """
                     bit_val = 1 if was_revoked else 0
-                    conn.exec_driver_sql(query, [bit_val, invoice_number])
+                    conn.exec_driver_sql(query, (bit_val, invoice_number))
             except Exception as e:
                 logger.error(f"Error saving revoked_from_relacion: {e}")
         return True
@@ -318,7 +324,7 @@ class FacturaMetadataManager:
                             VALUES (?, ?);
                         END
                     """
-                    conn.exec_driver_sql(query, [notes, invoice_number, invoice_number, notes])
+                    conn.exec_driver_sql(query, (notes, invoice_number, invoice_number, notes))
             except Exception as e:
                 logger.error(f"Error saving credito notes: {e}")
         return True
@@ -329,7 +335,7 @@ class FacturaMetadataManager:
             try:
                 with self.db_client.engine.connect() as conn:
                     query = "SELECT manual_order_json FROM factura_daily_order WHERE order_date = ?"
-                    result = conn.exec_driver_sql(query, [date_str]).fetchone()
+                    result = conn.exec_driver_sql(query, (date_str,)).fetchone()
                     if result and result[0]:
                         order = json.loads(result[0])
                         self.local_daily_orders[date_str] = order  # pragma: no cover
@@ -360,7 +366,7 @@ class FacturaMetadataManager:
                             VALUES (?, ?);
                         END
                     """
-                    conn.exec_driver_sql(query, [order_json, date_str, date_str, order_json])
+                    conn.exec_driver_sql(query, (order_json, date_str, date_str, order_json))
             except Exception as e:  # pragma: no cover
                 logger.error(f"Error saving daily order to SQL: {e}")
         return True
@@ -371,7 +377,7 @@ class FacturaMetadataManager:
             try:
                 with self.db_client.engine.connect() as conn:
                     query = "SELECT extra_invoices_json FROM factura_daily_extra WHERE order_date = ?"
-                    result = conn.exec_driver_sql(query, [date_str]).fetchone()
+                    result = conn.exec_driver_sql(query, (date_str,)).fetchone()
                     if result and result[0]:
                         extras = json.loads(result[0])
                         self.local_daily_extras[date_str] = extras  # pragma: no cover
@@ -402,7 +408,7 @@ class FacturaMetadataManager:
                             VALUES (?, ?);
                         END
                     """
-                    conn.exec_driver_sql(query, [extras_json, date_str, date_str, extras_json])
+                    conn.exec_driver_sql(query, (extras_json, date_str, date_str, extras_json))
             except Exception as e:  # pragma: no cover
                 logger.error(f"Error saving daily extras to SQL: {e}")
         return True
@@ -428,7 +434,7 @@ class FacturaMetadataManager:
                             VALUES (?, ?);
                         END
                     """
-                    conn.exec_driver_sql(query, [override_category, int(invoice_number), int(invoice_number), override_category])
+                    conn.exec_driver_sql(query, (override_category, int(invoice_number), int(invoice_number), override_category))
             except Exception as e:  # pragma: no cover
                 logger.error(f"Error saving override for invoice {invoice_number} to SQL: {e}")
         return True
@@ -454,7 +460,7 @@ class FacturaMetadataManager:
                             VALUES (?, ?);
                         END
                     """
-                    conn.exec_driver_sql(query, [color, int(invoice_number), int(invoice_number), color])
+                    conn.exec_driver_sql(query, (color, int(invoice_number), int(invoice_number), color))
             except Exception as e:  # pragma: no cover
                 logger.error(f"Error saving color for invoice {invoice_number} to SQL: {e}")
         return True
@@ -480,7 +486,34 @@ class FacturaMetadataManager:
                             VALUES (?, ?);
                         END
                     """
-                    conn.exec_driver_sql(query, [custom_name or None, int(invoice_number), int(invoice_number), custom_name or None])
+                    conn.exec_driver_sql(query, (custom_name or None, int(invoice_number), int(invoice_number), custom_name or None))
             except Exception as e:  # pragma: no cover
                 logger.error(f"Error saving custom customer name for invoice {invoice_number} to SQL: {e}")
+        return True
+
+    def save_sent_to_credito(self, invoice_number: int, sent: bool):
+        inv_str = str(invoice_number)
+        if inv_str not in self.local_metadata or not isinstance(self.local_metadata[inv_str], dict):
+            self.local_metadata[inv_str] = {"category": "", "color": "", "custom_customer_name": ""}
+        self.local_metadata[inv_str]["sent_to_credito"] = sent
+        self._save_fallback()
+        
+        if self.db_client.engine:
+            try:
+                with self.db_client.engine.begin() as conn:
+                    query = f"""
+                        UPDATE {self.TABLE_NAME} 
+                        SET sent_to_credito = ?
+                        WHERE invoice_number = ?;
+
+                        IF @@ROWCOUNT = 0
+                        BEGIN
+                            INSERT INTO {self.TABLE_NAME} (invoice_number, sent_to_credito)
+                            VALUES (?, ?);
+                        END
+                    """
+                    bit_val = 1 if sent else 0
+                    conn.exec_driver_sql(query, (bit_val, invoice_number, invoice_number, bit_val))
+            except Exception as e:
+                logger.error(f"Error saving sent_to_credito: {e}")
         return True
