@@ -1335,6 +1335,7 @@ function facturasApp() {
             const _trackManual = this.manualOrder;
 
             if (!this.currentRelacion || !this.currentRelacion.invoices) return [];
+
             const groups = {};
             const categoryOrder = [
                 'LOCAL', 'ENVIO LOCAL', 'VENTA MOSTRADOR', 'PAQUETERIA', 'PASE A PAQUETERIA', 
@@ -1371,7 +1372,7 @@ function facturasApp() {
                 invoiceIndexMap.set(String(inv.invoice_number), idx);
             });
 
-            return Object.values(groups).sort((a, b) => {
+            const result = Object.values(groups).sort((a, b) => {
                 const ai = categoryOrder.indexOf(a.category);
                 const bi = categoryOrder.indexOf(b.category);
                 const aIdx = ai >= 0 ? ai : 100;
@@ -1386,6 +1387,8 @@ function facturasApp() {
                 });
                 return g;
             });
+
+            return result;
         },
 
         isMatch(i) {
