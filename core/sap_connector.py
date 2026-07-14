@@ -27,7 +27,7 @@ class SAPHanaConnector:
 
     DEFAULT_HOST = os.environ.get("SAP_HOST", os.environ.get("SAP_HANA_HOST", ""))
     DEFAULT_PORT = int(os.environ.get("SAP_PORT", os.environ.get("SAP_HANA_PORT", "30015")))
-    DEFAULT_SCHEMA = os.environ.get("SAP_SCHEMA", os.environ.get("SAP_HANA_SCHEMA", "SBO_QUIMICABOSS"))
+    DEFAULT_SCHEMA = os.environ.get("SAP_SCHEMA", os.environ.get("SAP_HANA_SCHEMA", ""))
     DEFAULT_USER = os.environ.get("SAP_USER", os.environ.get("SAP_HANA_USER", ""))
     DEFAULT_PASS = os.environ.get("SAP_PASS", os.environ.get("SAP_HANA_PASSWORD", ""))
 
