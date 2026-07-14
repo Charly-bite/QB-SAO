@@ -901,7 +901,6 @@ class SAPHanaConnector:
         else:
             base_filter = 'T0."DocDate" = CURRENT_DATE'
         base_filter += f"""
-              AND (T1."TrnspName" NOT IN ('VENTA MOSTRADOR', 'VENTA DE MOSTRADOR', 'VENTAS MOSTRADOR') OR T1."TrnspName" IS NULL)
               AND T0."CardCode" != 'CL1662'
               AND T0."CANCELED" != 'C'
               AND NOT EXISTS (
@@ -916,21 +915,7 @@ class SAPHanaConnector:
                 nums = ",".join(str(int(n)) for n in extra_invoice_numbers if n)
                 if nums:
                     final_filter = f"""({base_filter}) 
-                    OR T0."DocNum" IN ({nums})
-                    OR EXISTS (
-                        SELECT 1 FROM {self._get_table_name("sales_orders")} R0
-                        INNER JOIN {self._get_table_name("invoice_lines")} L2
-                            ON L2."BaseType" = 17 AND L2."BaseEntry" = R0."DocEntry"
-                        WHERE L2."DocEntry" = T0."DocEntry" AND R0."DocNum" IN ({nums})
-                    )
-                    OR EXISTS (
-                        SELECT 1 FROM {self._get_table_name("sales_orders")} R0
-                        INNER JOIN {self._get_table_name("delivery_lines")} D1
-                            ON D1."BaseType" = 17 AND D1."BaseEntry" = R0."DocEntry"
-                        INNER JOIN {self._get_table_name("invoice_lines")} L3
-                            ON L3."BaseType" = 15 AND L3."BaseEntry" = D1."DocEntry"
-                        WHERE L3."DocEntry" = T0."DocEntry" AND R0."DocNum" IN ({nums})
-                    )"""
+                    OR T0."DocNum" IN ({nums})"""
                 else:
                     final_filter = base_filter
             except (ValueError, TypeError):  # pragma: no cover
@@ -1079,7 +1064,6 @@ class SAPHanaConnector:
         base_filter = f"T0.\"DocDate\" >= '{date_from}' AND T0.\"DocDate\" <= '{date_to}'"
         
         base_filter += f"""
-              AND (T1."TrnspName" NOT IN ('VENTA MOSTRADOR', 'VENTA DE MOSTRADOR', 'VENTAS MOSTRADOR') OR T1."TrnspName" IS NULL)
               AND T0."CardCode" != 'CL1662'
               AND T0."CANCELED" != 'C'
               AND NOT EXISTS (
@@ -1403,20 +1387,22 @@ class SAPHanaConnector:
             else:
                 total_mxn += float(balance_lc)
 
-        # 3. Fetch yesterday's USD→MXN exchange rate from ORTT
+        # 3. Fetch today's (or most recent) USD→MXN exchange rate from ORTT
         exchange_rate = None
         exchange_rate_date = None
         try:
+            import datetime as _dt
+            today_str = _dt.date.today().isoformat()
             rate_query = f"""
                 SELECT TOP 1
                     T0."RateDate",
                     T0."Rate"
                 FROM "{self.schema}"."ORTT" T0
                 WHERE T0."Currency" = 'USD'
-                  AND T0."RateDate" < CURRENT_DATE
+                  AND T0."RateDate" <= ?
                 ORDER BY T0."RateDate" DESC
             """
-            cursor.execute(rate_query)
+            cursor.execute(rate_query, [today_str])
             rate_row = cursor.fetchone()
             if rate_row:
                 exchange_rate_date = str(rate_row[0]).split(" ")[0]

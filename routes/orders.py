@@ -3603,7 +3603,7 @@ def api_export_relacion(folio):  # pragma: no cover
 
         # ── Normalize ANEXADAS categories (same as JS) ──
         anexadas_aliases = {
-            'ANEXO MY': 'ANEXADAS MTY', 'ANEXO MTY': 'ANEXADAS MTY',
+            'ANEXO MTY': 'ANEXADAS MTY',
             'ANEXO GDL': 'ANEXADAS GDL', 'ANEXO IRP': 'ANEXADAS IRP',
         }
         for inv in invoices:
@@ -3613,7 +3613,7 @@ def api_export_relacion(folio):  # pragma: no cover
 
         # ── Group invoices by category ──
         main_category_order = [
-            'LOCAL', 'ENVIO LOCAL', 'PAQUETERIA', 'PASE A PAQUETERIA',
+            'LOCAL', 'ENVIO LOCAL', 'VENTA MOSTRADOR', 'PAQUETERIA', 'PASE A PAQUETERIA',
             'PASE DIRECTO', 'PASE PROGRAMADO', 'FLETE INTERNO', 'FORANEO',
         ]
         anexadas_cats = ['ANEXADAS GDL', 'ANEXADAS MTY', 'ANEXADAS IRP']
@@ -3641,6 +3641,7 @@ def api_export_relacion(folio):  # pragma: no cover
         cat_colors = {
             'LOCAL': ('D9D9D9', '000000'),
             'ENVIO LOCAL': ('D9D9D9', '000000'),
+            'VENTA MOSTRADOR': ('D9D9D9', '000000'),
             'PAQUETERIA': ('FF00FF', 'FFFFFF'),
             'PASE A PAQUETERIA': ('FF00FF', 'FFFFFF'),
             'FLETE INTERNO': ('FF00FF', 'FFFFFF'),

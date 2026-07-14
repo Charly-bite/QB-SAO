@@ -1287,14 +1287,14 @@ function facturasApp() {
         get invoiceGroups() {
             const groups = {};
             const categoryOrder = [
-                'LOCAL', 'ENVIO LOCAL', 'PAQUETERIA', 'PASE A PAQUETERIA', 
+                'LOCAL', 'ENVIO LOCAL', 'VENTA MOSTRADOR', 'PAQUETERIA', 'PASE A PAQUETERIA', 
                 'PASE DIRECTO', 'PASE PROGRAMADO', 'FLETE INTERNO', 'FORANEO', 
                 'ANEXADAS MTY', 'ANEXADAS GDL', 'ANEXADAS IRP'
             ];
 
             this.filteredInvoices.forEach(i => {
                 let s = (i.shipping_type || 'LOCAL').toUpperCase();
-                if (s === 'ANEXO MY' || s === 'ANEXO MTY') s = 'ANEXADAS MTY';
+                if (s === 'ANEXO MTY') s = 'ANEXADAS MTY';
                 if (s === 'ANEXO GDL') s = 'ANEXADAS GDL';
                 if (s === 'ANEXO IRP') s = 'ANEXADAS IRP';
                 const category = s;
@@ -1337,7 +1337,7 @@ function facturasApp() {
             if (!this.currentRelacion || !this.currentRelacion.invoices) return [];
             const groups = {};
             const categoryOrder = [
-                'LOCAL', 'ENVIO LOCAL', 'PAQUETERIA', 'PASE A PAQUETERIA', 
+                'LOCAL', 'ENVIO LOCAL', 'VENTA MOSTRADOR', 'PAQUETERIA', 'PASE A PAQUETERIA', 
                 'PASE DIRECTO', 'PASE PROGRAMADO', 'FLETE INTERNO', 'FORANEO', 
                 'ANEXADAS MTY', 'ANEXADAS GDL', 'ANEXADAS IRP'
             ];
@@ -1347,7 +1347,7 @@ function facturasApp() {
                 const resolvedInv = liveInv ? { ...inv, ...liveInv } : inv;
 
                 let cat = (resolvedInv.shipping_type || resolvedInv.observaciones || resolvedInv.nota || 'LOCAL').toUpperCase();
-                if (cat === 'ANEXO MY' || cat === 'ANEXO MTY') cat = 'ANEXADAS MTY';
+                if (cat === 'ANEXO MTY') cat = 'ANEXADAS MTY';
                 if (cat === 'ANEXO GDL') cat = 'ANEXADAS GDL';
                 if (cat === 'ANEXO IRP') cat = 'ANEXADAS IRP';
 

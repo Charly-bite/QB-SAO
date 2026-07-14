@@ -163,6 +163,9 @@
                                     <th @click="sortBy('due_date')" class="px-2 py-2 text-center font-extrabold text-slate-700 uppercase tracking-wide bg-slate-100 cursor-pointer hover:bg-slate-200 select-none transition-colors">
                                         <div class="flex items-center justify-center gap-1">Vencimiento <span x-show="sortColumn === 'due_date'" class="text-[10px]" x-text="sortDir === 'asc' ? '▲' : '▼'"></span></div>
                                     </th>
+                                    <th @click="sortBy('total')" class="px-2 py-2 text-right font-extrabold text-slate-700 uppercase tracking-wide bg-slate-100 cursor-pointer hover:bg-slate-200 select-none transition-colors">
+                                        <div class="flex items-center justify-end gap-1">Adeudo <span x-show="sortColumn === 'total'" class="text-[10px]" x-text="sortDir === 'asc' ? '▲' : '▼'"></span></div>
+                                    </th>
                                     <th @click="sortBy('balance')" class="px-2 py-2 text-right font-extrabold text-slate-700 uppercase tracking-wide bg-slate-100 cursor-pointer hover:bg-slate-200 select-none transition-colors">
                                         <div class="flex items-center justify-end gap-1">Saldo <span x-show="sortColumn === 'balance'" class="text-[10px]" x-text="sortDir === 'asc' ? '▲' : '▼'"></span></div>
                                     </th>
@@ -185,6 +188,7 @@
                                         <td class="px-2 py-2 font-bold text-slate-800" x-text="inv.doc_num"></td>
                                         <td class="px-2 py-2 text-center text-slate-500" x-text="formatDocDate(inv.doc_date)"></td>
                                         <td class="px-2 py-2 text-center text-slate-500" x-text="formatDocDate(inv.due_date)"></td>
+                                        <td class="px-2 py-2 text-right font-semibold text-slate-600" x-text="'$' + Number(inv.total).toLocaleString('es-MX', {minimumFractionDigits: 2})"></td>
                                         <td class="px-2 py-2 text-right font-extrabold text-red-600" x-text="'$' + Number(inv.balance).toLocaleString('es-MX', {minimumFractionDigits: 2})"></td>
                                         <td class="px-2 py-2 text-center text-slate-500 font-semibold" x-text="inv.currency"></td>
                                         <td class="px-2 py-2 text-center">
@@ -195,7 +199,7 @@
                                     </tr>
                                 </template>
                                 <template x-if="filteredInvoices().length === 0">
-                                    <tr><td colspan="7" class="px-4 py-8 text-center text-slate-400 text-xs">No se encontraron facturas con los filtros seleccionados</td></tr>
+                                    <tr><td colspan="8" class="px-4 py-8 text-center text-slate-400 text-xs">No se encontraron facturas con los filtros seleccionados</td></tr>
                                 </template>
                             </tbody>
                         </table>

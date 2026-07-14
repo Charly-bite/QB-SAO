@@ -12,9 +12,11 @@ import datetime
 import json
 import logging
 import os
+import threading
 import tempfile
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+# Force Flask reload to clear memory cache
 from core.database_client import DatabaseClient
 
 logger = logging.getLogger(__name__)
@@ -151,7 +153,7 @@ class RelacionManager:
                         FROM seguimiento_relacion_envios
                         WHERE folio = ?
                     """
-                    row = conn.exec_driver_sql(query, [folio]).fetchone()
+                    row = conn.exec_driver_sql(query, (folio,)).fetchone()
                     if row:
                         relacion = {
                             "folio": row[0],
@@ -234,7 +236,7 @@ class RelacionManager:
                         """
                         conn.exec_driver_sql(
                             query,
-                            [invoices_json, invoice_numbers_str, username, relacion["notes"], folio],
+                            (invoices_json, invoice_numbers_str, username, relacion["notes"], folio),
                         )
                     else:
                         query = """
@@ -245,10 +247,10 @@ class RelacionManager:
                         """
                         conn.exec_driver_sql(
                             query,
-                            [
+                            (
                                 folio, date_str, username, username,
                                 invoices_json, invoice_numbers_str, relacion["notes"],
-                            ],
+                            ),
                         )
             except Exception as e:  # pragma: no cover
                 logger.error(f"Error saving relacion {folio} to SQL: {e}")
@@ -319,6 +321,7 @@ class RelacionManager:
         action: str,
         username: str,
         full_name: str = "",
+        signature_path: str = "",
     ) -> Dict[str, Any]:
         """
         Sign or unsign a specific area of the relación.
@@ -329,6 +332,7 @@ class RelacionManager:
             action: 'sign' or 'unsign'
             username: The username performing the action
             full_name: Display name for the signature
+            signature_path: Path to the user's uploaded signature image
 
         Returns:
             Updated signatures dict
@@ -345,6 +349,7 @@ class RelacionManager:
                 "name": full_name or username,
                 "user": username,
                 "at": datetime.datetime.now().isoformat(),
+                "signature_path": signature_path,
             }
         elif action == "unsign":
             signatures.pop(area, None)
@@ -363,7 +368,7 @@ class RelacionManager:
                         SET signatures_json = ?, updated_at = GETDATE()
                         WHERE folio = ?
                         """,
-                        [signatures_json, folio],
+                        (signatures_json, folio),
                     )
             except Exception as e:  # pragma: no cover
                 logger.error(f"Error saving signatures for {folio}: {e}")
@@ -384,7 +389,7 @@ class RelacionManager:
                 with self.db_client.engine.connect() as conn:
                     row = conn.exec_driver_sql(
                         "SELECT signatures_json FROM seguimiento_relacion_envios WHERE folio = ?",
-                        [folio],
+                        (folio,),
                     ).fetchone()
                     if row and row[0]:
                         return json.loads(row[0])
@@ -437,7 +442,7 @@ class RelacionManager:
                 with self.db_client.engine.connect() as conn:
                     row = conn.exec_driver_sql(
                         "SELECT invoices_json FROM seguimiento_relacion_envios WHERE folio = ?",
-                        [folio],
+                        (folio,),
                     ).fetchone()
                     if row and row[0]:
                         invoices = json.loads(row[0])
@@ -482,7 +487,7 @@ class RelacionManager:
                         SET invoices_json = ?, updated_at = GETDATE()
                         WHERE folio = ?
                         """,
-                        [invoices_json, folio],
+                        (invoices_json, folio),
                     )
             except Exception as e:  # pragma: no cover
                 logger.error(f"Error saving authorization for {folio}: {e}")
@@ -663,7 +668,7 @@ class RelacionManager:
                         SET is_closed = 1, updated_at = GETDATE(), updated_by = ?
                         WHERE folio = ? AND is_closed = 0
                     """
-                    conn.exec_driver_sql(query, [username, folio])
+                    conn.exec_driver_sql(query, (username, folio))
             except Exception as e:  # pragma: no cover
                 logger.error(f"Error closing relacion {folio}: {e}")
 
@@ -673,55 +678,14 @@ class RelacionManager:
             self.local_relaciones[folio]["updated_at"] = datetime.datetime.now().isoformat()
             self.local_relaciones[folio]["updated_by"] = username
 
-        # 2. Roll unsent invoices to next business day
-        rolled_count = 0
-        if unsent_invoices:
-            next_folio = self.generate_folio(next_day)
-            existing_next = self.get_relacion(next_day)
-
-            if existing_next:
-                # Merge with existing — add only new invoices
-                existing_nums = set(existing_next.get("invoice_numbers", []))
-                new_invoices = existing_next.get("invoices", [])[:]
-                for inv in unsent_invoices:
-                    inv_num = str(inv.get("invoice_number", ""))
-                    if inv_num not in existing_nums:
-                        new_invoices.append(inv)
-                        rolled_count += 1
-                if rolled_count > 0:
-                    self.create_or_update_relacion(
-                        next_day, new_invoices, username,
-                        notes=f"Incluye {rolled_count} facturas del {date_str}"
-                    )
-            else:
-                # Create new relación for next day with rolled invoices
-                rolled_count = len(unsent_invoices)
-                rel = self.create_or_update_relacion(
-                    next_day, unsent_invoices, username,
-                    notes=f"Rollover de {rolled_count} facturas del {date_str}"
-                )
-                # Mark the rolled_from reference
-                if self.db_client.engine:
-                    try:
-                        with self.db_client.engine.begin() as conn:
-                            conn.exec_driver_sql(
-                                "UPDATE seguimiento_relacion_envios SET rolled_from = ? WHERE folio = ?",
-                                [folio, next_folio]
-                            )
-                    except Exception:  # pragma: no cover
-                        pass
-
         self._save_fallback()
 
         result = {
             "closed_folio": folio,
             "closed_date": date_str,
             "next_business_day": next_day,
-            "rolled_invoices": rolled_count,
-            "next_folio": self.generate_folio(next_day) if rolled_count > 0 else None,
+            "rolled_invoices": 0,
+            "next_folio": None,
         }
-        logger.info(
-            f"Día cerrado: {folio} by {username}. "
-            f"Rolled {rolled_count} invoices to {next_day}"
-        )
+        logger.info(f"Día cerrado: {folio} by {username}.")
         return result

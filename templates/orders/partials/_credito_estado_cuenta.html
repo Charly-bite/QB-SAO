@@ -140,6 +140,7 @@
                             <th class="px-3 py-3 text-left font-extrabold text-slate-700 text-xs uppercase tracking-wide">No. Factura</th>
                             <th class="px-3 py-3 text-center font-extrabold text-slate-700 text-xs uppercase tracking-wide">Fecha</th>
                             <th class="px-3 py-3 text-center font-extrabold text-slate-700 text-xs uppercase tracking-wide">Vencimiento</th>
+                            <th class="px-3 py-3 text-right font-extrabold text-slate-700 text-xs uppercase tracking-wide">Adeudo</th>
                             <th class="px-3 py-3 text-right font-extrabold text-slate-700 text-xs uppercase tracking-wide">Saldo</th>
                             <th class="px-3 py-3 text-center font-extrabold text-slate-700 text-xs uppercase tracking-wide">Moneda</th>
                             <th class="px-3 py-3 text-center font-extrabold text-slate-700 text-xs uppercase tracking-wide">Días Atraso</th>
@@ -157,6 +158,7 @@
                                 <td class="px-3 py-2.5 font-bold text-slate-800" x-text="inv.doc_num"></td>
                                 <td class="px-3 py-2.5 text-center text-slate-500" x-text="formatDocDate(inv.doc_date)"></td>
                                 <td class="px-3 py-2.5 text-center text-slate-500" x-text="formatDocDate(inv.due_date)"></td>
+                                <td class="px-3 py-2.5 text-right font-semibold text-slate-600" x-text="'$' + Number(inv.total).toLocaleString('es-MX', {minimumFractionDigits: 2})"></td>
                                 <td class="px-3 py-2.5 text-right font-extrabold text-red-600" x-text="'$' + Number(inv.balance).toLocaleString('es-MX', {minimumFractionDigits: 2})"></td>
                                 <td class="px-3 py-2.5 text-center text-slate-500 font-semibold" x-text="inv.currency"></td>
                                 <td class="px-3 py-2.5 text-center">

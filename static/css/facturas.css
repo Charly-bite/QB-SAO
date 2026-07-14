@@ -59,7 +59,7 @@ tr.invoice-row.invoice-row-highlighted {
     /* Force landscape and tight margins */
     @page {
         size: letter landscape;
-        margin: 3mm;
+        margin: 2mm !important;
     }
 
     /* Scale everything down aggressively */
@@ -68,13 +68,13 @@ tr.invoice-row.invoice-row-highlighted {
         print-color-adjust: exact !important;
         margin: 0 !important;
         padding: 0 !important;
-        font-size: 7.5px !important;
+        font-size: 6.8px !important;
     }
 
     /* Prevent SVGs from expanding */
     svg {
-        max-width: 1rem !important;
-        max-height: 1rem !important;
+        max-width: 0.9rem !important;
+        max-height: 0.9rem !important;
     }
 
     /* Hide ALL UI controls */
@@ -99,19 +99,19 @@ tr.invoice-row.invoice-row-highlighted {
     table {
         width: 100% !important;
         page-break-inside: avoid !important;
-        font-size: 7.5px !important;
+        font-size: 6.8px !important;
         border-collapse: collapse !important;
     }
     td, th {
-        padding: 0px 3px !important;
-        font-size: 7.5px !important;
-        line-height: 1.1 !important;
+        padding: 0px 2px !important;
+        font-size: 6.8px !important;
+        line-height: 1.05 !important;
     }
-    .text-[9px] {
-        font-size: 7px !important;
+    .text-\[9px\] {
+        font-size: 6px !important;
     }
-    .py-3 { padding-top: 0.25rem !important; padding-bottom: 0.25rem !important; }
-    .px-6 { padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
+    .py-3 { padding-top: 0.15rem !important; padding-bottom: 0.15rem !important; }
+    .px-6 { padding-left: 0.3rem !important; padding-right: 0.3rem !important; }
     
     /* Ocultar botones e interfaces no deseadas en impresión */
     .print\:hidden {
@@ -123,16 +123,31 @@ tr.invoice-row.invoice-row-highlighted {
         page-break-inside: avoid;
         height: auto !important;
         min-height: 0 !important;
-        line-height: 1.1 !important;
+        line-height: 1.05 !important;
     }
     /* Compact spacer rows — nearly invisible */
     tr[style*="height: 16px"], tr[style*="height: 18px"] {
-        height: 2px !important;
+        height: 1.5px !important;
     }
     /* Compact data and header rows */
     tr[style*="height: 26px"], tr[style*="height: 28px"],
-    tr[style*="height: 30px"], tr[style*="height: 32px"] {
-        height: 13px !important;
+    tr[style*="height: 32px"] {
+        height: 11px !important;
+    }
+    tr[style*="height: 22px"] {
+        height: 9px !important;
+    }
+    /* Larger spacers */
+    tr[style*="height: 30px"],
+    tr[style*="height: 20px"] {
+        height: 3px !important;
+    }
+    tr[style*="height: 6px"] {
+        height: 1px !important;
+    }
+    /* Thin signature lines */
+    tr[style*="height: 2px"] {
+        height: 1.5px !important;
     }
 
     /* Hide drag handle columns */
@@ -166,13 +181,13 @@ tr.invoice-row.invoice-row-highlighted {
     /* Compact the relaciones table specifically */
     #relaciones-table td,
     #relaciones-table th {
-        padding: 0px 2px !important;
-        font-size: 7.5px !important;
-        line-height: 1.05 !important;
+        padding: 0px 1.5px !important;
+        font-size: 6.8px !important;
+        line-height: 1.02 !important;
     }
-    /* Shrink ANEXADAS banner/title rows */
-    #relaciones-table tfoot tr[style*="height"] {
-        height: 11px !important;
+    /* Shrink signature images in footer */
+    #relaciones-table tfoot img {
+        max-height: 18px !important;
     }
 
     /* Remove shadows, rounded corners */
