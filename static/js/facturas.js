@@ -266,9 +266,10 @@ function facturasApp() {
         currentUserUsername: cfg.currentUserUsername,
         currentUserFullName: cfg.currentUserFullName,
         currentUserSignature: cfg.currentUserSignature,
-        signatures: { facturacion: null, credito: null },
+        signatures: { facturacion: null, credito: null, almacen: null },
         canSignFacturacion: cfg.canSignFacturacion,
         canSignCredito: cfg.canSignCredito,
+        canSignAlmacen: cfg.canSignAlmacen,
         canAuthorizarCredito: cfg.canAuthorizarCredito || false,
         clientId: Math.random().toString(36).substring(2) + Date.now().toString(36),
         _suppressRelacionHighlight: false,
@@ -651,11 +652,13 @@ function facturasApp() {
                 const canSign = {
                     facturacion: this.canSignFacturacion,
                     credito: this.canSignCredito,
+                    almacen: this.canSignAlmacen,
                 };
                 if (!canSign[area]) {
                     const labels = {
                         facturacion: 'Facturación',
                         credito: 'Crédito y Cobranza',
+                        almacen: 'Almacén',
                     };
                     alert(`Solo el jefe de ${labels[area]} puede firmar esta área.`);
                     return;
@@ -673,6 +676,7 @@ function facturasApp() {
                     this.signatures = {
                         facturacion: data.signatures.facturacion || null,
                         credito: data.signatures.credito || null,
+                        almacen: data.signatures.almacen || null,
                     };
                 } else {
                     alert(data.error || 'Error al actualizar firma');

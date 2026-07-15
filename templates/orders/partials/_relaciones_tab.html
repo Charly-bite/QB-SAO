@@ -297,47 +297,68 @@
                 <tfoot>
                     <!-- ═══ SINGLE SIGNATURE BLOCK (at the very end) ═══ -->
                     <tr style="height: 20px;"><td colspan="9" class="bg-white" style="border: none;"></td></tr>
-                    <!-- Signature name rows (above the line) -->
-                    <tr style="height: 30px;">
-                        <td colspan="4" style="border: none; text-align: center; vertical-align: bottom; padding: 0 4px;" class="bg-white"
-                            @click="toggleSignature('facturacion')" :style="{ cursor: 'pointer' }">
-                            <template x-if="signatures.facturacion?.signature_path">
-                                <img :src="'/static/' + signatures.facturacion.signature_path" style="max-height: 26px; margin: 0 auto; object-fit: contain; display: block;" />
-                            </template>
-                            <template x-if="!signatures.facturacion?.signature_path">
-                                <span x-show="signatures.facturacion" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 14px; color: #1a3c7a;" x-text="signatures.facturacion?.name || ''"></span>
-                            </template>
+                    <!-- Signature name, line and label boxes (homogenized sizes via Flex container) -->
+                    <tr>
+                        <td colspan="9" style="border: none; padding: 15px 0 0 0;" class="bg-white">
+                            <div style="display: flex; justify-content: space-between; gap: 40px; width: 100%;">
+                                <!-- Facturación Box -->
+                                <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;">
+                                    <div style="height: 40px; display: flex; align-items: flex-end; justify-content: center; width: 100%; cursor: pointer;"
+                                         @click="toggleSignature('facturacion')">
+                                        <template x-if="signatures.facturacion?.signature_path">
+                                            <img :src="'/static/' + signatures.facturacion.signature_path" style="max-height: 36px; object-fit: contain;" />
+                                        </template>
+                                        <template x-if="!signatures.facturacion?.signature_path">
+                                            <span x-show="signatures.facturacion" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 14px; color: #1a3c7a;" x-text="signatures.facturacion?.name || ''"></span>
+                                        </template>
+                                    </div>
+                                    <div style="width: 100%; height: 2px; background-color: #000000; margin-top: 4px;"></div>
+                                    <div style="width: 100%; text-align: center; font-weight: bold; font-size: 12px; background-color: #A6A6A6; border: 1px solid #808080; padding: 5px; margin-top: 6px; cursor: pointer; color: #000000;"
+                                         @click="toggleSignature('facturacion')"
+                                         :style="signatures.facturacion ? { backgroundColor: '#7CB342', color: '#fff' } : { backgroundColor: '#A6A6A6' }">
+                                        Facturación
+                                    </div>
+                                </div>
+
+                                <!-- Crédito y Cobranza Box -->
+                                <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;">
+                                    <div style="height: 40px; display: flex; align-items: flex-end; justify-content: center; width: 100%; cursor: pointer;"
+                                         @click="toggleSignature('credito')">
+                                        <template x-if="signatures.credito?.signature_path">
+                                            <img :src="'/static/' + signatures.credito.signature_path" style="max-height: 36px; object-fit: contain;" />
+                                        </template>
+                                        <template x-if="!signatures.credito?.signature_path">
+                                            <span x-show="signatures.credito" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 14px; color: #1a3c7a;" x-text="signatures.credito?.name || ''"></span>
+                                        </template>
+                                    </div>
+                                    <div style="width: 100%; height: 2px; background-color: #000000; margin-top: 4px;"></div>
+                                    <div style="width: 100%; text-align: center; font-weight: bold; font-size: 12px; background-color: #A6A6A6; border: 1px solid #808080; padding: 5px; margin-top: 6px; cursor: pointer; color: #000000;"
+                                         @click="toggleSignature('credito')"
+                                         :style="signatures.credito ? { backgroundColor: '#7CB342', color: '#fff' } : { backgroundColor: '#A6A6A6' }">
+                                        Crédito y Cobranza
+                                    </div>
+                                </div>
+
+                                <!-- Almacén Box -->
+                                <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;">
+                                    <div style="height: 40px; display: flex; align-items: flex-end; justify-content: center; width: 100%; cursor: pointer;"
+                                         @click="toggleSignature('almacen')">
+                                        <template x-if="signatures.almacen?.signature_path">
+                                            <img :src="'/static/' + signatures.almacen.signature_path" style="max-height: 36px; object-fit: contain;" />
+                                        </template>
+                                        <template x-if="!signatures.almacen?.signature_path">
+                                            <span x-show="signatures.almacen" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 14px; color: #1a3c7a;" x-text="signatures.almacen?.name || ''"></span>
+                                        </template>
+                                    </div>
+                                    <div style="width: 100%; height: 2px; background-color: #000000; margin-top: 4px;"></div>
+                                    <div style="width: 100%; text-align: center; font-weight: bold; font-size: 12px; background-color: #A6A6A6; border: 1px solid #808080; padding: 5px; margin-top: 6px; cursor: pointer; color: #000000;"
+                                         @click="toggleSignature('almacen')"
+                                         :style="signatures.almacen ? { backgroundColor: '#7CB342', color: '#fff' } : { backgroundColor: '#A6A6A6' }">
+                                        Almacén
+                                    </div>
+                                </div>
+                            </div>
                         </td>
-                        <td style="border: none;" class="bg-white"></td>
-                        <td colspan="2" style="border: none; text-align: center; vertical-align: bottom; padding: 0 4px;" class="bg-white"
-                            @click="toggleSignature('credito')" :style="{ cursor: 'pointer' }">
-                            <template x-if="signatures.credito?.signature_path">
-                                <img :src="'/static/' + signatures.credito.signature_path" style="max-height: 26px; margin: 0 auto; object-fit: contain; display: block;" />
-                            </template>
-                            <template x-if="!signatures.credito?.signature_path">
-                                <span x-show="signatures.credito" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 14px; color: #1a3c7a;" x-text="signatures.credito?.name || ''"></span>
-                            </template>
-                        </td>
-                        <td style="border: none;" class="bg-white"></td>
-                        <td style="border: none; text-align: center; vertical-align: bottom; padding: 0 4px;" class="bg-white">
-                        </td>
-                    </tr>
-                    <!-- Thin black signature lines -->
-                    <tr style="height: 2px;">
-                        <td colspan="4" style="background-color: #000000; border: none; padding: 0;" @click="toggleSignature('facturacion')" :style="{ cursor: 'pointer' }"></td>
-                        <td style="border: none;" class="bg-white"></td>
-                        <td colspan="2" style="background-color: #000000; border: none; padding: 0;" @click="toggleSignature('credito')" :style="{ cursor: 'pointer' }"></td>
-                        <td style="border: none;" class="bg-white"></td>
-                        <td style="background-color: #000000; border: none; padding: 0;"></td>
-                    </tr>
-                    <tr style="height: 6px;"><td colspan="9" class="bg-white" style="border: none;"></td></tr>
-                    <!-- Signature label boxes (clickable) -->
-                    <tr style="height: 28px;">
-                        <td colspan="4" @click="toggleSignature('facturacion')" style="text-align: center; font-weight: bold; font-size: 12px; background-color: #A6A6A6; border: 1px solid #808080; padding: 5px; cursor: pointer;" :style="signatures.facturacion ? { backgroundColor: '#7CB342', color: '#fff' } : { backgroundColor: '#A6A6A6' }">Facturación</td>
-                        <td style="border: none;" class="bg-white"></td>
-                        <td colspan="2" @click="toggleSignature('credito')" style="text-align: center; font-weight: bold; font-size: 12px; background-color: #A6A6A6; border: 1px solid #808080; padding: 5px; cursor: pointer;" :style="signatures.credito ? { backgroundColor: '#7CB342', color: '#fff' } : { backgroundColor: '#A6A6A6' }">Crédito y Cobranza</td>
-                        <td style="border: none;" class="bg-white"></td>
-                        <td style="text-align: center; font-weight: bold; font-size: 12px; background-color: #A6A6A6; border: 1px solid #808080; padding: 5px;">Almacén</td>
                     </tr>
                 </tfoot>
             </table>

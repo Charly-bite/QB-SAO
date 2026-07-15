@@ -257,6 +257,7 @@
         currentUserSignature: {{ current_user.signature_path | tojson if current_user.signature_path else 'null' }},
         canSignFacturacion: {{ 'true' if current_user.can_sign_facturacion() else 'false' }},
         canSignCredito: {{ 'true' if current_user.can_sign_credito() else 'false' }},
+        canSignAlmacen: {{ 'true' if current_user.can_sign_almacen() else 'false' }},
         canAuthorizarCredito: {{ 'true' if current_user.can_authorize_credito() else 'false' }},
         apiFacturasUrl: "{{ url_for('orders.api_facturas') }}",
         apiFacturasPendingSummaryUrl: "{{ url_for('orders.api_facturas_pending_summary') }}",
