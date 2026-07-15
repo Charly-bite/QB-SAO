@@ -278,3 +278,106 @@ class TestFacturasSyncApi:
             "username": "testadmin",
             "client_id": "test_client_id_123"
         })
+
+    @patch("routes.orders._publish_event")
+    def test_send_to_credito_endpoint(self, mock_publish, auth_client, app):
+        payload = {
+            "sent": True
+        }
+        resp = auth_client.post(
+            "/orders/api/facturas/5001/send-to-credito",
+            data=json.dumps(payload),
+            content_type="application/json"
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["success"] is True
+        assert data["sent_to_credito"] is True
+        assert self.mgr.local_metadata["5001"]["sent_to_credito"] is True
+        
+        mock_publish.assert_called_with({
+            "type": "factura_sent_to_credito_changed",
+            "invoice_number": "5001",
+            "sent_to_credito": True
+        })
+
+    @patch("routes.orders._publish_event")
+    def test_auto_authorize_ventas_mostrador_endpoint(self, mock_publish, auth_client, app):
+        payload = {
+            "authorized": True,
+            "customer_name": "VENTAS MOSTRADOR GDL"
+        }
+        resp = auth_client.post(
+            "/orders/api/facturas/5001/authorize",
+            data=json.dumps(payload),
+            content_type="application/json"
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["success"] is True
+        assert data["invoice"]["credito_authorized"] is True
+
+    @patch("routes.orders._publish_event")
+    def test_facturacion_can_auto_authorize_mostrador_only(self, mock_publish, app):
+        print("PERMS IN TEST:", app.permission_manager.get_permissions("facturacion"))
+        um = app.user_manager
+        if "testfacturacion" not in um.users:
+            um.create_user(
+                username="testfacturacion",
+                password="facturapass123",
+                full_name="Test Invoicing",
+                role="facturacion",
+            )
+        um.users["testfacturacion"]["must_change_password"] = False
+        
+        # Configure mock SAP side effect to return normal client for 5002
+        def get_invoices(date_str=None, extra_invoice_numbers=None):
+            if extra_invoice_numbers and 5002 in extra_invoice_numbers:
+                return [{
+                    "invoice_number": 5002,
+                    "customer_name": "NORMAL CUSTOMER S.A.",
+                    "total": 100.0,
+                    "currency": "MXN",
+                    "status": "Abierta"
+                }]
+            return [{
+                "invoice_number": 5001,
+                "customer_name": "VENTAS MOSTRADOR GDL",
+                "total": 100.0,
+                "currency": "MXN",
+                "status": "Abierta"
+            }]
+        self.mock_sap.get_todays_invoices.side_effect = get_invoices
+        
+        client = app.test_client()
+        client.post(
+            "/login",
+            data={"username": "testfacturacion", "password": "facturapass123"},
+            follow_redirects=True
+        )
+
+        # 1. Authorizing normal invoice should fail with 403
+        payload_normal = {
+            "authorized": True,
+            "customer_name": "NORMAL CUSTOMER S.A."
+        }
+        resp = client.post(
+            "/orders/api/facturas/5002/authorize",
+            data=json.dumps(payload_normal),
+            content_type="application/json"
+        )
+        assert resp.status_code == 403
+
+        # 2. Authorizing mostrador invoice should succeed with 200
+        payload_mostrador = {
+            "authorized": True,
+            "customer_name": "VENTAS MOSTRADOR GDL"
+        }
+        resp = client.post(
+            "/orders/api/facturas/5001/authorize",
+            data=json.dumps(payload_mostrador),
+            content_type="application/json"
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["success"] is True

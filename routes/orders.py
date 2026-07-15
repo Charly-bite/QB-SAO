@@ -2409,6 +2409,7 @@ def api_facturas():
                 inv['credito_authorized_at'] = auth_data['credito_authorized_at']
                 inv['credito_revoked_from_relacion'] = auth_data.get('credito_revoked_from_relacion', False)
                 inv['credito_notes'] = auth_data.get('credito_notes', '')
+                inv['sent_to_credito'] = auth_data.get('sent_to_credito', False)
                 
                 # Resolve full name
                 user_mgr = getattr(current_app, "user_mgr", None)
@@ -2424,6 +2425,7 @@ def api_facturas():
                 inv['credito_authorized_at'] = None
                 inv['credito_revoked_from_relacion'] = False
                 inv['credito_notes'] = ''
+                inv['sent_to_credito'] = False
             order = factura_to_order.get(inv_num_str)
             if order:  # pragma: no cover
                 status = order.get('status')
@@ -4025,10 +4027,33 @@ def api_authorize_invoice(folio):  # pragma: no cover
 @login_required
 def api_factura_authorize(invoice_number):  # pragma: no cover
     """Authorize or revoke authorization for a specific invoice."""
-    if not current_user.can_authorize_credito():
-        return jsonify({"error": "Solo Crédito y Cobranza puede autorizar envíos."}), 403
-
     data = request.get_json() or {}
+    
+    # Check if this is a Ventas Mostrador invoice to allow auto-approval by billing/facturacion
+    is_mostrador = False
+    customer_name = data.get("customer_name", "")
+    if customer_name and "VENTAS MOSTRADOR" in customer_name.upper():
+        is_mostrador = True
+    else:
+        try:
+            sap = current_app.sap_connector
+            if sap:
+                if not sap.connected:
+                    sap.connect()
+                invoices = sap.get_todays_invoices(extra_invoice_numbers=[invoice_number])
+                if invoices:
+                    cust_name = invoices[0].get("customer_name", "")
+                    if cust_name and "VENTAS MOSTRADOR" in cust_name.upper():
+                        is_mostrador = True
+        except Exception as e:
+            logging.error(f"Error fetching customer name from SAP during authorization check: {e}")
+
+    if not current_user.can_authorize_credito():
+        if is_mostrador and current_user.can_edit_facturas():
+            pass
+        else:
+            return jsonify({"error": "Solo Crédito y Cobranza puede autorizar envíos."}), 403
+
     authorized = data.get("authorized", True)
 
     mgr = getattr(current_app, "factura_metadata_mgr", None)
@@ -4134,6 +4159,34 @@ def api_factura_credito_notes(invoice_number):  # pragma: no cover
         return jsonify({"success": True, "notes": notes})
     except Exception as e:
         logging.error(f"Error saving credito notes {invoice_number}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@orders_bp.route("/api/facturas/<int:invoice_number>/send-to-credito", methods=["POST"])
+@login_required
+def api_factura_send_to_credito(invoice_number):  # pragma: no cover
+    """Mark an invoice as sent to credit department for authorization."""
+    if not current_user.can_edit_facturas():
+        return jsonify({"error": "Sin permisos"}), 403
+
+    data = request.get_json() or {}
+    sent = data.get("sent", True)
+
+    mgr = getattr(current_app, "factura_metadata_mgr", None)
+    if not mgr:
+        return jsonify({"error": "Metadata manager not available"}), 500
+
+    try:
+        mgr.save_sent_to_credito(invoice_number, sent)
+        
+        _publish_event({
+            "type": "factura_sent_to_credito_changed",
+            "invoice_number": str(invoice_number),
+            "sent_to_credito": sent
+        })
+        
+        return jsonify({"success": True, "sent_to_credito": sent})
+    except Exception as e:
+        logging.error(f"Error saving sent_to_credito {invoice_number}: {e}")
         return jsonify({"error": str(e)}), 500
 
 @orders_bp.route("/api/facturas/<int:invoice_number>/toggle", methods=["POST"])
