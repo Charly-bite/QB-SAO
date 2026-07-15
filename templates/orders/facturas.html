@@ -175,6 +175,36 @@
                         📄 Estado de Cuenta
                     </button>
                 </div>
+
+                <!-- Almacén Sub-tabs (Only shown on Almacén tab) -->
+                <div x-show="activeTab === 'almacen'" x-transition class="flex flex-wrap items-center gap-2">
+                    <div class="inline-flex p-0.5 bg-sky-50 rounded-lg border border-sky-200/60 shadow-inner shrink-0 h-7 items-center">
+                        <button @click="almacenSubTab = 'todos'" 
+                            class="px-3 py-1 rounded-md text-xs font-bold transition-all duration-200 flex items-center"
+                            :class="almacenSubTab === 'todos' ? 'bg-sky-600 text-white shadow-sm' : 'text-sky-700 hover:bg-sky-100'">
+                            Todos
+                            <span class="text-[9px] opacity-75 ml-1 font-extrabold" x-text="'(' + (currentRelacion?.invoices?.length || 0) + ')'"></span>
+                        </button>
+                        <button @click="almacenSubTab = 'entregados'" 
+                            class="px-3 py-1 rounded-md text-xs font-bold transition-all duration-200 flex items-center"
+                            :class="almacenSubTab === 'entregados' ? 'bg-sky-600 text-white shadow-sm' : 'text-sky-700 hover:bg-sky-100'">
+                            Entregados
+                            <span class="text-[9px] opacity-75 ml-1 font-extrabold" x-text="'(' + (currentRelacion?.invoices?.filter(i => i.entrega).length || 0) + ')'"></span>
+                        </button>
+                        <button @click="almacenSubTab = 'sin_entregar'" 
+                            class="px-3 py-1 rounded-md text-xs font-bold transition-all duration-200 flex items-center"
+                            :class="almacenSubTab === 'sin_entregar' ? 'bg-sky-600 text-white shadow-sm' : 'text-sky-700 hover:bg-sky-100'">
+                            Sin entregar
+                            <span class="text-[9px] opacity-75 ml-1 font-extrabold" x-text="'(' + (currentRelacion?.invoices?.filter(i => !i.entrega && !i.rebote).length || 0) + ')'"></span>
+                        </button>
+                        <button @click="almacenSubTab = 'rebotados'" 
+                            class="px-3 py-1 rounded-md text-xs font-bold transition-all duration-200 flex items-center"
+                            :class="almacenSubTab === 'rebotados' ? 'bg-sky-600 text-white shadow-sm' : 'text-sky-700 hover:bg-sky-100'">
+                            Rebotados
+                            <span class="text-[9px] opacity-75 ml-1 font-extrabold" x-text="'(' + (currentRelacion?.invoices?.filter(i => i.rebote).length || 0) + ')'"></span>
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <!-- Right Side: Coincidences Count & Actions -->

@@ -246,6 +246,7 @@ function facturasApp() {
             return order.find(t => tabs[t]) || 'facturas';
         })(),
         creditoSubTab: 'Todas',
+        almacenSubTab: 'todos',
         
         // Pending Summary Tracking
         pendingSubTab: localStorage.getItem('qb_facturas_pending_subtab') || 'current', // 'calendar', 'all', 'current'
@@ -2757,6 +2758,21 @@ function facturasApp() {
             } catch (e) {
                 console.error('Error fetching relacion:', e);
             }
+        },
+
+        filteredAlmacenInvoices() {
+            if (!this.currentRelacion || !this.currentRelacion.invoices) return [];
+            const invoices = this.currentRelacion.invoices;
+            if (this.almacenSubTab === 'entregados') {
+                return invoices.filter(i => i.entrega);
+            }
+            if (this.almacenSubTab === 'sin_entregar') {
+                return invoices.filter(i => !i.entrega && !i.rebote);
+            }
+            if (this.almacenSubTab === 'rebotados') {
+                return invoices.filter(i => i.rebote);
+            }
+            return invoices;
         },
 
         async fetchRelaciones() {
