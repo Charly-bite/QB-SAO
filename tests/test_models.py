@@ -218,3 +218,35 @@ class TestCanEditOrders:
     def test_viewer_cannot_edit(self):
         u = _make_user(role='viewer')
         assert u.can_edit_orders() is False
+
+
+class TestReyesMPermissions:
+    """Verify that ReyesM gets specific permissions regardless of their role."""
+
+    @pytest.mark.parametrize("permission", [
+        "nav.facturas",
+        "nav.monitor",
+        "facturas.tab.relaciones",
+        "facturas.tab.pendientes",
+        "facturas.tab.almacen"
+    ])
+    def test_reyesm_has_required_permissions(self, permission):
+        u = _make_user(username="ReyesM", role="viewer")
+        assert u.has_permission(permission) is True
+
+    @pytest.mark.parametrize("permission", [
+        "nav.facturas",
+        "nav.monitor",
+        "facturas.tab.relaciones",
+        "facturas.tab.pendientes",
+        "facturas.tab.almacen"
+    ])
+    def test_reyesm_case_insensitive_has_required_permissions(self, permission):
+        u = _make_user(username="reyesm", role="viewer")
+        assert u.has_permission(permission) is True
+
+    def test_reyesm_does_not_have_unrelated_permissions(self):
+        u = _make_user(username="ReyesM", role="viewer")
+        assert u.has_permission("nav.users") is False
+        assert u.has_permission("facturas.edit") is False
+

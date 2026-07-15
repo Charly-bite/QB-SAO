@@ -20,6 +20,8 @@ window.estadoCuentaWindowApp = function(winConfig) {
         filterSearch: '',
         filterCurrency: 'ALL',
         filterOverdue: 'ALL',
+        filterStartDate: '',
+        filterEndDate: '',
         
         sortColumn: 'doc_num',
         sortDir: 'desc',
@@ -57,7 +59,7 @@ window.estadoCuentaWindowApp = function(winConfig) {
                 const data = await res.json();
                 if (data.success && data.data) {
                     this.data = data.data;
-                    this.selected = data.data.invoices.map(i => i.doc_num);
+                    this.selected = data.data.invoices.filter(i => i.balance > 0).map(i => i.doc_num);
                 } else {
                     alert(data.error || 'Error al obtener estado de cuenta');
                     this.close();
@@ -101,8 +103,11 @@ window.estadoCuentaWindowApp = function(winConfig) {
             let result = this.data.invoices.filter(inv => {
                 if (this.filterSearch && !String(inv.doc_num).includes(this.filterSearch.trim())) return false;
                 if (this.filterCurrency !== 'ALL' && (inv.currency || 'MXN').toUpperCase() !== this.filterCurrency) return false;
-                if (this.filterOverdue === 'OVERDUE' && inv.days_overdue <= 0) return false;
-                if (this.filterOverdue === 'CURRENT' && inv.days_overdue > 0) return false;
+                if (this.filterOverdue === 'OVERDUE' && (inv.days_overdue <= 0 || inv.balance <= 0)) return false;
+                if (this.filterOverdue === 'CURRENT' && (inv.days_overdue > 0 || inv.balance <= 0)) return false;
+                if (this.filterOverdue === 'PAID' && inv.balance > 0) return false;
+                if (this.filterStartDate && inv.doc_date < this.filterStartDate) return false;
+                if (this.filterEndDate && inv.doc_date > this.filterEndDate) return false;
                 return true;
             });
 
@@ -164,6 +169,11 @@ window.estadoCuentaWindowApp = function(winConfig) {
             return this.selected.length;
         },
 
+        filteredSelectedCount() {
+            const filtered = this.filteredInvoices();
+            return filtered.filter(i => this.selected.includes(i.doc_num)).length;
+        },
+
         selectedTotalMXN() {
             if (!this.data) return 0;
             return this.data.invoices
@@ -179,8 +189,16 @@ window.estadoCuentaWindowApp = function(winConfig) {
         },
 
         generate() {
-            if (this.selectedCount() === 0) return;
-            const invoices = this.selected.join(',');
+            const filtered = this.filteredInvoices();
+            const invoices = filtered
+                .filter(i => this.selected.includes(i.doc_num))
+                .map(i => i.doc_num)
+                .join(',');
+            
+            if (!invoices) {
+                alert('No hay facturas seleccionadas en el filtro actual.');
+                return;
+            }
             const url = `/orders/estado-cuenta?card_code=${this.customerCode}&invoices=${invoices}`;
             window.open(url, '_blank');
             this.close();
@@ -286,6 +304,8 @@ function facturasApp() {
         ecSubSelectedInvoices: [],
         ecSubFilterCurrency: 'ALL',
         ecSubFilterOverdue: 'ALL',
+        ecSubFilterStartDate: '',
+        ecSubFilterEndDate: '',
 
         // Add Invoice Modal State
         addInvoiceModalOpen: false,
@@ -495,13 +515,15 @@ function facturasApp() {
             this.ecSubSelectedInvoices = [];
             this.ecSubFilterCurrency = 'ALL';
             this.ecSubFilterOverdue = 'ALL';
+            this.ecSubFilterStartDate = '';
+            this.ecSubFilterEndDate = '';
             try {
                 const res = await fetch(`/orders/api/facturas/estado-cuenta/${client.card_code}`);
                 const json = await res.json();
                 if (json.success && json.data) {
                     this.ecSubClientData = json.data;
-                    // Select all by default
-                    this.ecSubSelectedInvoices = json.data.invoices.map(i => i.doc_num);
+                    // Select only unpaid invoices by default
+                    this.ecSubSelectedInvoices = json.data.invoices.filter(i => i.balance > 0).map(i => i.doc_num);
                 } else {
                     this.ecSubClientData = null;
                 }
@@ -519,6 +541,8 @@ function facturasApp() {
             this.ecSubSelectedInvoices = [];
             this.ecSubSearchQuery = '';
             this.ecSubSearchResults = [];
+            this.ecSubFilterStartDate = '';
+            this.ecSubFilterEndDate = '';
         },
 
         ecSubFilteredInvoices() {
@@ -528,9 +552,17 @@ function facturasApp() {
                 list = list.filter(i => (i.currency || 'MXN').toUpperCase() === this.ecSubFilterCurrency);
             }
             if (this.ecSubFilterOverdue === 'OVERDUE') {
-                list = list.filter(i => i.days_overdue > 0);
+                list = list.filter(i => i.days_overdue > 0 && i.balance > 0);
             } else if (this.ecSubFilterOverdue === 'CURRENT') {
-                list = list.filter(i => i.days_overdue <= 0);
+                list = list.filter(i => i.days_overdue <= 0 && i.balance > 0);
+            } else if (this.ecSubFilterOverdue === 'PAID') {
+                list = list.filter(i => i.balance === 0);
+            }
+            if (this.ecSubFilterStartDate) {
+                list = list.filter(i => i.doc_date >= this.ecSubFilterStartDate);
+            }
+            if (this.ecSubFilterEndDate) {
+                list = list.filter(i => i.doc_date <= this.ecSubFilterEndDate);
             }
             return list;
         },
@@ -569,6 +601,11 @@ function facturasApp() {
             return this.ecSubSelectedInvoices.length;
         },
 
+        ecSubFilteredSelectedCount() {
+            const filtered = this.ecSubFilteredInvoices();
+            return filtered.filter(i => this.ecSubSelectedInvoices.includes(i.doc_num)).length;
+        },
+
         ecSubSelectedTotalMXN() {
             if (!this.ecSubClientData) return 0;
             return this.ecSubClientData.invoices
@@ -584,9 +621,17 @@ function facturasApp() {
         },
 
         ecSubGenerateBill() {
-            if (this.ecSubSelectedCount() === 0) return;
+            const filtered = this.ecSubFilteredInvoices();
+            const invoices = filtered
+                .filter(i => this.ecSubSelectedInvoices.includes(i.doc_num))
+                .map(i => i.doc_num)
+                .join(',');
+            
+            if (!invoices) {
+                alert('No hay facturas seleccionadas en el filtro actual.');
+                return;
+            }
             const cardCode = this.ecSubSelectedClient.card_code;
-            const invoices = this.ecSubSelectedInvoices.join(',');
             const url = `/orders/estado-cuenta?card_code=${cardCode}&invoices=${invoices}`;
             window.open(url, '_blank');
         },

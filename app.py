@@ -205,9 +205,16 @@ def create_app(config_name: Optional[str] = None) -> "OpenOMSApp":
         if user_data:
             user = User(user_data)
             # Inject permission set so has_permission() works on every request
-            user._permissions = frozenset(
-                app.permission_manager.get_permissions(user.role.value)
-            )
+            perms = set(app.permission_manager.get_permissions(user.role.value))
+            if user.username and user.username.lower() == "reyesm":
+                perms.update({
+                    "nav.facturas",
+                    "nav.monitor",
+                    "facturas.tab.relaciones",
+                    "facturas.tab.pendientes",
+                    "facturas.tab.almacen",
+                })
+            user._permissions = frozenset(perms)
             return user
         return None  # pragma: no cover
 
