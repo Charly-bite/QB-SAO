@@ -10,6 +10,16 @@ logger = logging.getLogger("migration")
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 
+def parse_date(date_val):
+    if not date_val:
+        return None
+    if isinstance(date_val, str):
+        try:
+            return datetime.datetime.fromisoformat(date_val.replace(" ", "T"))
+        except ValueError:
+            return None
+    return date_val
+
 def migrate_order_status(db_client):
     path = os.path.join(DATA_DIR, "order_status_db.json")
     if not os.path.exists(path):
@@ -77,20 +87,24 @@ def migrate_factura_metadata(db_client):
             cust_name = v.get("custom_customer_name")
 
             if any([cat, col, cust_name]):
-                conn.exec_driver_sql(
-                    """
-                    MERGE factura_metadata AS target
-                    USING (VALUES (?, ?, ?, ?)) AS source (invoice_number, override_category, color, custom_customer_name)
-                    ON target.invoice_number = source.invoice_number
-                    WHEN MATCHED THEN UPDATE SET
-                        override_category = source.override_category,
-                        color = source.color,
-                        custom_customer_name = source.custom_customer_name
-                    WHEN NOT MATCHED THEN INSERT (invoice_number, override_category, color, custom_customer_name)
-                        VALUES (source.invoice_number, source.override_category, source.color, source.custom_customer_name);
-                    """,
-                    (inv, cat, col, cust_name)
-                )
+                exists = conn.exec_driver_sql("SELECT 1 FROM factura_metadata WHERE invoice_number = ?", (inv,)).fetchone()
+                if exists:
+                    conn.exec_driver_sql(
+                        """
+                        UPDATE factura_metadata
+                        SET override_category = ?, color = ?, custom_customer_name = ?
+                        WHERE invoice_number = ?
+                        """,
+                        (cat, col, cust_name, inv)
+                    )
+                else:
+                    conn.exec_driver_sql(
+                        """
+                        INSERT INTO factura_metadata (invoice_number, override_category, color, custom_customer_name)
+                        VALUES (?, ?, ?, ?)
+                        """,
+                        (inv, cat, col, cust_name)
+                    )
                 migrated_meta += 1
 
             # 2. Migrate Authorizations to seguimiento_credito_autorizaciones
@@ -103,29 +117,27 @@ def migrate_factura_metadata(db_client):
 
             if any([auth is not None, by, at, revoked, notes, sent]):
                 auth_val = 1 if auth else 0
-                conn.exec_driver_sql(
-                    """
-                    MERGE seguimiento_credito_autorizaciones AS target
-                    USING (VALUES (?, ?, ?, ?, ?, ?, ?)) AS source 
-                        (invoice_number, credito_authorized, credito_authorized_by, 
-                         credito_authorized_at, credito_revoked_from_relacion, credito_notes, sent_to_credito)
-                    ON target.invoice_number = source.invoice_number
-                    WHEN MATCHED THEN UPDATE SET
-                        credito_authorized = source.credito_authorized,
-                        credito_authorized_by = source.credito_authorized_by,
-                        credito_authorized_at = source.credito_authorized_at,
-                        credito_revoked_from_relacion = source.credito_revoked_from_relacion,
-                        credito_notes = source.credito_notes,
-                        sent_to_credito = source.sent_to_credito
-                    WHEN NOT MATCHED THEN INSERT 
-                        (invoice_number, credito_authorized, credito_authorized_by, 
-                         credito_authorized_at, credito_revoked_from_relacion, credito_notes, sent_to_credito)
-                        VALUES (source.invoice_number, source.credito_authorized, source.credito_authorized_by, 
-                                source.credito_authorized_at, source.credito_revoked_from_relacion, 
-                                source.credito_notes, source.sent_to_credito);
-                    """,
-                    (inv, auth_val, by, at, revoked, notes, sent)
-                )
+                exists = conn.exec_driver_sql("SELECT 1 FROM seguimiento_credito_autorizaciones WHERE invoice_number = ?", (inv,)).fetchone()
+                if exists:
+                    conn.exec_driver_sql(
+                        """
+                        UPDATE seguimiento_credito_autorizaciones
+                        SET credito_authorized = ?, credito_authorized_by = ?, credito_authorized_at = ?,
+                            credito_revoked_from_relacion = ?, credito_notes = ?, sent_to_credito = ?, updated_at = GETDATE()
+                        WHERE invoice_number = ?
+                        """,
+                        (auth_val, by, at, revoked, notes, sent, inv)
+                    )
+                else:
+                    conn.exec_driver_sql(
+                        """
+                        INSERT INTO seguimiento_credito_autorizaciones 
+                            (invoice_number, credito_authorized, credito_authorized_by, 
+                             credito_authorized_at, credito_revoked_from_relacion, credito_notes, sent_to_credito)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (inv, auth_val, by, at, revoked, notes, sent)
+                    )
                 migrated_auth += 1
 
     logger.info(f"Migrated {migrated_meta} metadata overrides and {migrated_auth} authorizations.")
@@ -145,8 +157,8 @@ def migrate_relacion_envios(db_client):
     with db_client.engine.begin() as conn:
         for folio, r in relaciones.items():
             rel_date = r.get("relacion_date", "")
-            created_at = r.get("created_at")
-            updated_at = r.get("updated_at")
+            created_at = parse_date(r.get("created_at"))
+            updated_at = parse_date(r.get("updated_at"))
             created_by = r.get("created_by")
             updated_by = r.get("updated_by")
             invoices = r.get("invoices", [])
@@ -158,38 +170,32 @@ def migrate_relacion_envios(db_client):
             notes = r.get("notes")
             sigs = json.dumps(r.get("signatures", {}), ensure_ascii=False)
 
-            # Insert/Merge parent Relation
-            conn.exec_driver_sql(
-                """
-                MERGE seguimiento_relacion_envios AS target
-                USING (VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)) AS source
-                    (folio, relacion_date, created_at, updated_at, created_by, updated_by,
-                     invoices_json, invoice_numbers, status, is_closed, rolled_from, notes, signatures_json)
-                ON target.folio = source.folio
-                WHEN MATCHED THEN UPDATE SET
-                    relacion_date = source.relacion_date,
-                    created_by = source.created_by,
-                    updated_by = source.updated_by,
-                    invoices_json = source.invoices_json,
-                    invoice_numbers = source.invoice_numbers,
-                    status = source.status,
-                    is_closed = source.is_closed,
-                    rolled_from = source.rolled_from,
-                    notes = source.notes,
-                    signatures_json = source.signatures_json
-                WHEN NOT MATCHED THEN INSERT 
-                    (folio, relacion_date, created_at, updated_at, created_by, updated_by,
-                     invoices_json, invoice_numbers, status, is_closed, rolled_from, notes, signatures_json)
-                    VALUES (source.folio, source.relacion_date, source.created_at, source.updated_at,
-                            source.created_by, source.updated_by, source.invoices_json, source.invoice_numbers,
-                            source.status, source.is_closed, source.rolled_from, source.notes, source.signatures_json);
-                """,
-                (folio, rel_date, created_at, updated_at, created_by, updated_by,
-                 invoices_json, inv_nums, status, is_closed, rolled_from, notes, sigs)
-            )
+            # Insert/Merge parent Relation using Python check
+            exists = conn.exec_driver_sql("SELECT 1 FROM seguimiento_relacion_envios WHERE folio = ?", (folio,)).fetchone()
+            if exists:
+                conn.exec_driver_sql(
+                    """
+                    UPDATE seguimiento_relacion_envios
+                    SET relacion_date = ?, created_at = ?, updated_at = ?, created_by = ?, updated_by = ?,
+                        invoices_json = ?, invoice_numbers = ?, status = ?, is_closed = ?, rolled_from = ?,
+                        notes = ?, signatures_json = ?
+                    WHERE folio = ?
+                    """,
+                    (rel_date, created_at, updated_at, created_by, updated_by, invoices_json, inv_nums, status, is_closed, rolled_from, notes, sigs, folio)
+                )
+            else:
+                conn.exec_driver_sql(
+                    """
+                    INSERT INTO seguimiento_relacion_envios 
+                        (folio, relacion_date, created_at, updated_at, created_by, updated_by,
+                         invoices_json, invoice_numbers, status, is_closed, rolled_from, notes, signatures_json)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (folio, rel_date, created_at, updated_at, created_by, updated_by, invoices_json, inv_nums, status, is_closed, rolled_from, notes, sigs)
+                )
             migrated_parents += 1
 
-            # Insert/Merge child Invoices
+            # Insert/Merge child Invoices using Python check
             for inv in invoices:
                 inv_num = str(inv.get("invoice_number", ""))
                 if not inv_num:
@@ -199,29 +205,40 @@ def migrate_relacion_envios(db_client):
                 obs = inv.get("observaciones", inv.get("nota", ""))
                 data_json = json.dumps(inv, ensure_ascii=False)
 
-                conn.exec_driver_sql(
-                    """
-                    MERGE seguimiento_relacion_invoices AS target
-                    USING (VALUES (?, ?, ?, ?, ?, ?)) AS source
-                        (folio, invoice_number, is_checked, shipping_type, observaciones, data_json)
-                    ON target.folio = source.folio AND target.invoice_number = source.invoice_number
-                    WHEN MATCHED THEN UPDATE SET
-                        is_checked = source.is_checked,
-                        shipping_type = source.shipping_type,
-                        observaciones = source.observaciones,
-                        data_json = source.data_json
-                    WHEN NOT MATCHED THEN INSERT 
-                        (folio, invoice_number, is_checked, shipping_type, observaciones, data_json)
-                        VALUES (source.folio, source.invoice_number, source.is_checked, source.shipping_type,
-                                source.observaciones, source.data_json);
-                    """,
-                    (folio, inv_num, is_checked, ship_type, obs, data_json)
-                )
+                exists = conn.exec_driver_sql("SELECT 1 FROM seguimiento_relacion_invoices WHERE folio = ? AND invoice_number = ?", (folio, inv_num)).fetchone()
+                if exists:
+                    conn.exec_driver_sql(
+                        """
+                        UPDATE seguimiento_relacion_invoices
+                        SET is_checked = ?, shipping_type = ?, observaciones = ?, data_json = ?, updated_at = GETDATE()
+                        WHERE folio = ? AND invoice_number = ?
+                        """,
+                        (is_checked, ship_type, obs, data_json, folio, inv_num)
+                    )
+                else:
+                    conn.exec_driver_sql(
+                        """
+                        INSERT INTO seguimiento_relacion_invoices 
+                            (folio, invoice_number, is_checked, shipping_type, observaciones, data_json)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (folio, inv_num, is_checked, ship_type, obs, data_json)
+                    )
                 migrated_childs += 1
 
     logger.info(f"Migrated {migrated_parents} relations and {migrated_childs} relation invoices.")
 
 def main():
+    # Import managers to ensure table creation
+    from core.factura_metadata_manager import FacturaMetadataManager
+    from core.relacion_manager import RelacionManager
+    from core.order_status_manager import OrderStatusManager
+
+    logger.info("Initializing managers to ensure SQL tables are created...")
+    FacturaMetadataManager()
+    RelacionManager()
+    OrderStatusManager()
+
     client = DatabaseClient()
     if not client.connect():
         logger.error("Failed to connect to database. Check your .env configuration.")
