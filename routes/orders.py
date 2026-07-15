@@ -4505,3 +4505,4 @@ def estado_cuenta_print():  # pragma: no cover
         card_code=card_code,
         invoice_nums=invoice_nums,
     )
+

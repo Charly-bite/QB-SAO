@@ -27,7 +27,7 @@ class SAPHanaConnector:
 
     DEFAULT_HOST = os.environ.get("SAP_HOST", os.environ.get("SAP_HANA_HOST", ""))
     DEFAULT_PORT = int(os.environ.get("SAP_PORT", os.environ.get("SAP_HANA_PORT", "30015")))
-    DEFAULT_SCHEMA = os.environ.get("SAP_SCHEMA", os.environ.get("SAP_HANA_SCHEMA", "SBO_QUIMICABOSS"))
+    DEFAULT_SCHEMA = os.environ.get("SAP_SCHEMA", os.environ.get("SAP_HANA_SCHEMA", ""))
     DEFAULT_USER = os.environ.get("SAP_USER", os.environ.get("SAP_HANA_USER", ""))
     DEFAULT_PASS = os.environ.get("SAP_PASS", os.environ.get("SAP_HANA_PASSWORD", ""))
 
@@ -1322,7 +1322,6 @@ class SAPHanaConnector:
         if not cust_row:
             cursor.close()
             return None
-
         customer = {
             "card_code": cust_row[0],
             "card_name": cust_row[1] or "",
@@ -1350,9 +1349,7 @@ class SAPHanaConnector:
                 T0."DocRate"
             FROM {self._get_table_name("invoices")} T0
             WHERE T0."CardCode" = ?
-              AND T0."DocStatus" = 'O'
               AND T0."CANCELED" = 'N'
-              AND (T0."DocTotal" - T0."PaidToDate") > 0
             ORDER BY T0."DocDueDate" ASC
         """
         cursor.execute(inv_query, [card_code])
@@ -1368,6 +1365,8 @@ class SAPHanaConnector:
             # For foreign-currency invoices use FC fields (actual USD amounts);
             # for local-currency (MXN) invoices use LC fields.
             is_foreign = (currency or "MXN").upper() != "MXN"
+            balance = float(balance_fc) if is_foreign else float(balance_lc)
+            is_overdue = balance > 0 and days and int(days) > 0
 
             inv = {
                 "doc_num": int(doc_num),
@@ -1375,17 +1374,18 @@ class SAPHanaConnector:
                 "due_date": str(due_date).split(" ")[0],
                 "total": float(total_fc) if is_foreign else float(total_lc),
                 "paid": float(paid_fc) if is_foreign else float(paid_lc),
-                "balance": float(balance_fc) if is_foreign else float(balance_lc),
+                "balance": balance,
                 "currency": currency or "MXN",
-                "days_overdue": int(days) if days and int(days) > 0 else 0,
+                "days_overdue": int(days) if is_overdue else 0,
                 "doc_rate": float(doc_rate) if doc_rate else None,
-                "total_lc": float(balance_lc),
+                "total_lc": float(balance_lc) if balance > 0 else 0.0,
             }
             invoices.append(inv)
-            if is_foreign:
-                total_usd += float(balance_fc)
-            else:
-                total_mxn += float(balance_lc)
+            if balance > 0:
+                if is_foreign:
+                    total_usd += float(balance_fc)
+                else:
+                    total_mxn += float(balance_lc)
 
         # 3. Fetch today's (or most recent) USD→MXN exchange rate from ORTT
         exchange_rate = None

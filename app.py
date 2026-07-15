@@ -185,11 +185,11 @@ def create_app(config_name: Optional[str] = None) -> "OpenOMSApp":
         if sap_user and sap_pass and SAPHanaConnector is not None:
             try:
                 app.sap_connector = SAPHanaConnector(
-                    host=os.environ.get("SAP_HOST", "20.0.1.9"),
+                    host=os.environ.get("SAP_HOST", ""),
                     port=int(os.environ.get("SAP_PORT", 30015)),
                     username=sap_user,
                     password=sap_pass,
-                    schema=os.environ.get("SAP_SCHEMA", "SBO_QUIMICABOSS"),
+                    schema=os.environ.get("SAP_SCHEMA", ""),
                 )
                 logger.info("✅ SAP Connector initialized (Lazy connection mode)")
             except Exception as e:
@@ -205,9 +205,16 @@ def create_app(config_name: Optional[str] = None) -> "OpenOMSApp":
         if user_data:
             user = User(user_data)
             # Inject permission set so has_permission() works on every request
-            user._permissions = frozenset(
-                app.permission_manager.get_permissions(user.role.value)
-            )
+            perms = set(app.permission_manager.get_permissions(user.role.value))
+            if user.username and user.username.lower() == "reyesm":
+                perms.update({
+                    "nav.facturas",
+                    "nav.monitor",
+                    "facturas.tab.relaciones",
+                    "facturas.tab.pendientes",
+                    "facturas.tab.almacen",
+                })
+            user._permissions = frozenset(perms)
             return user
         return None  # pragma: no cover
 
@@ -367,12 +374,16 @@ if __name__ == "__main__":
     logger.info("=" * 60)
 
     debug_mode = app.config.get("DEBUG", False)
+    host = os.environ.get("FLASK_RUN_HOST", "0.0.0.0")
+    port = int(os.environ.get("FLASK_RUN_PORT", 5009))
+
     if debug_mode:
         from werkzeug.serving import WSGIRequestHandler
         WSGIRequestHandler.protocol_version = "HTTP/1.1"
-        logger.info("🚀 Starting Flask Development Server (HTTP/1.1 Keep-Alive enabled)...")
-        app.run(host="192.168.2.134", port=5009, debug=True, threaded=True)
+        logger.info(f"🚀 Starting Flask Development Server on {host}:{port} (HTTP/1.1 Keep-Alive enabled)...")
+        app.run(host=host, port=port, debug=True, threaded=True)
     else:
         from waitress import serve
-        logger.info("🚀 Starting Waitress Production WSGI Server...")
-        serve(app, host="0.0.0.0", port=5009, threads=200)
+        threads = int(os.environ.get("WAITRESS_THREADS", 200))
+        logger.info(f"🚀 Starting Waitress Production WSGI Server on {host}:{port} with {threads} threads...")
+        serve(app, host=host, port=port, threads=threads)
