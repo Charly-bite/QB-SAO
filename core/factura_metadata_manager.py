@@ -1,7 +1,11 @@
+import copy
 import logging
 import os
 import json
+import queue
+import sys
 import tempfile
+import threading
 from core.database_client import DatabaseClient
 
 logger = logging.getLogger(__name__)
@@ -21,9 +25,7 @@ class FacturaMetadataManager:
         self.local_daily_extras = {}
 
         # Background writer thread initialization
-        import queue
-        import threading
-        self._write_queue = queue.Queue()
+        self._write_queue = queue.Queue(maxsize=100)
         self._worker_thread = threading.Thread(target=self._process_write_queue, daemon=True)
         self._worker_thread.start()
 
@@ -39,10 +41,14 @@ class FacturaMetadataManager:
                 if item is None:
                     break
                 file_path, data = item
-                self._execute_write(file_path, data)
-                self._write_queue.task_done()
+                try:
+                    self._execute_write(file_path, data)
+                except Exception as e:
+                    logger.error(f"Error in background JSON writer: {e}")
+                finally:
+                    self._write_queue.task_done()
             except Exception as e:
-                logger.error(f"Error in background JSON writer: {e}")
+                logger.error(f"Fatal error in write queue loop: {e}")
 
     def _execute_write(self, file_path, data):
         try:
@@ -63,7 +69,6 @@ class FacturaMetadataManager:
             logger.error(f"Error writing file {file_path} in background: {e}")
 
     def _enqueue_write(self, file_path, data):
-        import sys
         if "pytest" in sys.modules:
             # Write synchronously during tests
             self._execute_write(file_path, data)
@@ -180,7 +185,6 @@ class FacturaMetadataManager:
 
     def _save_fallback(self):
         """Saves metadata to JSON file fallback"""
-        import copy
         try:
             data_copy = copy.deepcopy(self.local_metadata)
             self._enqueue_write(self.db_path, data_copy)
@@ -188,7 +192,6 @@ class FacturaMetadataManager:
             logger.error(f"Error enqueuing JSON fallback: {e}")
 
     def _save_daily_fallback(self):
-        import copy
         try:
             daily_path = os.path.join(os.path.dirname(self.db_path), "factura_daily_order.json")
             data_copy = copy.deepcopy(self.local_daily_orders)
@@ -197,7 +200,6 @@ class FacturaMetadataManager:
             logger.error(f"Error enqueuing daily order JSON fallback: {e}")
 
     def _save_extra_fallback(self):
-        import copy
         try:
             extra_path = os.path.join(os.path.dirname(self.db_path), "factura_daily_extra.json")
             data_copy = copy.deepcopy(self.local_daily_extras)

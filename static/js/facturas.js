@@ -246,7 +246,7 @@ function facturasApp() {
             return order.find(t => tabs[t]) || 'facturas';
         })(),
         creditoSubTab: 'Todas',
-        almacenSubTab: 'todos',
+        almacenSubTab: localStorage.getItem('qb_facturas_almacen_subtab') || 'todos',
         
         // Pending Summary Tracking
         pendingSubTab: localStorage.getItem('qb_facturas_pending_subtab') || 'current', // 'calendar', 'all', 'current'
@@ -1508,6 +1508,10 @@ function facturasApp() {
                 if (value === 'relaciones') {
                     this.fetchRelaciones();
                 }
+            });
+
+            this.$watch('almacenSubTab', (value) => {
+                localStorage.setItem('qb_facturas_almacen_subtab', value);
             });
 
             if (this.activeTab === 'relaciones') {
