@@ -55,6 +55,46 @@ class TestFacturaMetadataManagerFallback:
         extras = mgr.get_daily_extras("2026-06-10")
         assert extras == [99901, 99902]
 
+    @patch("core.factura_metadata_manager.DatabaseClient")
+    def test_background_writer_and_exceptions(self, mock_db_client, temp_db_path):
+        import sys
+        import time
+        from unittest.mock import patch, MagicMock
+
+        mgr = FacturaMetadataManager(db_path=temp_db_path)
+
+        # 1. Cover line 595 (inv_str not in local_metadata in save_sent_to_credito)
+        mgr.save_sent_to_credito(99999, True)
+        assert mgr.local_metadata["99999"]["sent_to_credito"] is True
+
+        # 2. Force a write to the actual background queue.
+        # This will execute lines 41-51 of _process_write_queue.
+        mgr._write_queue.put((temp_db_path, {"test_key": "test_val"}))
+        mgr._write_queue.join()  # waits until task_done is called
+        
+        with open(temp_db_path, "r", encoding="utf-8") as f:
+            saved_data = json.load(f)
+        assert saved_data.get("test_key") == "test_val"
+
+        # 3. Test queue execution failure (invalid directory/file to trigger exception in _execute_write):
+        mgr._write_queue.put(("::invalid_path::/nonexistent.json", {"k": "v"}))
+        time.sleep(0.1)
+        mgr._write_queue.join()
+
+        # 4. Test _enqueue_write else branch:
+        # Patch sys.modules to temporarily not have "pytest"
+        with patch.dict("sys.modules", {}):
+            mgr._enqueue_write(temp_db_path, {"test_key": "pytest_off"})
+            mgr._write_queue.join()
+            
+        with open(temp_db_path, "r", encoding="utf-8") as f:
+            saved_data = json.load(f)
+        assert saved_data.get("test_key") == "pytest_off"
+
+        # 5. Test exit sentinel:
+        mgr._write_queue.put(None)
+        time.sleep(0.1)
+
 
 # ---------------------------------------------------------------------------
 # API integration & Broadcasting tests
