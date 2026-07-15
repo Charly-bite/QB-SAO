@@ -1342,8 +1342,11 @@ function facturasApp() {
                 'ANEXADAS MTY', 'ANEXADAS GDL', 'ANEXADAS IRP'
             ];
 
+            const invoiceMap = new Map();
+            this.invoices.forEach(i => invoiceMap.set(String(i.invoice_number), i));
+
             this.currentRelacion.invoices.forEach(inv => {
-                const liveInv = this.invoices.find(i => String(i.invoice_number) === String(inv.invoice_number));
+                const liveInv = invoiceMap.get(String(inv.invoice_number));
                 const resolvedInv = liveInv ? { ...inv, ...liveInv } : inv;
 
                 let cat = (resolvedInv.shipping_type || resolvedInv.observaciones || resolvedInv.nota || 'LOCAL').toUpperCase();
@@ -2634,8 +2637,11 @@ function facturasApp() {
                     });
                     
                     // Sync metadata (credito_notes, rebote, observaciones, etc.) from master list to relacion invoices
+                    const invoiceMapForSync = new Map();
+                    this.invoices.forEach(i => invoiceMapForSync.set(String(i.invoice_number), i));
+
                     this.currentRelacion.invoices.forEach(relInv => {
-                        const masterInv = this.invoices.find(i => String(i.invoice_number) === String(relInv.invoice_number));
+                        const masterInv = invoiceMapForSync.get(String(relInv.invoice_number));
                         if (masterInv) {
                             relInv.credito_notes = masterInv.credito_notes;
                             relInv.credito_authorized = masterInv.credito_authorized;
