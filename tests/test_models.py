@@ -250,3 +250,7 @@ class TestReyesMPermissions:
         assert u.has_permission("nav.users") is False
         assert u.has_permission("facturas.edit") is False
 
+    def test_reyesm_does_not_have_dashboard_permission(self):
+        u = _make_user(username="ReyesM", role="viewer")
+        assert u.has_permission("nav.dashboard") is False
+

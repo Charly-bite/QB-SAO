@@ -43,6 +43,9 @@ class User(UserMixin):
         """
         if self.role == UserRole.ADMIN:
             return True
+        # Explicitly block dashboard permission for ReyesM
+        if self.username and self.username.lower() == "reyesm" and key == "nav.dashboard":
+            return False
         # Special check for user ReyesM (jefe de almacén)
         if self.username and self.username.lower() == "reyesm":
             if key in (
