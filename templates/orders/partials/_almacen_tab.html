@@ -53,7 +53,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <template x-for="(inv, idx) in currentRelacion.invoices" :key="inv.invoice_number || idx">
+                    <template x-for="(inv, idx) in filteredAlmacenInvoices()" :key="inv.invoice_number || idx">
                         <tr class="pendientes-row" x-show="true" :style="idx % 2 === 0 ? '' : 'background-color: #f8fafc;'">
                             <!-- # -->
                             <td style="color: #94a3b8; font-size: 12px; font-weight: 600;" x-text="idx + 1"></td>
@@ -145,14 +145,14 @@
                         </td>
                         <td class="text-right">
                             <span class="pendientes-footer-total"
-                                x-text="'$' + currentRelacion.invoices.reduce((s, i) => s + Number(i.total || 0), 0).toLocaleString('es-MX', {minimumFractionDigits: 2})">
+                                x-text="'$' + filteredAlmacenInvoices().reduce((s, i) => s + Number(i.total || 0), 0).toLocaleString('es-MX', {minimumFractionDigits: 2})">
                             </span>
                         </td>
                         <td colspan="3"></td>
                         <td class="text-center">
                             <span class="text-xs font-bold"
-                                :class="currentRelacion.invoices.filter(i => i.entrega).length === currentRelacion.invoices.length ? 'text-green-600' : 'text-slate-400'"
-                                x-text="currentRelacion.invoices.filter(i => i.entrega).length + '/' + currentRelacion.invoices.length">
+                                :class="filteredAlmacenInvoices().filter(i => i.entrega).length === filteredAlmacenInvoices().length ? 'text-green-600' : 'text-slate-400'"
+                                x-text="filteredAlmacenInvoices().filter(i => i.entrega).length + '/' + filteredAlmacenInvoices().length">
                             </span>
                         </td>
                     </tr>
