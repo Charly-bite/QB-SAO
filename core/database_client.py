@@ -8,7 +8,8 @@ import logging
 import time
 import random
 import pyodbc
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
+from urllib.parse import quote_plus
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -39,51 +40,116 @@ class DatabaseClient:
                     driver = '{ODBC Driver 17 for SQL Server}'
             except Exception:
                 driver = '{ODBC Driver 17 for SQL Server}'
-        server = os.getenv("SQL_SERVER", "192.168.2.237")
-        database = os.getenv("SQL_DATABASE", "SGA_Database")
-        user = os.getenv("SQL_USER", "sga_app_user")
-        password = os.getenv("SQL_PASSWORD", "")
+        server = os.getenv("SQL_SERVER", "")
+        database = os.getenv("SQL_DATABASE", "")
+        trusted = os.getenv("SQL_INTEGRATED_SECURITY", "no").lower() == "yes"
         trust = os.getenv("SQL_TRUST_CERTIFICATE", "yes").lower()
         timeout = os.getenv("SQL_TIMEOUT", "5")
 
-        if not password:
-            logger.error("CRITICAL: SQL_PASSWORD is empty!")
-            raise ValueError("Missing SQL_PASSWORD in environment config.")
-
-        return (
-            f"DRIVER={driver};SERVER={server};DATABASE={database};"
-            f"UID={user};PWD={password};TrustServerCertificate={trust};"
-            f"Connection Timeout={timeout}"
-        )
+        if trusted:
+            if not all([server, database]):
+                missing = [k for k, v in {"SQL_SERVER": server, "SQL_DATABASE": database}.items() if not v]
+                logger.error(f"CRITICAL: Missing SQL configuration: {', '.join(missing)}")
+                raise ValueError(f"Missing required SQL environment config: {', '.join(missing)}")
+            return (
+                f"DRIVER={driver};SERVER={server};DATABASE={database};"
+                f"Trusted_Connection=yes;TrustServerCertificate={trust};"
+                f"Connection Timeout={timeout}"
+            )
+        else:
+            user = os.getenv("SQL_USER", "")
+            password = os.getenv("SQL_PASSWORD", "")
+            if not all([server, database, user, password]):
+                missing = [k for k, v in {"SQL_SERVER": server, "SQL_DATABASE": database, "SQL_USER": user, "SQL_PASSWORD": password}.items() if not v]
+                logger.error(f"CRITICAL: Missing SQL configuration: {', '.join(missing)}")
+                raise ValueError(f"Missing required SQL environment config: {', '.join(missing)}")
+            return (
+                f"DRIVER={driver};SERVER={server};DATABASE={database};"
+                f"UID={user};PWD={password};TrustServerCertificate={trust};"
+                f"Connection Timeout={timeout}"
+            )
 
     def connect(self, max_retries=5, retry_delay=2):
         """Establish connection to SQL Server with retries, exponential backoff, and jitter."""
-        try:
-            self._connection_string = self._build_connection_string()
-        except ValueError as e:  # pragma: no cover
-            logger.error(f"[ERROR] Cannot build connection string: {e}")
-            self.connected = False
-            self.engine = None
-            return False
+        import sys
+        if "pytest" in sys.modules:
+            self._use_pymssql = os.getenv("SQL_USE_PYMSSQL", "no").lower() == "yes" and os.getenv("TEST_USE_PYMSSQL") == "yes"
+        else:
+            self._use_pymssql = os.getenv("SQL_USE_PYMSSQL", "no").lower() == "yes"
+        
+        if not self._use_pymssql:
+            try:
+                self._connection_string = self._build_connection_string()
+            except ValueError as e:  # pragma: no cover
+                logger.error(f"[ERROR] Cannot build connection string: {e}")
+                self.connected = False
+                self.engine = None
+                return False
 
         for attempt in range(1, max_retries + 1):
             try:
-                # Test with pyodbc first
-                timeout_val = int(os.getenv("SQL_TIMEOUT", "5"))
-                conn = pyodbc.connect(self._connection_string, timeout=timeout_val)
-                conn.close()
+                if self._use_pymssql:
+                    import pymssql
+                    server = os.getenv("SQL_SERVER", "")
+                    database = os.getenv("SQL_DATABASE", "")
+                    user = os.getenv("SQL_USER", "")
+                    password = os.getenv("SQL_PASSWORD", "")
+                    timeout_val = int(os.getenv("SQL_TIMEOUT", "5"))
+                    
+                    if not all([server, database, user, password]):
+                        missing = [k for k, v in {"SQL_SERVER": server, "SQL_DATABASE": database, "SQL_USER": user, "SQL_PASSWORD": password}.items() if not v]
+                        raise ValueError(f"Missing required SQL environment config: {', '.join(missing)}")
+                    
+                    # Test connection with pymssql first
+                    conn = pymssql.connect(
+                        server=server,
+                        user=user,
+                        password=password,
+                        database=database,
+                        login_timeout=timeout_val
+                    )
+                    conn.close()
 
-                # Create SQLAlchemy engine with pooling settings
-                sa_url = f"mssql+pyodbc:///?odbc_connect={self._connection_string}"
-                self.engine = create_engine(
-                    sa_url,
-                    echo=False,
-                    pool_pre_ping=True,
-                    pool_recycle=1800,  # recycle connections after 30 minutes
-                    pool_size=10,       # connection pool size
-                    max_overflow=20,    # allowed overflow connections
-                    pool_timeout=15     # wait time for connection from pool
-                )
+                    # Create SQLAlchemy engine with pymssql
+                    safe_user = quote_plus(user)
+                    safe_pass = quote_plus(password)
+                    sa_url = f"mssql+pymssql://{safe_user}:{safe_pass}@{server}/{database}"
+                    
+                    self.engine = create_engine(
+                        sa_url,
+                        echo=False,
+                        pool_pre_ping=True,
+                        pool_recycle=1800,  # recycle connections after 30 minutes
+                        pool_size=10,       # connection pool size
+                        max_overflow=20,    # allowed overflow connections
+                        pool_timeout=15     # wait time for connection from pool
+                    )
+                else:
+                    # Test with pyodbc first
+                    timeout_val = int(os.getenv("SQL_TIMEOUT", "5"))
+                    conn = pyodbc.connect(self._connection_string, timeout=timeout_val)
+                    conn.close()
+
+                    # Create SQLAlchemy engine with pooling settings
+                    sa_url = f"mssql+pyodbc:///?odbc_connect={self._connection_string}"
+                    self.engine = create_engine(
+                        sa_url,
+                        echo=False,
+                        pool_pre_ping=True,
+                        pool_recycle=1800,  # recycle connections after 30 minutes
+                        pool_size=10,       # connection pool size
+                        max_overflow=20,    # allowed overflow connections
+                        pool_timeout=15     # wait time for connection from pool
+                    )
+
+                from sqlalchemy.engine import Engine
+                if isinstance(self.engine, Engine):
+                    @event.listens_for(self.engine, "before_cursor_execute", retval=True)
+                    def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+                        style = getattr(conn.engine.dialect, "paramstyle", "qmark")
+                        if style in ("format", "pyformat"):
+                            statement = statement.replace("?", "%s")
+                        return statement, parameters
 
                 self.connected = True
                 logger.info("[OK] SQL Server connected")

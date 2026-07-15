@@ -418,6 +418,7 @@
         .ec-filter-btn.active-usd { background: #1d4ed8; color: white; border-color: #1d4ed8; }
         .ec-filter-btn.active-overdue { background: #dc2626; color: white; border-color: #dc2626; }
         .ec-filter-btn.active-current { background: #16a34a; color: white; border-color: #16a34a; }
+        .ec-filter-btn.active-paid { background: #059669; color: white; border-color: #059669; }
         .ec-filter-badge {
             display: inline-flex;
             align-items: center;
@@ -558,9 +559,27 @@
                         <button class="ec-filter-btn" :class="filterOverdue === 'ALL' ? 'active-all' : ''" @click="filterOverdue = 'ALL'; applyFilters()">Todas</button>
                         <button class="ec-filter-btn" :class="filterOverdue === 'OVERDUE' ? 'active-overdue' : ''" @click="filterOverdue = 'OVERDUE'; applyFilters()">Vencidas</button>
                         <button class="ec-filter-btn" :class="filterOverdue === 'CURRENT' ? 'active-current' : ''" @click="filterOverdue = 'CURRENT'; applyFilters()">Al corriente</button>
+                        <button class="ec-filter-btn" :class="filterOverdue === 'PAID' ? 'active-paid' : ''" @click="filterOverdue = 'PAID'; applyFilters()">Pagadas</button>
                     </div>
                 </div>
-                <div class="ec-filter-badge" x-show="filterCurrency !== 'ALL' || filterOverdue !== 'ALL'">
+                <div class="ec-filter-section">
+                    <span class="ec-filter-label">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                        Fecha:
+                    </span>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <input type="date" x-model="filterStartDate" @change="applyFilters()"
+                            style="padding: 4px 8px; font-size: 12px; border: 2px solid #cbd5e1; border-radius: 8px; font-weight: 700; color: #475569;" />
+                        <span style="font-size: 11px; color: #94a3b8; font-weight: 700;">a</span>
+                        <input type="date" x-model="filterEndDate" @change="applyFilters()"
+                            style="padding: 4px 8px; font-size: 12px; border: 2px solid #cbd5e1; border-radius: 8px; font-weight: 700; color: #475569;" />
+                        <button x-show="filterStartDate || filterEndDate" @click="filterStartDate = ''; filterEndDate = ''; applyFilters()"
+                            style="padding: 4px; border: none; background: transparent; cursor: pointer; color: #94a3b8; display: inline-flex; align-items: center;" title="Limpiar fechas">
+                            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="ec-filter-badge" x-show="filterCurrency !== 'ALL' || filterOverdue !== 'ALL' || filterStartDate || filterEndDate">
                     <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
                     <span x-text="'Mostrando ' + displayInvoices.length + ' de ' + filteredInvoices.length"></span>
                 </div>
@@ -568,7 +587,7 @@
 
             <div class="ec-table-wrap">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-                    <h2 x-text="'Facturas Pendientes (' + displayInvoices.length + ')'"></h2>
+                    <h2 x-text="filterOverdue === 'PAID' ? 'Facturas Pagadas (' + displayInvoices.length + ')' : (filterOverdue === 'ALL' ? 'Facturas (' + displayInvoices.length + ')' : 'Facturas Pendientes (' + displayInvoices.length + ')')"></h2>
                 </div>
                 <table class="ec-table">
                     <thead>
@@ -617,17 +636,17 @@
                                 <td x-text="fmtDate(inv.doc_date)"></td>
                                 <td x-text="fmtDate(inv.due_date)"></td>
                                 <td class="text-right font-semibold text-slate-600" x-text="'$' + Number(inv.total).toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})"></td>
-                                <td class="text-right text-red font-bold" x-text="'$' + Number(inv.balance).toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})"></td>
+                                <td class="text-right font-bold" :class="inv.balance > 0 ? 'text-red' : 'text-green'" x-text="'$' + Number(inv.balance).toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})"></td>
                                 <td class="text-center" x-text="inv.currency"></td>
                                 <td x-show="hasUSD" class="text-center font-semibold text-slate-600"
                                     @dblclick="editRate(inv)" style="cursor: pointer;" title="Doble clic para editar T.C."
                                     x-text="(inv.currency || 'MXN').toUpperCase() === 'USD' ? (inv.doc_rate ? '$' + Number(inv.doc_rate).toFixed(4) : '-') : '-'"></td>
                                 <td class="text-center">
-                                    <span :style="inv.days_overdue > 0 ? 'color: #dc2626; font-weight: 700;' : 'color: #16a34a; font-weight: 600;'"
-                                          x-text="inv.days_overdue > 0 ? inv.days_overdue + ' días' : 'Al corriente'"></span>
+                                    <span :style="inv.balance === 0 ? 'color: #16a34a; font-weight: 700;' : (inv.days_overdue > 0 ? 'color: #dc2626; font-weight: 700;' : 'color: #16a34a; font-weight: 600;')"
+                                          x-text="inv.balance === 0 ? 'Pagada' : (inv.days_overdue > 0 ? inv.days_overdue + ' días' : 'Al corriente')"></span>
                                 </td>
                                 <td x-show="hasUSD" class="text-right font-bold" style="color: #6d28d9;"
-                                    x-text="(inv.currency || 'MXN').toUpperCase() === 'USD' ? '$' + Number(inv.total_lc || 0).toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-'"></td>
+                                    x-text="(inv.currency || 'MXN').toUpperCase() === 'USD' ? '$' + Number(inv.balance > 0 ? (inv.total_lc || 0) : (inv.total * inv.doc_rate)).toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-'"></td>
                             </tr>
                         </template>
                     </tbody>
@@ -731,6 +750,8 @@
                 displayInvoices: [],
                 filterCurrency: 'ALL',
                 filterOverdue: 'ALL',
+                filterStartDate: '',
+                filterEndDate: '',
                 totalMXN: 0,
                 totalUSD: 0,
                 grandTotalMXN: 0,
@@ -826,14 +847,20 @@
                             this.exchangeRate = json.data.exchange_rate || null;
                             this.exchangeRateDate = json.data.exchange_rate_date || null;
 
-                            // Apply yesterday's exchange rate to USD invoices
+                            // Apply exchange rate to USD invoices
                             if (this.data && this.data.invoices) {
                                 this.data.invoices.forEach(inv => {
                                     inv.isSelected = true; // Selected by default
                                     if ((inv.currency || 'MXN').toUpperCase() === 'USD') {
-                                        if (this.exchangeRate) {
-                                            inv.doc_rate = this.exchangeRate;
-                                            inv.total_lc = inv.balance * this.exchangeRate;
+                                        if (inv.balance > 0) {
+                                            if (this.exchangeRate) {
+                                                inv.doc_rate = this.exchangeRate;
+                                                inv.total_lc = inv.balance * this.exchangeRate;
+                                            }
+                                        } else {
+                                            // Paid invoice: keep original rate from SAP, total_lc is 0.0
+                                            inv.doc_rate = inv.doc_rate || this.exchangeRate || 1.0;
+                                            inv.total_lc = 0.0;
                                         }
                                     }
                                 });
@@ -887,9 +914,18 @@
                     }
 
                     if (this.filterOverdue === 'OVERDUE') {
-                        list = list.filter(i => i.days_overdue > 0);
+                        list = list.filter(i => i.days_overdue > 0 && i.balance > 0);
                     } else if (this.filterOverdue === 'CURRENT') {
-                        list = list.filter(i => i.days_overdue <= 0);
+                        list = list.filter(i => i.days_overdue <= 0 && i.balance > 0);
+                    } else if (this.filterOverdue === 'PAID') {
+                        list = list.filter(i => i.balance === 0);
+                    }
+
+                    if (this.filterStartDate) {
+                        list = list.filter(i => i.doc_date >= this.filterStartDate);
+                    }
+                    if (this.filterEndDate) {
+                        list = list.filter(i => i.doc_date <= this.filterEndDate);
                     }
 
                     // Apply sorting

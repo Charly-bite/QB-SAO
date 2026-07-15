@@ -43,6 +43,16 @@ class User(UserMixin):
         """
         if self.role == UserRole.ADMIN:
             return True
+        # Special check for user ReyesM (jefe de almacén)
+        if self.username and self.username.lower() == "reyesm":
+            if key in (
+                "nav.facturas",
+                "nav.monitor",
+                "facturas.tab.relaciones",
+                "facturas.tab.pendientes",
+                "facturas.tab.almacen",
+            ):
+                return True
         if not self._permissions:
             from flask import current_app
             if current_app:

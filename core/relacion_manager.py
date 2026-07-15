@@ -86,9 +86,38 @@ class RelacionManager:
                     """)
             except Exception:  # pragma: no cover
                 pass  # column likely exists
-            logger.info(f"Verified {self.TABLE_NAME} table exists")
+            # Create child table for normalized invoices
+            child_table = "seguimiento_relacion_invoices"
+            query_child = f"""
+                IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='{child_table}' and xtype='U')
+                BEGIN
+                    CREATE TABLE {child_table} (
+                        id              INT IDENTITY(1,1) PRIMARY KEY,
+                        folio           VARCHAR(30) NOT NULL,
+                        invoice_number  VARCHAR(30) NOT NULL,
+                        is_checked      BIT NOT NULL DEFAULT 1,
+                        shipping_type   VARCHAR(50) NULL,
+                        observaciones   VARCHAR(MAX) NULL,
+                        data_json       VARCHAR(MAX) NULL,
+                        created_at      DATETIME DEFAULT GETDATE(),
+                        updated_at      DATETIME DEFAULT GETDATE(),
+                        CONSTRAINT UQ_relacion_invoice UNIQUE (folio, invoice_number)
+                    )
+                END
+            """
+            with self.db_client.engine.begin() as conn:
+                conn.exec_driver_sql(query_child)
+                conn.exec_driver_sql(f"""
+                    IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='IX_relacion_invoices_folio' AND object_id=OBJECT_ID('{child_table}'))
+                    CREATE INDEX IX_relacion_invoices_folio ON {child_table} (folio)
+                """)
+                conn.exec_driver_sql(f"""
+                    IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='IX_relacion_invoices_invoice' AND object_id=OBJECT_ID('{child_table}'))
+                    CREATE INDEX IX_relacion_invoices_invoice ON {child_table} (invoice_number)
+                """)
+            logger.info(f"Verified {self.TABLE_NAME} and {child_table} tables exist")
         except Exception as e:  # pragma: no cover
-            logger.error(f"Failed to create {self.TABLE_NAME}: {e}")
+            logger.error(f"Failed to create tables: {e}")
 
     # ── Fallback JSON Persistence ────────────────────────────────────────
 
@@ -155,6 +184,51 @@ class RelacionManager:
                     """
                     row = conn.exec_driver_sql(query, (folio,)).fetchone()
                     if row:
+                        parent_invoices = json.loads(row[6]) if row[6] else []
+                        
+                        # Load normalized invoices from child table
+                        child_rows = conn.exec_driver_sql(
+                            "SELECT invoice_number, is_checked, shipping_type, observaciones, data_json FROM seguimiento_relacion_invoices WHERE folio = ?",
+                            (folio,)
+                        ).fetchall()
+                        
+                        if child_rows:
+                            invoices = []
+                            for c_row in child_rows:
+                                try:
+                                    inv = json.loads(c_row[4]) if c_row[4] else {}
+                                except Exception:
+                                    inv = {}
+                                inv["invoice_number"] = c_row[0]
+                                inv["_selected"] = bool(c_row[1])
+                                inv["shipping_type"] = c_row[2] or "LOCAL"
+                                inv["observaciones"] = c_row[3] or ""
+                                inv["nota"] = c_row[3] or ""
+                                invoices.append(inv)
+                        elif parent_invoices:
+                            # Self-healing migration/backfill
+                            invoices = parent_invoices
+                            try:
+                                with self.db_client.engine.begin() as write_conn:
+                                    for inv in invoices:
+                                        inv_num = str(inv.get("invoice_number", ""))
+                                        is_checked = 1 if inv.get("_selected", True) else 0
+                                        ship_type = inv.get("shipping_type", "LOCAL")
+                                        obs = inv.get("observaciones", inv.get("nota", ""))
+                                        write_conn.exec_driver_sql(
+                                            """
+                                            INSERT INTO seguimiento_relacion_invoices 
+                                                (folio, invoice_number, is_checked, shipping_type, observaciones, data_json)
+                                            VALUES (?, ?, ?, ?, ?, ?)
+                                            """,
+                                            (folio, inv_num, is_checked, ship_type, obs, json.dumps(inv, ensure_ascii=False))
+                                        )
+                                logger.info(f"[SELF-HEALING] Backfilled {len(invoices)} invoices for folio {folio} to seguimiento_relacion_invoices.")
+                            except Exception as migration_err:
+                                logger.error(f"Failed self-healing backfill for {folio}: {migration_err}")
+                        else:
+                            invoices = []
+
                         relacion = {
                             "folio": row[0],
                             "relacion_date": row[1],
@@ -162,8 +236,8 @@ class RelacionManager:
                             "updated_at": row[3].isoformat() if row[3] else None,
                             "created_by": row[4],
                             "updated_by": row[5],
-                            "invoices": json.loads(row[6]) if row[6] else [],
-                            "invoice_numbers": row[7].split(",") if row[7] else [],
+                            "invoices": invoices,
+                            "invoice_numbers": [str(inv.get("invoice_number", "")) for inv in invoices],
                             "status": row[8],
                             "is_closed": bool(row[9]),
                             "rolled_from": row[10],
@@ -251,6 +325,22 @@ class RelacionManager:
                                 folio, date_str, username, username,
                                 invoices_json, invoice_numbers_str, relacion["notes"],
                             ),
+                        )
+                    
+                    # Synchronize child table
+                    conn.exec_driver_sql("DELETE FROM seguimiento_relacion_invoices WHERE folio = ?", (folio,))
+                    for inv in invoices:
+                        inv_num = str(inv.get("invoice_number", ""))
+                        is_checked = 1 if inv.get("_selected", True) else 0
+                        ship_type = inv.get("shipping_type", "LOCAL")
+                        obs = inv.get("observaciones", inv.get("nota", ""))
+                        conn.exec_driver_sql(
+                            """
+                            INSERT INTO seguimiento_relacion_invoices 
+                                (folio, invoice_number, is_checked, shipping_type, observaciones, data_json)
+                            VALUES (?, ?, ?, ?, ?, ?)
+                            """,
+                            (folio, inv_num, is_checked, ship_type, obs, json.dumps(inv, ensure_ascii=False))
                         )
             except Exception as e:  # pragma: no cover
                 logger.error(f"Error saving relacion {folio} to SQL: {e}")
@@ -440,13 +530,32 @@ class RelacionManager:
         if relacion is None and self.db_client.engine:
             try:
                 with self.db_client.engine.connect() as conn:
-                    row = conn.exec_driver_sql(
-                        "SELECT invoices_json FROM seguimiento_relacion_envios WHERE folio = ?",
-                        (folio,),
-                    ).fetchone()
-                    if row and row[0]:
-                        invoices = json.loads(row[0])
+                    child_rows = conn.exec_driver_sql(
+                        "SELECT invoice_number, is_checked, shipping_type, observaciones, data_json FROM seguimiento_relacion_invoices WHERE folio = ?",
+                        (folio,)
+                    ).fetchall()
+                    if child_rows:
+                        invoices = []
+                        for c_row in child_rows:
+                            try:
+                                inv = json.loads(c_row[4]) if c_row[4] else {}
+                            except Exception:
+                                inv = {}
+                            inv["invoice_number"] = c_row[0]
+                            inv["_selected"] = bool(c_row[1])
+                            inv["shipping_type"] = c_row[2] or "LOCAL"
+                            inv["observaciones"] = c_row[3] or ""
+                            inv["nota"] = c_row[3] or ""
+                            invoices.append(inv)
                         relacion = {"invoices": invoices, "folio": folio}
+                    else:
+                        row = conn.exec_driver_sql(
+                            "SELECT invoices_json FROM seguimiento_relacion_envios WHERE folio = ?",
+                            (folio,),
+                        ).fetchone()
+                        if row and row[0]:
+                            invoices = json.loads(row[0])
+                            relacion = {"invoices": invoices, "folio": folio}
             except Exception as e:
                 logger.error(f"Error fetching relacion {folio} for auth: {e}")
 
@@ -488,6 +597,16 @@ class RelacionManager:
                         WHERE folio = ?
                         """,
                         (invoices_json, folio),
+                    )
+                    
+                    inv_num = str(updated_invoice.get("invoice_number", ""))
+                    conn.exec_driver_sql(
+                        """
+                        UPDATE seguimiento_relacion_invoices
+                        SET data_json = ?, updated_at = GETDATE()
+                        WHERE folio = ? AND invoice_number = ?
+                        """,
+                        (json.dumps(updated_invoice, ensure_ascii=False), folio, inv_num),
                     )
             except Exception as e:  # pragma: no cover
                 logger.error(f"Error saving authorization for {folio}: {e}")
@@ -540,14 +659,28 @@ class RelacionManager:
             try:
                 with self.db_client.engine.connect() as conn:
                     query = """
-                        SELECT invoice_numbers FROM seguimiento_relacion_envios
-                        WHERE status = 'active' AND invoice_numbers IS NOT NULL
+                        SELECT DISTINCT i.invoice_number 
+                        FROM seguimiento_relacion_invoices i
+                        INNER JOIN seguimiento_relacion_envios e ON i.folio = e.folio
+                        WHERE e.status = 'active' AND i.is_checked = 1
                     """
                     rows = conn.exec_driver_sql(query).fetchall()
-                    for row in rows:
-                        if row[0]:
-                            used.update(n.strip() for n in row[0].split(",") if n.strip())
-                    return used
+                    if rows:
+                        for row in rows:
+                            if row[0]:
+                                used.add(str(row[0]).strip())
+                        return used
+                    else:
+                        # Fallback to legacy string split if child table has no rows
+                        query_legacy = """
+                            SELECT invoice_numbers FROM seguimiento_relacion_envios
+                            WHERE status = 'active' AND invoice_numbers IS NOT NULL
+                        """
+                        rows_legacy = conn.exec_driver_sql(query_legacy).fetchall()
+                        for row in rows_legacy:
+                            if row[0]:
+                                used.update(n.strip() for n in row[0].split(",") if n.strip())
+                        return used
             except Exception as e:
                 logger.error(f"Error fetching used invoices: {e}")
 

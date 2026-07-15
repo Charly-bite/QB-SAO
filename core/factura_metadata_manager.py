@@ -86,10 +86,25 @@ class FacturaMetadataManager:
                         extra_invoices_json VARCHAR(MAX) NULL
                     )
                 END
+                
+                IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='seguimiento_credito_autorizaciones' and xtype='U')
+                BEGIN
+                    CREATE TABLE seguimiento_credito_autorizaciones (
+                        invoice_number                  INT PRIMARY KEY,
+                        credito_authorized              BIT NOT NULL DEFAULT 0,
+                        credito_authorized_by           VARCHAR(50) NULL,
+                        credito_authorized_at           VARCHAR(50) NULL,
+                        credito_revoked_from_relacion   BIT NOT NULL DEFAULT 0,
+                        credito_notes                   VARCHAR(MAX) NULL,
+                        sent_to_credito                 BIT NOT NULL DEFAULT 0,
+                        created_at                      DATETIME DEFAULT GETDATE(),
+                        updated_at                      DATETIME DEFAULT GETDATE()
+                    )
+                END
             """
             with self.db_client.engine.begin() as conn:
                 conn.exec_driver_sql(check_query)
-            logger.info(f"Verified tables exist")
+            logger.info(f"Verified tables exist (including seguimiento_credito_autorizaciones)")
         except Exception as e:  # pragma: no cover
             logger.error(f"Failed to verify/create tables: {e}")
 
@@ -234,21 +249,84 @@ class FacturaMetadataManager:
         if self.db_client.engine:
             try:
                 with self.db_client.engine.connect() as conn:
-                    result = conn.exec_driver_sql(f"SELECT invoice_number, credito_authorized, credito_authorized_by, credito_authorized_at, credito_revoked_from_relacion, credito_notes, sent_to_credito FROM {self.TABLE_NAME} WHERE credito_authorized IS NOT NULL OR credito_revoked_from_relacion = 1 OR credito_notes IS NOT NULL OR sent_to_credito = 1").fetchall()
-                    for row in result:
-                        inv = row[0]
-                        auths[inv] = {
-                            "credito_authorized": bool(row[1]) if row[1] is not None else False,
-                            "credito_authorized_by": row[2],
-                            "credito_authorized_at": row[3],
-                            "credito_revoked_from_relacion": bool(row[4]) if len(row) > 4 and row[4] is not None else False,
-                            "credito_notes": row[5] if len(row) > 5 and row[5] is not None else "",
-                            "sent_to_credito": bool(row[6]) if len(row) > 6 and row[6] is not None else False
-                        }
-                        if str(inv) not in self.local_metadata or not isinstance(self.local_metadata[str(inv)], dict):
-                            self.local_metadata[str(inv)] = {"category": "", "color": "", "custom_customer_name": ""}
-                        self.local_metadata[str(inv)].update(auths[inv])
-                    self._save_fallback()
+                    # Query the new normalized table
+                    result = conn.exec_driver_sql(
+                        """
+                        SELECT invoice_number, credito_authorized, credito_authorized_by, 
+                               credito_authorized_at, credito_revoked_from_relacion, 
+                               credito_notes, sent_to_credito 
+                        FROM seguimiento_credito_autorizaciones
+                        """
+                    ).fetchall()
+                    
+                    if result:
+                        for row in result:
+                            inv = row[0]
+                            auths[inv] = {
+                                "credito_authorized": bool(row[1]) if row[1] is not None else False,
+                                "credito_authorized_by": row[2],
+                                "credito_authorized_at": row[3],
+                                "credito_revoked_from_relacion": bool(row[4]) if len(row) > 4 and row[4] is not None else False,
+                                "credito_notes": row[5] if len(row) > 5 and row[5] is not None else "",
+                                "sent_to_credito": bool(row[6]) if len(row) > 6 and row[6] is not None else False
+                            }
+                            if str(inv) not in self.local_metadata or not isinstance(self.local_metadata[str(inv)], dict):
+                                self.local_metadata[str(inv)] = {"category": "", "color": "", "custom_customer_name": ""}
+                            self.local_metadata[str(inv)].update(auths[inv])
+                        self._save_fallback()
+                    else:
+                        # Self-healing migration from legacy factura_metadata table
+                        # Check if old table has any credit data
+                        legacy_query = f"""
+                            SELECT invoice_number, credito_authorized, credito_authorized_by, 
+                                   credito_authorized_at, credito_revoked_from_relacion, 
+                                   credito_notes, sent_to_credito 
+                            FROM {self.TABLE_NAME} 
+                            WHERE credito_authorized IS NOT NULL 
+                               OR credito_revoked_from_relacion = 1 
+                               OR credito_notes IS NOT NULL 
+                               OR sent_to_credito = 1
+                        """
+                        legacy_rows = conn.exec_driver_sql(legacy_query).fetchall()
+                        if legacy_rows:
+                            try:
+                                with self.db_client.engine.begin() as write_conn:
+                                    for row in legacy_rows:
+                                        inv = row[0]
+                                        auth_val = 1 if row[1] else 0
+                                        by = row[2]
+                                        at = row[3]
+                                        revoked = 1 if row[4] else 0
+                                        notes = row[5] or ""
+                                        sent = 1 if row[6] else 0
+                                        
+                                        write_conn.exec_driver_sql(
+                                            """
+                                            INSERT INTO seguimiento_credito_autorizaciones 
+                                                (invoice_number, credito_authorized, credito_authorized_by, 
+                                                 credito_authorized_at, credito_revoked_from_relacion, 
+                                                 credito_notes, sent_to_credito)
+                                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                                            """,
+                                            (inv, auth_val, by, at, revoked, notes, sent)
+                                        )
+                                        
+                                        # Also populate auths dict
+                                        auths[inv] = {
+                                            "credito_authorized": bool(row[1]) if row[1] is not None else False,
+                                            "credito_authorized_by": row[2],
+                                            "credito_authorized_at": row[3],
+                                            "credito_revoked_from_relacion": bool(row[4]) if row[4] is not None else False,
+                                            "credito_notes": row[5] if row[5] is not None else "",
+                                            "sent_to_credito": bool(row[6]) if row[6] is not None else False
+                                        }
+                                        if str(inv) not in self.local_metadata or not isinstance(self.local_metadata[str(inv)], dict):
+                                            self.local_metadata[str(inv)] = {"category": "", "color": "", "custom_customer_name": ""}
+                                        self.local_metadata[str(inv)].update(auths[inv])
+                                logger.info(f"[SELF-HEALING] Migrated {len(legacy_rows)} credit records to seguimiento_credito_autorizaciones.")
+                                self._save_fallback()
+                            except Exception as migration_err:
+                                logger.error(f"Failed to migrate legacy credit auths: {migration_err}")
             except Exception as e:
                 logger.error(f"Error fetching credito auths: {e}")
         return auths
@@ -265,14 +343,14 @@ class FacturaMetadataManager:
         if self.db_client.engine:
             try:
                 with self.db_client.engine.begin() as conn:
-                    query = f"""
-                        UPDATE {self.TABLE_NAME} 
-                        SET credito_authorized = ?, credito_authorized_by = ?, credito_authorized_at = ?
+                    query = """
+                        UPDATE seguimiento_credito_autorizaciones 
+                        SET credito_authorized = ?, credito_authorized_by = ?, credito_authorized_at = ?, updated_at = GETDATE()
                         WHERE invoice_number = ?;
 
                         IF @@ROWCOUNT = 0
                         BEGIN
-                            INSERT INTO {self.TABLE_NAME} (invoice_number, credito_authorized, credito_authorized_by, credito_authorized_at)
+                            INSERT INTO seguimiento_credito_autorizaciones (invoice_number, credito_authorized, credito_authorized_by, credito_authorized_at)
                             VALUES (?, ?, ?, ?);
                         END
                     """
@@ -292,13 +370,19 @@ class FacturaMetadataManager:
         if self.db_client.engine:
             try:
                 with self.db_client.engine.begin() as conn:
-                    query = f"""
-                        UPDATE {self.TABLE_NAME} 
-                        SET credito_revoked_from_relacion = ?
-                        WHERE invoice_number = ?
+                    query = """
+                        UPDATE seguimiento_credito_autorizaciones 
+                        SET credito_revoked_from_relacion = ?, updated_at = GETDATE()
+                        WHERE invoice_number = ?;
+
+                        IF @@ROWCOUNT = 0
+                        BEGIN
+                            INSERT INTO seguimiento_credito_autorizaciones (invoice_number, credito_revoked_from_relacion)
+                            VALUES (?, ?);
+                        END
                     """
                     bit_val = 1 if was_revoked else 0
-                    conn.exec_driver_sql(query, (bit_val, invoice_number))
+                    conn.exec_driver_sql(query, (bit_val, invoice_number, invoice_number, bit_val))
             except Exception as e:
                 logger.error(f"Error saving revoked_from_relacion: {e}")
         return True
@@ -313,14 +397,14 @@ class FacturaMetadataManager:
         if self.db_client.engine:
             try:
                 with self.db_client.engine.begin() as conn:
-                    query = f"""
-                        UPDATE {self.TABLE_NAME} 
-                        SET credito_notes = ?
+                    query = """
+                        UPDATE seguimiento_credito_autorizaciones 
+                        SET credito_notes = ?, updated_at = GETDATE()
                         WHERE invoice_number = ?;
 
                         IF @@ROWCOUNT = 0
                         BEGIN
-                            INSERT INTO {self.TABLE_NAME} (invoice_number, credito_notes)
+                            INSERT INTO seguimiento_credito_autorizaciones (invoice_number, credito_notes)
                             VALUES (?, ?);
                         END
                     """
@@ -501,14 +585,14 @@ class FacturaMetadataManager:
         if self.db_client.engine:
             try:
                 with self.db_client.engine.begin() as conn:
-                    query = f"""
-                        UPDATE {self.TABLE_NAME} 
-                        SET sent_to_credito = ?
+                    query = """
+                        UPDATE seguimiento_credito_autorizaciones 
+                        SET sent_to_credito = ?, updated_at = GETDATE()
                         WHERE invoice_number = ?;
 
                         IF @@ROWCOUNT = 0
                         BEGIN
-                            INSERT INTO {self.TABLE_NAME} (invoice_number, sent_to_credito)
+                            INSERT INTO seguimiento_credito_autorizaciones (invoice_number, sent_to_credito)
                             VALUES (?, ?);
                         END
                     """
