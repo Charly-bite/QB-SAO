@@ -4140,12 +4140,13 @@ def api_factura_credito_notes(invoice_number):  # pragma: no cover
 @login_required
 def toggle_factura_status(invoice_number):  # pragma: no cover
     """Toggle Recibido or Entrega checkbox from the Facturas tab, which updates the related order status."""
-    if not current_user.can_edit_facturas():
-        return jsonify({"error": "Sin permisos"}), 403
-
     data = request.get_json() or {}
     field = data.get("field") # 'recibido' or 'entrega'
     value = data.get("value") # boolean
+
+    if not current_user.can_edit_facturas():
+        if not (current_user.username and current_user.username.lower() == "reyesm" and field in ["entrega", "rebote"]):
+            return jsonify({"error": "Sin permisos"}), 403
 
     if field not in ['recibido', 'entrega', 'observaciones', 'rebote']:
         return jsonify({"error": "Campo inválido"}), 400

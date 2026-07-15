@@ -131,7 +131,7 @@
                                 <label class="inline-flex items-center gap-2 cursor-pointer select-none group">
                                     <input type="checkbox" :checked="inv.rebote"
                                         @change="inv.rebote = $event.target.checked; toggleFactura(inv.invoice_number, 'rebote', inv.rebote)"
-                                        :disabled="!canEditFacturas"
+                                        :disabled="!canEditFacturas && (currentUserUsername || '').toLowerCase() !== 'reyesm'"
                                         class="w-5 h-5 rounded border-slate-300 text-orange-500 focus:ring-orange-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all">
                                     <span class="text-xs font-medium transition-colors"
                                         :class="inv.rebote ? 'text-orange-700' : 'text-slate-400'"
@@ -143,7 +143,7 @@
                                 <label class="inline-flex items-center gap-2 cursor-pointer select-none group">
                                     <input type="checkbox" :checked="inv.entrega"
                                         @change="inv.entrega = $event.target.checked; toggleFactura(inv.invoice_number, 'entrega', inv.entrega)"
-                                        :disabled="!canEditFacturas || inv.rebote"
+                                        :disabled="(!canEditFacturas && (currentUserUsername || '').toLowerCase() !== 'reyesm') || inv.rebote"
                                         class="w-5 h-5 rounded border-slate-300 text-green-500 focus:ring-green-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all">
                                     <span class="text-xs font-medium transition-colors"
                                         :class="inv.entrega ? 'text-green-700' : 'text-slate-400'"

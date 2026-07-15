@@ -253,3 +253,66 @@ class TestErrorHandlers:
         response = client.get('/favicon.ico')
         # Could be 200 if the image exists, or 404 in test if missing
         assert response.status_code in (200, 404)
+
+
+class TestToggleFacturaStatus:
+    """POST /orders/api/facturas/<invoice_number>/toggle — toggles status."""
+
+    def test_reyesm_can_toggle_entrega_and_rebote(self, app):
+        with app.app_context():
+            um = app.user_manager
+            if "reyesm" not in um.users:
+                um.create_user(
+                    username="ReyesM",
+                    password="reyespass123",
+                    full_name="Reyes M",
+                    role="viewer",
+                )
+
+        client = app.test_client()
+        client.post(
+            "/login",
+            data={"username": "ReyesM", "password": "reyespass123"},
+            follow_redirects=True,
+        )
+
+        with app.app_context():
+            order = app.order_status_mgr.orders["10001"]
+            order["factura_number"] = "10001"
+            app.order_status_mgr._save_order("10001")
+
+        response = client.post(
+            "/orders/api/facturas/10001/toggle",
+            data=json.dumps({"field": "entrega", "value": True}),
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data.get("success") is True
+
+        response = client.post(
+            "/orders/api/facturas/10001/toggle",
+            data=json.dumps({"field": "rebote", "value": True}),
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+
+        response = client.post(
+            "/orders/api/facturas/10001/toggle",
+            data=json.dumps({"field": "recibido", "value": True}),
+            content_type="application/json",
+        )
+        assert response.status_code == 403
+
+    def test_viewer_cannot_toggle_any(self, viewer_client, app):
+        with app.app_context():
+            order = app.order_status_mgr.orders["10001"]
+            order["factura_number"] = "10001"
+            app.order_status_mgr._save_order("10001")
+
+        response = viewer_client.post(
+            "/orders/api/facturas/10001/toggle",
+            data=json.dumps({"field": "entrega", "value": True}),
+            content_type="application/json",
+        )
+        assert response.status_code == 403
