@@ -109,8 +109,25 @@
                                 :class="ecSubFilterOverdue === 'ALL' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">Todas</button>
                             <button @click="ecSubFilterOverdue = 'OVERDUE'" class="px-4 py-2 text-sm font-extrabold transition-all border-r border-slate-300"
                                 :class="ecSubFilterOverdue === 'OVERDUE' ? 'bg-red-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">Vencidas</button>
-                            <button @click="ecSubFilterOverdue = 'CURRENT'" class="px-4 py-2 text-sm font-extrabold transition-all"
+                            <button @click="ecSubFilterOverdue = 'CURRENT'" class="px-4 py-2 text-sm font-extrabold transition-all border-r border-slate-300"
                                 :class="ecSubFilterOverdue === 'CURRENT' ? 'bg-green-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">Al corriente</button>
+                            <button @click="ecSubFilterOverdue = 'PAID'" class="px-4 py-2 text-sm font-extrabold transition-all"
+                                :class="ecSubFilterOverdue === 'PAID' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">Pagadas</button>
+                        </div>
+                    </div>
+                    <!-- Date Filter -->
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold text-slate-600">Fecha:</span>
+                        <div class="flex items-center gap-1.5">
+                            <input type="date" x-model="ecSubFilterStartDate"
+                                class="px-2 py-1.5 text-xs font-medium border-2 border-slate-300 rounded-lg focus:outline-none focus:border-emerald-500 bg-white" />
+                            <span class="text-xs text-slate-400 font-bold">a</span>
+                            <input type="date" x-model="ecSubFilterEndDate"
+                                class="px-2 py-1.5 text-xs font-medium border-2 border-slate-300 rounded-lg focus:outline-none focus:border-emerald-500 bg-white" />
+                            <button x-show="ecSubFilterStartDate || ecSubFilterEndDate" @click="ecSubFilterStartDate = ''; ecSubFilterEndDate = ''"
+                                class="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors" title="Limpiar fechas">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
                         </div>
                     </div>
                     <!-- Selection controls -->
@@ -123,7 +140,7 @@
                             <span x-text="ecSubAllSelected() ? '✕ Deseleccionar Todo' : '✓ Seleccionar Todo'"></span>
                         </button>
                         <span class="text-sm font-bold text-slate-500 bg-white px-3 py-1.5 rounded-lg border border-slate-200" 
-                              x-text="ecSubSelectedCount() + ' de ' + ecSubFilteredInvoices().length + ' seleccionadas'"></span>
+                              x-text="ecSubFilteredSelectedCount() + ' de ' + ecSubFilteredInvoices().length + ' seleccionadas'"></span>
                     </div>
                 </div>
             </div>
@@ -159,12 +176,12 @@
                                 <td class="px-3 py-2.5 text-center text-slate-500" x-text="formatDocDate(inv.doc_date)"></td>
                                 <td class="px-3 py-2.5 text-center text-slate-500" x-text="formatDocDate(inv.due_date)"></td>
                                 <td class="px-3 py-2.5 text-right font-semibold text-slate-600" x-text="'$' + Number(inv.total).toLocaleString('es-MX', {minimumFractionDigits: 2})"></td>
-                                <td class="px-3 py-2.5 text-right font-extrabold text-red-600" x-text="'$' + Number(inv.balance).toLocaleString('es-MX', {minimumFractionDigits: 2})"></td>
+                                <td class="px-3 py-2.5 text-right font-extrabold" :class="inv.balance > 0 ? 'text-red-600' : 'text-slate-500'" x-text="'$' + Number(inv.balance).toLocaleString('es-MX', {minimumFractionDigits: 2})"></td>
                                 <td class="px-3 py-2.5 text-center text-slate-500 font-semibold" x-text="inv.currency"></td>
                                 <td class="px-3 py-2.5 text-center">
                                     <span class="px-2 py-0.5 rounded text-xs font-bold"
-                                        :class="inv.days_overdue > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'"
-                                        x-text="inv.days_overdue > 0 ? inv.days_overdue + ' días' : 'Al corriente'"></span>
+                                        :class="inv.balance === 0 ? 'bg-emerald-100 text-emerald-700' : (inv.days_overdue > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700')"
+                                        x-text="inv.balance === 0 ? 'Pagada' : (inv.days_overdue > 0 ? inv.days_overdue + ' días' : 'Al corriente')"></span>
                                 </td>
                             </tr>
                         </template>
@@ -180,11 +197,11 @@
 
             <!-- Generate Button -->
             <div class="flex justify-center pt-3 pb-2">
-                <button @click="ecSubGenerateBill()" :disabled="ecSubSelectedCount() === 0"
+                <button @click="ecSubGenerateBill()" :disabled="ecSubFilteredSelectedCount() === 0"
                     class="inline-flex items-center gap-3 px-8 py-4 rounded-xl text-base font-black text-white transition-all duration-200 shadow-xl active:scale-95 border-2"
-                    :class="ecSubSelectedCount() > 0 ? 'bg-emerald-600 border-emerald-700 hover:bg-emerald-700 shadow-emerald-300/50 hover:shadow-emerald-400/50' : 'bg-slate-300 border-slate-400 cursor-not-allowed shadow-none'">
+                    :class="ecSubFilteredSelectedCount() > 0 ? 'bg-emerald-600 border-emerald-700 hover:bg-emerald-700 shadow-emerald-300/50 hover:shadow-emerald-400/50' : 'bg-slate-300 border-slate-400 cursor-not-allowed shadow-none'">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
-                    <span x-text="'Generar Estado de Cuenta — ' + ecSubSelectedCount() + ' facturas'"></span>
+                    <span x-text="'Generar Estado de Cuenta — ' + ecSubFilteredSelectedCount() + ' facturas'"></span>
                 </button>
             </div>
         </div>

@@ -112,7 +112,7 @@
                                     <span x-text="allSelected() ? '✕ Deseleccionar Todo' : '✓ Seleccionar Todo'"></span>
                                 </button>
                                 <span class="text-[11px] font-bold text-slate-500 bg-white px-2 py-1.5 rounded-lg border border-slate-200" 
-                                      x-text="selectedCount() + ' de ' + (data ? data.invoices.length : 0)"></span>
+                                      x-text="filteredSelectedCount() + ' de ' + filteredInvoices().length"></span>
                             </div>
                         </div>
 
@@ -139,8 +139,26 @@
                                         :class="filterOverdue === 'ALL' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">Todas</button>
                                     <button @click="filterOverdue = 'OVERDUE'" class="px-3 py-1 text-[11px] font-extrabold transition-all border-r border-slate-300"
                                         :class="filterOverdue === 'OVERDUE' ? 'bg-red-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">Vencidas</button>
-                                    <button @click="filterOverdue = 'CURRENT'" class="px-3 py-1 text-[11px] font-extrabold transition-all"
+                                    <button @click="filterOverdue = 'CURRENT'" class="px-3 py-1 text-[11px] font-extrabold transition-all border-r border-slate-300"
                                         :class="filterOverdue === 'CURRENT' ? 'bg-green-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">Al corriente</button>
+                                    <button @click="filterOverdue = 'PAID'" class="px-3 py-1 text-[11px] font-extrabold transition-all"
+                                        :class="filterOverdue === 'PAID' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">Pagadas</button>
+                                </div>
+                            </div>
+
+                            <!-- Date Filter -->
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-[11px] font-bold text-slate-600">Fecha:</span>
+                                <div class="flex items-center gap-1">
+                                    <input type="date" x-model="filterStartDate"
+                                        class="px-1.5 py-1 text-[11px] font-medium border-2 border-slate-300 rounded-lg focus:outline-none focus:border-emerald-500 bg-white" />
+                                    <span class="text-[10px] text-slate-400 font-bold">a</span>
+                                    <input type="date" x-model="filterEndDate"
+                                        class="px-1.5 py-1 text-[11px] font-medium border-2 border-slate-300 rounded-lg focus:outline-none focus:border-emerald-500 bg-white" />
+                                    <button x-show="filterStartDate || filterEndDate" @click="filterStartDate = ''; filterEndDate = ''"
+                                        class="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors" title="Limpiar fechas">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -189,12 +207,12 @@
                                         <td class="px-2 py-2 text-center text-slate-500" x-text="formatDocDate(inv.doc_date)"></td>
                                         <td class="px-2 py-2 text-center text-slate-500" x-text="formatDocDate(inv.due_date)"></td>
                                         <td class="px-2 py-2 text-right font-semibold text-slate-600" x-text="'$' + Number(inv.total).toLocaleString('es-MX', {minimumFractionDigits: 2})"></td>
-                                        <td class="px-2 py-2 text-right font-extrabold text-red-600" x-text="'$' + Number(inv.balance).toLocaleString('es-MX', {minimumFractionDigits: 2})"></td>
+                                        <td class="px-2 py-2 text-right font-extrabold" :class="inv.balance > 0 ? 'text-red-600' : 'text-slate-500'" x-text="'$' + Number(inv.balance).toLocaleString('es-MX', {minimumFractionDigits: 2})"></td>
                                         <td class="px-2 py-2 text-center text-slate-500 font-semibold" x-text="inv.currency"></td>
                                         <td class="px-2 py-2 text-center">
                                             <span class="px-1.5 py-0.5 rounded text-[10px] font-bold"
-                                                :class="inv.days_overdue > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'"
-                                                x-text="inv.days_overdue > 0 ? inv.days_overdue + ' días' : 'Al corriente'"></span>
+                                                :class="inv.balance === 0 ? 'bg-emerald-100 text-emerald-700' : (inv.days_overdue > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700')"
+                                                x-text="inv.balance === 0 ? 'Pagada' : (inv.days_overdue > 0 ? inv.days_overdue + ' días' : 'Al corriente')"></span>
                                         </td>
                                     </tr>
                                 </template>
@@ -209,11 +227,11 @@
                 <!-- Footer with Generate button -->
                 <div x-show="!loading && data" class="p-4 border-t-2 border-slate-200 bg-slate-50 shrink-0">
                     <button @click="generate()"
-                            :disabled="selectedCount() === 0"
+                            :disabled="filteredSelectedCount() === 0"
                             class="w-full py-3 rounded-xl text-sm font-black text-white transition-all duration-200 shadow-xl active:scale-95 border-2 flex items-center justify-center gap-2"
-                            :class="selectedCount() > 0 ? 'bg-emerald-600 border-emerald-700 hover:bg-emerald-700 shadow-emerald-300/50 hover:shadow-emerald-400/50' : 'bg-slate-300 border-slate-400 cursor-not-allowed shadow-none'">
+                            :class="filteredSelectedCount() > 0 ? 'bg-emerald-600 border-emerald-700 hover:bg-emerald-700 shadow-emerald-300/50 hover:shadow-emerald-400/50' : 'bg-slate-300 border-slate-400 cursor-not-allowed shadow-none'">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
-                        <span x-text="selectedCount() > 0 ? 'Generar Estado de Cuenta — ' + selectedCount() + ' facturas' : 'Seleccione facturas'"></span>
+                        <span x-text="filteredSelectedCount() > 0 ? 'Generar Estado de Cuenta — ' + filteredSelectedCount() + ' facturas' : 'Seleccione facturas'"></span>
                     </button>
                 </div>
             </div>

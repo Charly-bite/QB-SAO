@@ -18,6 +18,10 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
+# Disable integrated security and pymssql driver options during test runs
+os.environ["SQL_INTEGRATED_SECURITY"] = "no"
+os.environ["SQL_USE_PYMSSQL"] = "no"
+
 
 # ---------------------------------------------------------------------------
 # Mock external drivers BEFORE any application import
@@ -34,6 +38,13 @@ try:
 except ImportError:
     _pyodbc_mock = MagicMock()
     sys.modules.setdefault("pyodbc", _pyodbc_mock)
+
+# stub pymssql when not available
+try:
+    import pymssql
+except ImportError:
+    _pymssql_mock = MagicMock()
+    sys.modules.setdefault("pymssql", _pymssql_mock)
 
 
 # ---------------------------------------------------------------------------

@@ -12,7 +12,7 @@ def test_ci_workflow_triggers():
     assert "on:" in content, "CI workflow missing 'on:' trigger"
     assert "push:" in content, "CI workflow missing 'push:' trigger"
     assert "pull_request:" in content, "CI workflow missing 'pull_request:' trigger"
-    assert "branches: [main, staging, develop]" in content or "branches: [main, develop]" in content, "CI workflow must target main, staging, and develop branches"
+    assert any(pat in content for pat in ["branches: ['**']", "branches: [main, staging, develop]", "branches: [main, develop]"]), "CI workflow must target main, staging, develop branches, or all branches ('**')"
 
 def test_cd_workflow_gating():
     """Verify that CD workflow is conditionally gated and has a valid structure."""

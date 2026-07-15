@@ -158,7 +158,7 @@ class TestSgaRobustness:
             MagicMock()  # success
         ]
         
-        with patch.dict(os.environ, {"SQL_SERVER": "192.168.2.237"}, clear=False):
+        with patch.dict(os.environ, {"SQL_SERVER": "192.168.2.237", "SGA_WEB_HOST": "192.168.2.134"}, clear=False):
             status = check_sga_status(timeout=0.1, cache_ttl=0, max_attempts=3, retry_delay=0.1)
             
             assert status is True

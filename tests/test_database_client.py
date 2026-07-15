@@ -9,6 +9,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+# Ensure integrated security is disabled by default for legacy tests
+import os
+os.environ["SQL_INTEGRATED_SECURITY"] = "no"
+
 
 class TestDatabaseClientInit:
     @patch("core.database_client.pyodbc")
@@ -32,7 +36,8 @@ class TestBuildConnectionString:
             "SQL_SERVER": "127.0.0.1",
             "SQL_DATABASE": "DB",
             "SQL_USER": "usr",
-            "SQL_PASSWORD": "pass123"
+            "SQL_PASSWORD": "pass123",
+            "SQL_INTEGRATED_SECURITY": "no"
         }):
             cs = db._build_connection_string()
         assert "Custom Driver" in cs
@@ -115,10 +120,28 @@ class TestBuildConnectionString:
             "SQL_SERVER": "127.0.0.1",
             "SQL_DATABASE": "DB",
             "SQL_USER": "usr",
-            "SQL_PASSWORD": ""
+            "SQL_PASSWORD": "",
+            "SQL_INTEGRATED_SECURITY": "no"
         }, clear=False):
             with pytest.raises(ValueError, match="Missing required SQL environment config"):
                 db._build_connection_string()
+
+    @patch("core.database_client.pyodbc")
+    @patch("core.database_client.load_dotenv")
+    def test_integrated_security(self, _ld, _pyodbc):
+        from core.database_client import DatabaseClient
+        db = DatabaseClient()
+        with patch.dict(os.environ, {
+            "SQL_SERVER": "127.0.0.1",
+            "SQL_DATABASE": "DB",
+            "SQL_INTEGRATED_SECURITY": "yes",
+            "SQL_USER": "",
+            "SQL_PASSWORD": ""
+        }, clear=False):
+            cs = db._build_connection_string()
+        assert "Trusted_Connection=yes" in cs
+        assert "UID=" not in cs
+        assert "PWD=" not in cs
 
 
 class TestConnect:
@@ -146,6 +169,39 @@ class TestConnect:
         assert db.connected is True
         assert db.engine is mock_engine
         mock_conn.close.assert_called_once()
+
+    @patch("core.database_client.create_engine")
+    @patch("pymssql.connect")
+    @patch("core.database_client.load_dotenv")
+    def test_connect_pymssql_success(self, _ld, mock_pymssql_connect, mock_create_engine):
+        mock_conn = MagicMock()
+        mock_pymssql_connect.return_value = mock_conn
+        mock_engine = MagicMock()
+        mock_create_engine.return_value = mock_engine
+
+        from core.database_client import DatabaseClient
+        db = DatabaseClient()
+        with patch.dict(os.environ, {
+            "SQL_SERVER": "127.0.0.1",
+            "SQL_DATABASE": "DB",
+            "SQL_USER": "usr",
+            "SQL_PASSWORD": "test_pass",
+            "SQL_USE_PYMSSQL": "yes",
+            "TEST_USE_PYMSSQL": "yes"
+        }, clear=False):
+            result = db.connect()
+
+        assert result is True
+        assert db.connected is True
+        assert db.engine is mock_engine
+        mock_conn.close.assert_called_once()
+        mock_pymssql_connect.assert_called_once_with(
+            server="127.0.0.1",
+            user="usr",
+            password="test_pass",
+            database="DB",
+            login_timeout=5
+        )
 
     @patch("core.database_client.pyodbc")
     @patch("core.database_client.load_dotenv")
