@@ -426,8 +426,22 @@ function visorData() {
         loading: false,
         searchQuery: '',
         selectedUser: '',
-        dateFrom: new Date().toISOString().split('T')[0],
-        dateTo: new Date().toISOString().split('T')[0],
+        dateFrom: (function() {
+            try {
+                const saved = localStorage.getItem('qb_visor_date_from');
+                return saved !== null ? saved : new Date().toISOString().split('T')[0];
+            } catch (e) {
+                return new Date().toISOString().split('T')[0];
+            }
+        })(),
+        dateTo: (function() {
+            try {
+                const saved = localStorage.getItem('qb_visor_date_to');
+                return saved !== null ? saved : new Date().toISOString().split('T')[0];
+            } catch (e) {
+                return new Date().toISOString().split('T')[0];
+            }
+        })(),
         maxOrders: '0',
         activeTopFilter: 'all',
         currentPage: 1,
@@ -530,7 +544,20 @@ function visorData() {
             document.querySelector('.qb-visor-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         },
 
-        init() { this.startTimer(); },
+        init() {
+            // Watch date range filters to persist them
+            this.$watch('dateFrom', val => {
+                try {
+                    localStorage.setItem('qb_visor_date_from', val !== null && val !== undefined ? val : '');
+                } catch(e) { console.warn(e); }
+            });
+            this.$watch('dateTo', val => {
+                try {
+                    localStorage.setItem('qb_visor_date_to', val !== null && val !== undefined ? val : '');
+                } catch(e) { console.warn(e); }
+            });
+            this.startTimer();
+        },
         startTimer() { setInterval(() => { this.timer--; if (this.timer <= 0) { this.timer = 10; this.refreshData(); } }, 1000); },
 
         async refreshData() {

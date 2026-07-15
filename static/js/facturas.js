@@ -1638,6 +1638,13 @@ function facturasApp() {
                     this.invoices = [...this.invoices];
                     this.highlightInvoice(data.invoice_number);
                 }
+            } else if (data.type === 'factura_sent_to_credito_changed') {
+                const inv = this.invoices.find(i => String(i.invoice_number) === String(data.invoice_number));
+                if (inv) {
+                    inv.sent_to_credito = data.sent_to_credito;
+                    this.invoices = [...this.invoices];
+                    this.highlightInvoice(data.invoice_number);
+                }
             } else if (data.type === 'factura_color_changed') {
                 if (data.client_id !== this.clientId) {
                     this.rowColors[data.invoice_number] = data.color;
@@ -2967,6 +2974,72 @@ function facturasApp() {
                     inv.credito_authorized_name = this.currentUserFullName;
                     inv.credito_authorized_at = new Date().toISOString();
                 }
+            }
+        },
+
+        async autoAuthorizeInvoice(inv) {
+            if (!this.canEditFacturas && !this.canAuthorizarCredito) {
+                alert('No tienes permisos para realizar esta acción.');
+                return;
+            }
+
+            const isMostrador = (inv.customer_name || '').includes('VENTAS MOSTRADOR');
+            if (!isMostrador && !this.canAuthorizarCredito) {
+                alert('Solo el departamento de Crédito y Cobranza puede autorizar envíos de clientes normales.');
+                return;
+            }
+
+            const newValue = !inv.credito_authorized;
+
+            try {
+                const res = await fetch(`/orders/api/facturas/${inv.invoice_number}/authorize`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        invoice_number: inv.invoice_number,
+                        authorized: newValue,
+                        customer_name: inv.customer_name,
+                    }),
+                });
+                const data = await res.json();
+                if (data.success && data.invoice) {
+                    Object.assign(inv, data.invoice);
+                    this.showToast('Éxito', newValue ? 'Factura auto-aprobada' : 'Auto-aprobación revocada', '✅');
+                } else {
+                    alert(data.error || 'Error al autorizar factura');
+                }
+            } catch (e) {
+                console.error('Error auto-authorizing invoice:', e);
+                alert('Error de conexión');
+            }
+        },
+
+        async sendToCredito(inv, sent) {
+            if (!this.canEditFacturas) {
+                alert('No tienes permisos para realizar esta acción.');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/orders/api/facturas/${inv.invoice_number}/send-to-credito`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        invoice_number: inv.invoice_number,
+                        sent: sent,
+                    }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    inv.sent_to_credito = sent;
+                    this.invoices = [...this.invoices];
+                    this.showToast('Éxito', sent ? 'Enviado a Crédito' : 'Cancelado envío a Crédito', '⏰');
+                } else {
+                    alert(data.error || 'Error al enviar a Crédito');
+                }
+            } catch (e) {
+                console.error('Error sending to credito:', e);
+                alert('Error de conexión');
             }
         },
 
