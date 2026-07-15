@@ -246,6 +246,7 @@ function facturasApp() {
             return order.find(t => tabs[t]) || 'facturas';
         })(),
         creditoSubTab: 'Todas',
+        almacenSubTab: 'todos',
         
         // Pending Summary Tracking
         pendingSubTab: localStorage.getItem('qb_facturas_pending_subtab') || 'current', // 'calendar', 'all', 'current'
@@ -266,9 +267,10 @@ function facturasApp() {
         currentUserUsername: cfg.currentUserUsername,
         currentUserFullName: cfg.currentUserFullName,
         currentUserSignature: cfg.currentUserSignature,
-        signatures: { facturacion: null, credito: null },
+        signatures: { facturacion: null, credito: null, almacen: null },
         canSignFacturacion: cfg.canSignFacturacion,
         canSignCredito: cfg.canSignCredito,
+        canSignAlmacen: cfg.canSignAlmacen,
         canAuthorizarCredito: cfg.canAuthorizarCredito || false,
         clientId: Math.random().toString(36).substring(2) + Date.now().toString(36),
         _suppressRelacionHighlight: false,
@@ -651,11 +653,13 @@ function facturasApp() {
                 const canSign = {
                     facturacion: this.canSignFacturacion,
                     credito: this.canSignCredito,
+                    almacen: this.canSignAlmacen,
                 };
                 if (!canSign[area]) {
                     const labels = {
                         facturacion: 'Facturación',
                         credito: 'Crédito y Cobranza',
+                        almacen: 'Almacén',
                     };
                     alert(`Solo el jefe de ${labels[area]} puede firmar esta área.`);
                     return;
@@ -673,6 +677,7 @@ function facturasApp() {
                     this.signatures = {
                         facturacion: data.signatures.facturacion || null,
                         credito: data.signatures.credito || null,
+                        almacen: data.signatures.almacen || null,
                     };
                 } else {
                     alert(data.error || 'Error al actualizar firma');
@@ -2760,6 +2765,21 @@ function facturasApp() {
             } catch (e) {
                 console.error('Error fetching relacion:', e);
             }
+        },
+
+        filteredAlmacenInvoices() {
+            if (!this.currentRelacion || !this.currentRelacion.invoices) return [];
+            const invoices = this.currentRelacion.invoices;
+            if (this.almacenSubTab === 'entregados') {
+                return invoices.filter(i => i.entrega);
+            }
+            if (this.almacenSubTab === 'sin_entregar') {
+                return invoices.filter(i => !i.entrega && !i.rebote);
+            }
+            if (this.almacenSubTab === 'rebotados') {
+                return invoices.filter(i => i.rebote);
+            }
+            return invoices;
         },
 
         async fetchRelaciones() {

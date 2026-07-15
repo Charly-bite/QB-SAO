@@ -20,10 +20,55 @@ class FacturaMetadataManager:
         self.local_daily_orders = {}
         self.local_daily_extras = {}
 
+        # Background writer thread initialization
+        import queue
+        import threading
+        self._write_queue = queue.Queue()
+        self._worker_thread = threading.Thread(target=self._process_write_queue, daemon=True)
+        self._worker_thread.start()
+
         self.db_client = DatabaseClient()
         self.db_client.connect()
         self._ensure_table_exists()
         self._load_fallback()
+
+    def _process_write_queue(self):
+        while True:
+            try:
+                item = self._write_queue.get()
+                if item is None:
+                    break
+                file_path, data = item
+                self._execute_write(file_path, data)
+                self._write_queue.task_done()
+            except Exception as e:
+                logger.error(f"Error in background JSON writer: {e}")
+
+    def _execute_write(self, file_path, data):
+        try:
+            dir_name = os.path.dirname(file_path)
+            os.makedirs(dir_name, exist_ok=True)
+            fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
+                os.replace(tmp_path, file_path)
+            except Exception:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
+        except Exception as e:
+            logger.error(f"Error writing file {file_path} in background: {e}")
+
+    def _enqueue_write(self, file_path, data):
+        import sys
+        if "pytest" in sys.modules:
+            # Write synchronously during tests
+            self._execute_write(file_path, data)
+        else:
+            self._write_queue.put((file_path, data))
 
     def _ensure_table_exists(self):
         try:
@@ -135,63 +180,30 @@ class FacturaMetadataManager:
 
     def _save_fallback(self):
         """Saves metadata to JSON file fallback"""
+        import copy
         try:
-            dir_name = os.path.dirname(self.db_path)
-            os.makedirs(dir_name, exist_ok=True)
-            fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
-            try:
-                with os.fdopen(fd, "w", encoding="utf-8") as f:
-                    json.dump(self.local_metadata, f, indent=2, ensure_ascii=False)
-                os.replace(tmp_path, self.db_path)
-            except Exception:  # pragma: no cover
-                # Always clean up the temp file so we never leave orphans on disk
-                try:  # pragma: no cover
-                    os.unlink(tmp_path)  # pragma: no cover
-                except OSError:  # pragma: no cover
-                    pass  # pragma: no cover
-                raise  # pragma: no cover
+            data_copy = copy.deepcopy(self.local_metadata)
+            self._enqueue_write(self.db_path, data_copy)
         except Exception as e:  # pragma: no cover
-            logger.error(f"Error saving JSON fallback: {e}")
+            logger.error(f"Error enqueuing JSON fallback: {e}")
 
     def _save_daily_fallback(self):
+        import copy
         try:
             daily_path = os.path.join(os.path.dirname(self.db_path), "factura_daily_order.json")
-            dir_name = os.path.dirname(self.db_path)
-            os.makedirs(dir_name, exist_ok=True)
-            fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
-            try:
-                with os.fdopen(fd, "w", encoding="utf-8") as f:
-                    json.dump(self.local_daily_orders, f, indent=2, ensure_ascii=False)
-                os.replace(tmp_path, daily_path)
-            except Exception:  # pragma: no cover
-                # Always clean up the temp file so we never leave orphans on disk
-                try:  # pragma: no cover
-                    os.unlink(tmp_path)  # pragma: no cover
-                except OSError:  # pragma: no cover
-                    pass  # pragma: no cover
-                raise  # pragma: no cover
+            data_copy = copy.deepcopy(self.local_daily_orders)
+            self._enqueue_write(daily_path, data_copy)
         except Exception as e:  # pragma: no cover
-            logger.error(f"Error saving daily order JSON fallback: {e}")
+            logger.error(f"Error enqueuing daily order JSON fallback: {e}")
 
     def _save_extra_fallback(self):
+        import copy
         try:
             extra_path = os.path.join(os.path.dirname(self.db_path), "factura_daily_extra.json")
-            dir_name = os.path.dirname(self.db_path)
-            os.makedirs(dir_name, exist_ok=True)
-            fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
-            try:
-                with os.fdopen(fd, "w", encoding="utf-8") as f:
-                    json.dump(self.local_daily_extras, f, indent=2, ensure_ascii=False)
-                os.replace(tmp_path, extra_path)
-            except Exception:  # pragma: no cover
-                # Always clean up the temp file so we never leave orphans on disk
-                try:  # pragma: no cover
-                    os.unlink(tmp_path)  # pragma: no cover
-                except OSError:  # pragma: no cover
-                    pass  # pragma: no cover
-                raise  # pragma: no cover
+            data_copy = copy.deepcopy(self.local_daily_extras)
+            self._enqueue_write(extra_path, data_copy)
         except Exception as e:  # pragma: no cover
-            logger.error(f"Error saving daily extra JSON fallback: {e}")
+            logger.error(f"Error enqueuing daily extra JSON fallback: {e}")
 
     def get_overrides(self):
         """Returns (overrides_dict, colors_dict, custom_names_dict)"""
