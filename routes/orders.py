@@ -4029,12 +4029,30 @@ def api_factura_authorize(invoice_number):  # pragma: no cover
     """Authorize or revoke authorization for a specific invoice."""
     data = request.get_json() or {}
     
-    # Check if this is a Ventas Mostrador invoice to allow auto-approval by billing/facturacion
+    # Check if this is a Ventas Mostrador or special invoice to allow auto-approval by billing/facturacion
     is_mostrador = False
     customer_name = data.get("customer_name", "")
+    
+    # 1. Check customer name first
     if customer_name and "VENTAS MOSTRADOR" in customer_name.upper():
         is_mostrador = True
-    else:
+    
+    # 2. Check shipping type from request or database overrides
+    shipping_type = data.get("shipping_type", "")
+    mgr = getattr(current_app, "factura_metadata_mgr", None)
+    if not shipping_type and mgr:
+        category_overrides, _, _ = mgr.get_overrides()
+        shipping_type = category_overrides.get(invoice_number, "")
+
+    special_categories = {
+        "VENTA MOSTRADOR", "VENTA DE MOSTRADOR", "VENTAS MOSTRADOR",
+        "PASE A PAQUETERIA", "PASE PROGRAMADO", "PASA PROGRAMADO"
+    }
+
+    if shipping_type and str(shipping_type).upper().strip() in special_categories:
+        is_mostrador = True
+
+    if not is_mostrador:
         try:
             sap = current_app.sap_connector
             if sap:
@@ -4045,8 +4063,11 @@ def api_factura_authorize(invoice_number):  # pragma: no cover
                     cust_name = invoices[0].get("customer_name", "")
                     if cust_name and "VENTAS MOSTRADOR" in cust_name.upper():
                         is_mostrador = True
+                    sap_shipping_type = invoices[0].get("shipping_type", "")
+                    if sap_shipping_type and str(sap_shipping_type).upper().strip() in special_categories:
+                        is_mostrador = True
         except Exception as e:
-            logging.error(f"Error fetching customer name from SAP during authorization check: {e}")
+            logging.error(f"Error fetching customer/shipping details from SAP during authorization check: {e}")
 
     if not current_user.can_authorize_credito():
         if is_mostrador and current_user.can_edit_facturas():
