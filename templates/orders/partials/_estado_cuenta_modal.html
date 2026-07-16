@@ -137,10 +137,8 @@
                                 <div class="inline-flex border-2 border-slate-300 rounded-lg overflow-hidden shadow-sm">
                                     <button @click="filterOverdue = 'ALL'" class="px-3 py-1 text-[11px] font-extrabold transition-all border-r border-slate-300"
                                         :class="filterOverdue === 'ALL' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">Todas</button>
-                                    <button @click="filterOverdue = 'OVERDUE'" class="px-3 py-1 text-[11px] font-extrabold transition-all border-r border-slate-300"
-                                        :class="filterOverdue === 'OVERDUE' ? 'bg-red-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">Vencidas</button>
-                                    <button @click="filterOverdue = 'CURRENT'" class="px-3 py-1 text-[11px] font-extrabold transition-all border-r border-slate-300"
-                                        :class="filterOverdue === 'CURRENT' ? 'bg-green-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">Al corriente</button>
+                                    <button @click="filterOverdue = 'UNPAID'" class="px-3 py-1 text-[11px] font-extrabold transition-all border-r border-slate-300"
+                                        :class="filterOverdue === 'UNPAID' ? 'bg-red-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">No pagadas</button>
                                     <button @click="filterOverdue = 'PAID'" class="px-3 py-1 text-[11px] font-extrabold transition-all"
                                         :class="filterOverdue === 'PAID' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">Pagadas</button>
                                 </div>

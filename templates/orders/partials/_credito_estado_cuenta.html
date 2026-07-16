@@ -10,7 +10,7 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                     </svg>
                 </div>
-                <input type="text" x-model="ecSubSearchQuery" @input="ecSubSearch()" @focus="if(ecSubSearchResults.length > 0) ecSubSearchResults = ecSubSearchResults"
+                <input type="text" x-model="ecSubSearchQuery" @input="ecSubSearch()" @focus="if(ecSubSearchQuery.length >= 2) ecSubSearch()"
                     class="block w-full pl-10 pr-10 py-2.5 border-2 border-slate-200 rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm font-medium transition-all"
                     placeholder="Buscar cliente por nombre o código (ej: OXI, CL01223)..." />
                 <!-- Clear button -->
@@ -23,7 +23,7 @@
         </div>
 
         <!-- Search Results Dropdown -->
-        <div x-show="ecSubSearchResults.length > 0 && !ecSubSelectedClient" x-transition
+        <div x-show="ecSubSearchResults.length > 0" x-transition @click.outside="ecSubSearchResults = []"
             class="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl max-h-64 overflow-y-auto">
             <template x-for="client in ecSubSearchResults" :key="client.card_code">
                 <button @click="ecSubSelectClient(client)"
@@ -48,8 +48,7 @@
     </div>
 
     <!-- Selected Client Info -->
-    <template x-if="ecSubSelectedClient && ecSubClientData">
-        <div class="space-y-4">
+    <div x-show="ecSubSelectedClient && ecSubClientData" x-cloak x-transition.duration.300ms class="space-y-4">
             <!-- Client Header Card -->
             <div class="bg-slate-800 rounded-xl p-4 text-white shadow-md">
                 <div class="flex items-center justify-between">
@@ -107,10 +106,8 @@
                         <div class="inline-flex border-2 border-slate-300 rounded-lg overflow-hidden shadow-sm">
                             <button @click="ecSubFilterOverdue = 'ALL'" class="px-4 py-2 text-sm font-extrabold transition-all border-r border-slate-300"
                                 :class="ecSubFilterOverdue === 'ALL' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">Todas</button>
-                            <button @click="ecSubFilterOverdue = 'OVERDUE'" class="px-4 py-2 text-sm font-extrabold transition-all border-r border-slate-300"
-                                :class="ecSubFilterOverdue === 'OVERDUE' ? 'bg-red-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">Vencidas</button>
-                            <button @click="ecSubFilterOverdue = 'CURRENT'" class="px-4 py-2 text-sm font-extrabold transition-all border-r border-slate-300"
-                                :class="ecSubFilterOverdue === 'CURRENT' ? 'bg-green-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">Al corriente</button>
+                            <button @click="ecSubFilterOverdue = 'UNPAID'" class="px-4 py-2 text-sm font-extrabold transition-all border-r border-slate-300"
+                                :class="ecSubFilterOverdue === 'UNPAID' ? 'bg-red-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">No pagadas</button>
                             <button @click="ecSubFilterOverdue = 'PAID'" class="px-4 py-2 text-sm font-extrabold transition-all"
                                 :class="ecSubFilterOverdue === 'PAID' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">Pagadas</button>
                         </div>
@@ -205,38 +202,34 @@
                 </button>
             </div>
         </div>
-    </template>
+    </div>
 
     <!-- Loading state -->
-    <div x-show="ecSubClientLoading" class="py-12 text-center">
+    <div x-show="ecSubClientLoading" x-cloak x-transition.duration.200ms class="py-12 text-center">
         <div class="inline-block w-8 h-8 border-3 border-slate-200 border-t-emerald-500 rounded-full animate-spin"></div>
         <p class="text-sm text-slate-500 mt-3">Cargando estado de cuenta...</p>
     </div>
 
     <!-- Empty state (no client selected) -->
-    <template x-if="!ecSubSelectedClient && !ecSubClientLoading">
-        <div class="py-16 text-center">
-            <div class="flex flex-col items-center gap-3">
-                <svg class="w-14 h-14 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                </svg>
-                <p class="text-slate-500 font-medium">Busca un cliente para ver su estado de cuenta</p>
-                <p class="text-sm text-slate-400">Escribe el nombre o código del cliente en la barra de búsqueda</p>
-            </div>
+    <div x-show="!ecSubSelectedClient && !ecSubClientLoading" x-cloak x-transition.duration.200ms class="py-16 text-center">
+        <div class="flex flex-col items-center gap-3">
+            <svg class="w-14 h-14 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+            <p class="text-slate-500 font-medium">Busca un cliente para ver su estado de cuenta</p>
+            <p class="text-sm text-slate-400">Escribe el nombre o código del cliente en la barra de búsqueda</p>
         </div>
-    </template>
+    </div>
 
     <!-- No invoices state -->
-    <template x-if="ecSubSelectedClient && ecSubClientData && ecSubClientData.invoices.length === 0 && !ecSubClientLoading">
-        <div class="py-12 text-center">
-            <div class="flex flex-col items-center gap-3">
-                <svg class="w-12 h-12 text-green-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-                <p class="text-slate-500 font-medium">Este cliente no tiene facturas pendientes</p>
-                <p class="text-sm text-slate-400" x-text="ecSubSelectedClient.card_name + ' (' + ecSubSelectedClient.card_code + ')'"></p>
-            </div>
+    <div x-show="ecSubSelectedClient && ecSubClientData && ecSubClientData.invoices.length === 0 && !ecSubClientLoading" x-cloak x-transition.duration.300ms class="py-12 text-center">
+        <div class="flex flex-col items-center gap-3">
+            <svg class="w-12 h-12 text-green-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-slate-500 font-medium">Este cliente no tiene facturas pendientes</p>
+            <p class="text-sm text-slate-400" x-text="ecSubSelectedClient.card_name + ' (' + ecSubSelectedClient.card_code + ')'"></p>
         </div>
-    </template>
+    </div>
 
 </div>
