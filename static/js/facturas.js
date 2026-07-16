@@ -3068,7 +3068,10 @@ function facturasApp() {
                 return;
             }
 
-            const isMostrador = (inv.customer_name || '').includes('VENTAS MOSTRADOR');
+            const specialCategories = ['VENTA MOSTRADOR', 'VENTA DE MOSTRADOR', 'VENTAS MOSTRADOR', 'PASE A PAQUETERIA', 'PASE PROGRAMADO', 'PASA PROGRAMADO'];
+            const isMostrador = (inv.customer_name || '').includes('VENTAS MOSTRADOR') ||
+                                specialCategories.includes((inv.shipping_type || '').toUpperCase().trim());
+
             if (!isMostrador && !this.canAuthorizarCredito) {
                 alert('Solo el departamento de Crédito y Cobranza puede autorizar envíos de clientes normales.');
                 return;
@@ -3084,6 +3087,7 @@ function facturasApp() {
                         invoice_number: inv.invoice_number,
                         authorized: newValue,
                         customer_name: inv.customer_name,
+                        shipping_type: inv.shipping_type,
                     }),
                 });
                 const data = await res.json();
