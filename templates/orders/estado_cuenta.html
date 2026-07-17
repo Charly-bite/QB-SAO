@@ -557,8 +557,7 @@
                     </span>
                     <div class="ec-filter-group">
                         <button class="ec-filter-btn" :class="filterOverdue === 'ALL' ? 'active-all' : ''" @click="filterOverdue = 'ALL'; applyFilters()">Todas</button>
-                        <button class="ec-filter-btn" :class="filterOverdue === 'OVERDUE' ? 'active-overdue' : ''" @click="filterOverdue = 'OVERDUE'; applyFilters()">Vencidas</button>
-                        <button class="ec-filter-btn" :class="filterOverdue === 'CURRENT' ? 'active-current' : ''" @click="filterOverdue = 'CURRENT'; applyFilters()">Al corriente</button>
+                        <button class="ec-filter-btn" :class="filterOverdue === 'UNPAID' ? 'active-overdue' : ''" @click="filterOverdue = 'UNPAID'; applyFilters()">No pagadas</button>
                         <button class="ec-filter-btn" :class="filterOverdue === 'PAID' ? 'active-paid' : ''" @click="filterOverdue = 'PAID'; applyFilters()">Pagadas</button>
                     </div>
                 </div>
@@ -913,10 +912,8 @@
                         list = list.filter(i => (i.currency || 'MXN').toUpperCase() === this.filterCurrency);
                     }
 
-                    if (this.filterOverdue === 'OVERDUE') {
-                        list = list.filter(i => i.days_overdue > 0 && i.balance > 0);
-                    } else if (this.filterOverdue === 'CURRENT') {
-                        list = list.filter(i => i.days_overdue <= 0 && i.balance > 0);
+                    if (this.filterOverdue === 'UNPAID') {
+                        list = list.filter(i => i.balance > 0);
                     } else if (this.filterOverdue === 'PAID') {
                         list = list.filter(i => i.balance === 0);
                     }

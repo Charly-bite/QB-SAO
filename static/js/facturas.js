@@ -103,8 +103,7 @@ window.estadoCuentaWindowApp = function(winConfig) {
             let result = this.data.invoices.filter(inv => {
                 if (this.filterSearch && !String(inv.doc_num).includes(this.filterSearch.trim())) return false;
                 if (this.filterCurrency !== 'ALL' && (inv.currency || 'MXN').toUpperCase() !== this.filterCurrency) return false;
-                if (this.filterOverdue === 'OVERDUE' && (inv.days_overdue <= 0 || inv.balance <= 0)) return false;
-                if (this.filterOverdue === 'CURRENT' && (inv.days_overdue > 0 || inv.balance <= 0)) return false;
+                if (this.filterOverdue === 'UNPAID' && inv.balance <= 0) return false;
                 if (this.filterOverdue === 'PAID' && inv.balance > 0) return false;
                 if (this.filterStartDate && inv.doc_date < this.filterStartDate) return false;
                 if (this.filterEndDate && inv.doc_date > this.filterEndDate) return false;
@@ -343,6 +342,16 @@ function facturasApp() {
             });
         },
 
+        showECContextMenu(event, inv, customerCode = null) {
+            const code = customerCode || (this.ecSubClientData && this.ecSubClientData.customer ? this.ecSubClientData.customer.card_code : '');
+            const mappedInv = {
+                invoice_number: inv.doc_num,
+                customer_code: code,
+                order_number: inv.order_number || null
+            };
+            this.showContextMenu(event, mappedInv);
+        },
+
         closeRelationshipMap() {
             this.relationshipMapShow = false;
             this.relationshipMapMinimized = false;
@@ -553,10 +562,8 @@ function facturasApp() {
             if (this.ecSubFilterCurrency !== 'ALL') {
                 list = list.filter(i => (i.currency || 'MXN').toUpperCase() === this.ecSubFilterCurrency);
             }
-            if (this.ecSubFilterOverdue === 'OVERDUE') {
-                list = list.filter(i => i.days_overdue > 0 && i.balance > 0);
-            } else if (this.ecSubFilterOverdue === 'CURRENT') {
-                list = list.filter(i => i.days_overdue <= 0 && i.balance > 0);
+            if (this.ecSubFilterOverdue === 'UNPAID') {
+                list = list.filter(i => i.balance > 0);
             } else if (this.ecSubFilterOverdue === 'PAID') {
                 list = list.filter(i => i.balance === 0);
             }
@@ -1701,6 +1708,13 @@ function facturasApp() {
                 if (inv) {
                     inv.credito_authorized = data.authorized;
                     inv.credito_revoked_from_relacion = data.revoked_from_relacion || false;
+                    this.invoices = [...this.invoices];
+                    this.highlightInvoice(data.invoice_number);
+                }
+            } else if (data.type === 'factura_sent_to_credito_changed') {
+                const inv = this.invoices.find(i => String(i.invoice_number) === String(data.invoice_number));
+                if (inv) {
+                    inv.sent_to_credito = data.sent_to_credito;
                     this.invoices = [...this.invoices];
                     this.highlightInvoice(data.invoice_number);
                 }
@@ -3056,6 +3070,76 @@ function facturasApp() {
                     inv.credito_authorized_name = this.currentUserFullName;
                     inv.credito_authorized_at = new Date().toISOString();
                 }
+            }
+        },
+
+        async autoAuthorizeInvoice(inv) {
+            if (!this.canEditFacturas && !this.canAuthorizarCredito) {
+                alert('No tienes permisos para realizar esta acción.');
+                return;
+            }
+
+            const specialCategories = ['VENTA MOSTRADOR', 'VENTA DE MOSTRADOR', 'VENTAS MOSTRADOR', 'PASE A PAQUETERIA', 'PASE PROGRAMADO', 'PASA PROGRAMADO'];
+            const isMostrador = (inv.customer_name || '').includes('VENTAS MOSTRADOR') ||
+                                specialCategories.includes((inv.shipping_type || '').toUpperCase().trim());
+
+            if (!isMostrador && !this.canAuthorizarCredito) {
+                alert('Solo el departamento de Crédito y Cobranza puede autorizar envíos de clientes normales.');
+                return;
+            }
+
+            const newValue = !inv.credito_authorized;
+
+            try {
+                const res = await fetch(`/orders/api/facturas/${inv.invoice_number}/authorize`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        invoice_number: inv.invoice_number,
+                        authorized: newValue,
+                        customer_name: inv.customer_name,
+                        shipping_type: inv.shipping_type,
+                    }),
+                });
+                const data = await res.json();
+                if (data.success && data.invoice) {
+                    Object.assign(inv, data.invoice);
+                    this.showToast('Éxito', newValue ? 'Factura auto-aprobada' : 'Auto-aprobación revocada', '✅');
+                } else {
+                    alert(data.error || 'Error al autorizar factura');
+                }
+            } catch (e) {
+                console.error('Error auto-authorizing invoice:', e);
+                alert('Error de conexión');
+            }
+        },
+
+        async sendToCredito(inv, sent) {
+            if (!this.canEditFacturas) {
+                alert('No tienes permisos para realizar esta acción.');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/orders/api/facturas/${inv.invoice_number}/send-to-credito`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        invoice_number: inv.invoice_number,
+                        sent: sent,
+                    }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    inv.sent_to_credito = sent;
+                    this.invoices = [...this.invoices];
+                    this.showToast('Éxito', sent ? 'Enviado a Crédito' : 'Cancelado envío a Crédito', '⏰');
+                } else {
+                    alert(data.error || 'Error al enviar a Crédito');
+                }
+            } catch (e) {
+                console.error('Error sending to credito:', e);
+                alert('Error de conexión');
             }
         },
 
