@@ -103,8 +103,7 @@ window.estadoCuentaWindowApp = function(winConfig) {
             let result = this.data.invoices.filter(inv => {
                 if (this.filterSearch && !String(inv.doc_num).includes(this.filterSearch.trim())) return false;
                 if (this.filterCurrency !== 'ALL' && (inv.currency || 'MXN').toUpperCase() !== this.filterCurrency) return false;
-                if (this.filterOverdue === 'OVERDUE' && (inv.days_overdue <= 0 || inv.balance <= 0)) return false;
-                if (this.filterOverdue === 'CURRENT' && (inv.days_overdue > 0 || inv.balance <= 0)) return false;
+                if (this.filterOverdue === 'UNPAID' && inv.balance <= 0) return false;
                 if (this.filterOverdue === 'PAID' && inv.balance > 0) return false;
                 if (this.filterStartDate && inv.doc_date < this.filterStartDate) return false;
                 if (this.filterEndDate && inv.doc_date > this.filterEndDate) return false;
@@ -343,6 +342,16 @@ function facturasApp() {
             });
         },
 
+        showECContextMenu(event, inv, customerCode = null) {
+            const code = customerCode || (this.ecSubClientData && this.ecSubClientData.customer ? this.ecSubClientData.customer.card_code : '');
+            const mappedInv = {
+                invoice_number: inv.doc_num,
+                customer_code: code,
+                order_number: inv.order_number || null
+            };
+            this.showContextMenu(event, mappedInv);
+        },
+
         closeRelationshipMap() {
             this.relationshipMapShow = false;
             this.relationshipMapMinimized = false;
@@ -553,10 +562,8 @@ function facturasApp() {
             if (this.ecSubFilterCurrency !== 'ALL') {
                 list = list.filter(i => (i.currency || 'MXN').toUpperCase() === this.ecSubFilterCurrency);
             }
-            if (this.ecSubFilterOverdue === 'OVERDUE') {
-                list = list.filter(i => i.days_overdue > 0 && i.balance > 0);
-            } else if (this.ecSubFilterOverdue === 'CURRENT') {
-                list = list.filter(i => i.days_overdue <= 0 && i.balance > 0);
+            if (this.ecSubFilterOverdue === 'UNPAID') {
+                list = list.filter(i => i.balance > 0);
             } else if (this.ecSubFilterOverdue === 'PAID') {
                 list = list.filter(i => i.balance === 0);
             }

@@ -122,7 +122,8 @@ class DatabaseClient:
                         pool_recycle=1800,  # recycle connections after 30 minutes
                         pool_size=10,       # connection pool size
                         max_overflow=20,    # allowed overflow connections
-                        pool_timeout=15     # wait time for connection from pool
+                        pool_timeout=15,    # wait time for connection from pool
+                        connect_args={"timeout": 15}
                     )
                 else:
                     # Test with pyodbc first
@@ -139,7 +140,8 @@ class DatabaseClient:
                         pool_recycle=1800,  # recycle connections after 30 minutes
                         pool_size=10,       # connection pool size
                         max_overflow=20,    # allowed overflow connections
-                        pool_timeout=15     # wait time for connection from pool
+                        pool_timeout=15,    # wait time for connection from pool
+                        connect_args={"timeout": 15}
                     )
 
                 from sqlalchemy.engine import Engine

@@ -34,6 +34,7 @@ class RelacionManager:
             os.makedirs(os.path.dirname(db_path), exist_ok=True)
         self.db_path = db_path
         self.local_relaciones: Dict[str, Any] = {}  # keyed by folio
+        self._json_write_lock = threading.Lock()
 
         self.db_client = DatabaseClient()
         self.db_client.connect()
@@ -132,22 +133,23 @@ class RelacionManager:
 
     def _save_fallback(self):
         """Save relaciones to JSON fallback file."""
-        try:
-            dir_name = os.path.dirname(self.db_path)
-            os.makedirs(dir_name, exist_ok=True)
-            fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
+        with self._json_write_lock:
             try:
-                with os.fdopen(fd, "w", encoding="utf-8") as f:
-                    json.dump(self.local_relaciones, f, indent=2, ensure_ascii=False)
-                os.replace(tmp_path, self.db_path)
-            except Exception:  # pragma: no cover
+                dir_name = os.path.dirname(self.db_path)
+                os.makedirs(dir_name, exist_ok=True)
+                fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
                 try:
-                    os.unlink(tmp_path)
-                except OSError:
-                    pass
-                raise
-        except Exception as e:  # pragma: no cover
-            logger.error(f"Error saving relacion fallback: {e}")
+                    with os.fdopen(fd, "w", encoding="utf-8") as f:
+                        json.dump(self.local_relaciones, f, indent=2, ensure_ascii=False)
+                    os.replace(tmp_path, self.db_path)
+                except Exception:  # pragma: no cover
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
+                    raise
+            except Exception as e:  # pragma: no cover
+                logger.error(f"Error saving relacion fallback: {e}")
 
     # ── Folio Generation ─────────────────────────────────────────────────
 
