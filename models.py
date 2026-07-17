@@ -56,6 +56,12 @@ class User(UserMixin):
                 "facturas.tab.almacen",
             ):
                 return True
+        if not self._permissions:
+            from flask import current_app
+            if current_app:
+                pm = getattr(current_app, "permission_manager", None)
+                if pm:
+                    return pm.has_permission(self.role.value, key)
         return key in self._permissions
 
     # ── Convenience helpers (delegate to has_permission) ─────────────────────

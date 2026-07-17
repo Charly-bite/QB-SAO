@@ -28,6 +28,30 @@ orders_bp = Blueprint("orders", __name__)
 # Simple in-memory pub/sub for Server-Sent Events (SSE)
 _SUBSCRIBERS = []
 
+
+def _get_sap_connector():
+    sap = current_app.sap_connector
+    if not sap:
+        from core.sap_connector import SAPHanaConnector
+        try:
+            sap_user = os.environ.get("SAP_USER")
+            sap_pass = os.environ.get("SAP_PASS")
+            sap = SAPHanaConnector(
+                host=os.environ.get("SAP_HOST", ""),
+                port=int(os.environ.get("SAP_PORT", 30015)),
+                username=sap_user,
+                password=sap_pass,
+                schema=os.environ.get("SAP_SCHEMA", ""),
+            )
+            current_app.sap_connector = sap
+        except Exception as e:
+            logging.error(f"Failed to initialize SAPHanaConnector: {e}")
+            raise ConnectionError("SAP conector could not be initialized")
+    if not sap.connected:
+        sap.connect()
+    return sap
+
+
 # ── Webhook retry queue ──────────────────────────────────────────────────────
 # When SGA fires a label-printed webhook for an order that isn't loaded yet,
 # we enqueue it here and retry every 30 s (up to MAX_RETRIES attempts).
@@ -74,7 +98,7 @@ def _webhook_retry_worker(app):  # pragma: no cover
                 order_mgr = app.order_status_mgr
                 order = order_mgr.get_order(order_id)
 
-                if not order and app.sap_available and app.sap_connector:
+                if not order and app.sap_available and _get_sap_connector():  # pragma: no cover
                     try:
                         sap = app.sap_connector
                         if not sap.connected:
@@ -616,12 +640,7 @@ def audit_stats():  # pragma: no cover
     limit = request.args.get("limit", 100, type=int)
 
     try:
-        sap = current_app.sap_connector
-        if not sap or not sap.connected:
-            from core.sap_connector import SAPHanaConnector
-            sap = SAPHanaConnector()
-            sap.connect()
-            current_app.sap_connector = sap
+        sap = _get_sap_connector()
 
         deliveries, invoices = sap.get_recent_deliveries_and_invoices_audit(limit=limit)
     except Exception as e:
@@ -908,13 +927,7 @@ def import_from_sap():
         return jsonify({"error": "Número de pedido requerido"}), 400
 
     try:
-        sap = current_app.sap_connector
-        if not sap or not sap.connected:  # pragma: no cover
-            from core.sap_connector import SAPHanaConnector  # pragma: no cover
-
-            sap = SAPHanaConnector()  # pragma: no cover
-            sap.connect()  # pragma: no cover
-            current_app.sap_connector = sap  # pragma: no cover
+        sap = _get_sap_connector()
 
         order_data = sap.get_order_details(order_number)
 
@@ -1025,12 +1038,7 @@ def sga_label_printed():
         # Try to dynamically import it from SAP if SAP is available.
         if current_app.sap_available:
             try:
-                sap = current_app.sap_connector
-                if not sap or not sap.connected:  # pragma: no cover
-                    from core.sap_connector import SAPHanaConnector
-                    sap = SAPHanaConnector()
-                    sap.connect()
-                    current_app.sap_connector = sap
+                sap = _get_sap_connector()
 
                 order_data = sap.get_order_details(order_id)
                 if order_data:
@@ -1163,13 +1171,7 @@ def load_recent_from_sap():
     logging.info(f"Load Recent SAP: limit={limit}, only_open={only_open}")
 
     try:
-        sap = current_app.sap_connector
-        if not sap or not sap.connected:  # pragma: no cover
-            from core.sap_connector import SAPHanaConnector  # pragma: no cover
-
-            sap = SAPHanaConnector()  # pragma: no cover
-            sap.connect()  # pragma: no cover
-            current_app.sap_connector = sap  # pragma: no cover
+        sap = _get_sap_connector()
 
         # Get recent orders from SAP
         recent_orders = sap.get_recent_orders(limit=limit, only_open=only_open)
@@ -1302,13 +1304,7 @@ def sync_sap_status():
         return jsonify({"error": "Sin permisos"}), 403
 
     try:
-        sap = current_app.sap_connector
-        if not sap or not sap.connected:  # pragma: no cover
-            from core.sap_connector import SAPHanaConnector  # pragma: no cover
-
-            sap = SAPHanaConnector()  # pragma: no cover
-            sap.connect()  # pragma: no cover
-            current_app.sap_connector = sap  # pragma: no cover
+        sap = _get_sap_connector()
 
         order_mgr = current_app.order_status_mgr
 
@@ -1444,13 +1440,7 @@ def visor_sync():
         return jsonify({"error": "SAP no disponible"}), 503
 
     try:
-        sap = current_app.sap_connector
-        if not sap or not sap.connected:  # pragma: no cover
-            from core.sap_connector import SAPHanaConnector  # pragma: no cover
-
-            sap = SAPHanaConnector()  # pragma: no cover
-            sap.connect()  # pragma: no cover
-            current_app.sap_connector = sap  # pragma: no cover
+        sap = _get_sap_connector()
 
         # Get recent active orders (limit 50, only open)
         # This is faster than a full sync
@@ -1824,13 +1814,7 @@ def public_api_sync():
         return jsonify({"error": "SAP no disponible"}), 503
 
     try:
-        sap = current_app.sap_connector
-        if not sap or not sap.connected:  # pragma: no cover
-            from core.sap_connector import SAPHanaConnector  # pragma: no cover
-
-            sap = SAPHanaConnector()  # pragma: no cover
-            sap.connect()  # pragma: no cover
-            current_app.sap_connector = sap  # pragma: no cover
+        sap = _get_sap_connector()
 
         # Get recent active orders (limit 50, only open)
         recent_orders = sap.get_recent_orders(limit=50, only_open=True)
@@ -1981,13 +1965,7 @@ def api_refresh_orders():
                 now = _time.time()
                 if (now - _last_sap_sync) >= _SAP_SYNC_INTERVAL:
                     try:
-                        sap = current_app.sap_connector
-                        if not sap or not sap.connected:  # pragma: no cover
-                            from core.sap_connector import SAPHanaConnector  # pragma: no cover
-
-                            sap = SAPHanaConnector()  # pragma: no cover
-                            sap.connect()  # pragma: no cover
-                            current_app.sap_connector = sap  # pragma: no cover
+                        sap = _get_sap_connector()
 
                         recent_orders = sap.get_recent_orders(limit=50, only_open=False)
 
@@ -2280,12 +2258,7 @@ def api_facturas_pending_summary():  # pragma: no cover
         date_from = (datetime.date.today() - datetime.timedelta(days=30)).isoformat()
 
     try:
-        sap = current_app.sap_connector
-        if not sap or not sap.connected:  # pragma: no cover
-            from core.sap_connector import SAPHanaConnector
-            sap = SAPHanaConnector()
-            sap.connect()
-            current_app.sap_connector = sap
+        sap = _get_sap_connector()
             
         # Get all invoices in range
         all_invoices = sap.get_invoices_date_range(date_from, date_to)
@@ -2366,13 +2339,7 @@ def api_facturas():
     extra_invoices_str = request.args.get("extra_invoices", "").strip()
 
     try:
-        sap = current_app.sap_connector
-        if not sap or not sap.connected:  # pragma: no cover
-            from core.sap_connector import SAPHanaConnector  # pragma: no cover
-
-            sap = SAPHanaConnector()  # pragma: no cover
-            sap.connect()  # pragma: no cover
-            current_app.sap_connector = sap  # pragma: no cover
+        sap = _get_sap_connector()
 
         overrides = getattr(current_app, "factura_metadata_mgr", None)
         db_date = date_filter or datetime.date.today().isoformat()
@@ -2409,6 +2376,7 @@ def api_facturas():
                 inv['credito_authorized_at'] = auth_data['credito_authorized_at']
                 inv['credito_revoked_from_relacion'] = auth_data.get('credito_revoked_from_relacion', False)
                 inv['credito_notes'] = auth_data.get('credito_notes', '')
+                inv['sent_to_credito'] = auth_data.get('sent_to_credito', False)
                 
                 # Resolve full name
                 user_mgr = getattr(current_app, "user_mgr", None)
@@ -2424,6 +2392,7 @@ def api_facturas():
                 inv['credito_authorized_at'] = None
                 inv['credito_revoked_from_relacion'] = False
                 inv['credito_notes'] = ''
+                inv['sent_to_credito'] = False
             order = factura_to_order.get(inv_num_str)
             if order:  # pragma: no cover
                 status = order.get('status')
@@ -4025,10 +3994,54 @@ def api_authorize_invoice(folio):  # pragma: no cover
 @login_required
 def api_factura_authorize(invoice_number):  # pragma: no cover
     """Authorize or revoke authorization for a specific invoice."""
-    if not current_user.can_authorize_credito():
-        return jsonify({"error": "Solo Crédito y Cobranza puede autorizar envíos."}), 403
-
     data = request.get_json() or {}
+    
+    # Check if this is a Ventas Mostrador or special invoice to allow auto-approval by billing/facturacion
+    is_mostrador = False
+    customer_name = data.get("customer_name", "")
+    
+    # 1. Check customer name first
+    if customer_name and "VENTAS MOSTRADOR" in customer_name.upper():
+        is_mostrador = True
+    
+    # 2. Check shipping type from request or database overrides
+    shipping_type = data.get("shipping_type", "")
+    mgr = getattr(current_app, "factura_metadata_mgr", None)
+    if not shipping_type and mgr:
+        category_overrides, _, _ = mgr.get_overrides()
+        shipping_type = category_overrides.get(invoice_number, "")
+
+    special_categories = {
+        "VENTA MOSTRADOR", "VENTA DE MOSTRADOR", "VENTAS MOSTRADOR",
+        "PASE A PAQUETERIA", "PASE PROGRAMADO", "PASA PROGRAMADO"
+    }
+
+    if shipping_type and str(shipping_type).upper().strip() in special_categories:
+        is_mostrador = True
+
+    if not is_mostrador:
+        try:
+            sap = current_app.sap_connector
+            if sap:
+                if not sap.connected:
+                    sap.connect()
+                invoices = sap.get_todays_invoices(extra_invoice_numbers=[invoice_number])
+                if invoices:
+                    cust_name = invoices[0].get("customer_name", "")
+                    if cust_name and "VENTAS MOSTRADOR" in cust_name.upper():
+                        is_mostrador = True
+                    sap_shipping_type = invoices[0].get("shipping_type", "")
+                    if sap_shipping_type and str(sap_shipping_type).upper().strip() in special_categories:
+                        is_mostrador = True
+        except Exception as e:
+            logging.error(f"Error fetching customer/shipping details from SAP during authorization check: {e}")
+
+    if not current_user.can_authorize_credito():
+        if is_mostrador and current_user.can_edit_facturas():
+            pass
+        else:
+            return jsonify({"error": "Solo Crédito y Cobranza puede autorizar envíos."}), 403
+
     authorized = data.get("authorized", True)
 
     mgr = getattr(current_app, "factura_metadata_mgr", None)
@@ -4134,6 +4147,34 @@ def api_factura_credito_notes(invoice_number):  # pragma: no cover
         return jsonify({"success": True, "notes": notes})
     except Exception as e:
         logging.error(f"Error saving credito notes {invoice_number}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@orders_bp.route("/api/facturas/<int:invoice_number>/send-to-credito", methods=["POST"])
+@login_required
+def api_factura_send_to_credito(invoice_number):  # pragma: no cover
+    """Mark an invoice as sent to credit department for authorization."""
+    if not current_user.can_edit_facturas():
+        return jsonify({"error": "Sin permisos"}), 403
+
+    data = request.get_json() or {}
+    sent = data.get("sent", True)
+
+    mgr = getattr(current_app, "factura_metadata_mgr", None)
+    if not mgr:
+        return jsonify({"error": "Metadata manager not available"}), 500
+
+    try:
+        mgr.save_sent_to_credito(invoice_number, sent)
+        
+        _publish_event({
+            "type": "factura_sent_to_credito_changed",
+            "invoice_number": str(invoice_number),
+            "sent_to_credito": sent
+        })
+        
+        return jsonify({"success": True, "sent_to_credito": sent})
+    except Exception as e:
+        logging.error(f"Error saving sent_to_credito {invoice_number}: {e}")
         return jsonify({"error": str(e)}), 500
 
 @orders_bp.route("/api/facturas/<int:invoice_number>/toggle", methods=["POST"])
@@ -4256,12 +4297,7 @@ def api_invoice_relationship_map(invoice_number):
     """
     if current_app.sap_available:
         try:
-            sap = current_app.sap_connector
-            if not sap or not sap.connected:  # pragma: no cover
-                from core.sap_connector import SAPHanaConnector
-                sap = SAPHanaConnector()
-                sap.connect()
-                current_app.sap_connector = sap
+            sap = _get_sap_connector()
                 
             data = sap.get_invoice_relationship_map(invoice_number)
             if data:
@@ -4391,12 +4427,7 @@ def api_customers_search():  # pragma: no cover
 
     if current_app.sap_available:
         try:
-            sap = current_app.sap_connector
-            if not sap or not sap.connected:
-                from core.sap_connector import SAPHanaConnector
-                sap = SAPHanaConnector()
-                sap.connect()
-                current_app.sap_connector = sap
+            sap = _get_sap_connector()
 
             results = sap.search_customers(query, limit=10)
             return jsonify({"success": True, "results": results})
@@ -4417,12 +4448,7 @@ def api_customer_account_statement(card_code):  # pragma: no cover
     """
     if current_app.sap_available:
         try:
-            sap = current_app.sap_connector
-            if not sap or not sap.connected:
-                from core.sap_connector import SAPHanaConnector
-                sap = SAPHanaConnector()
-                sap.connect()
-                current_app.sap_connector = sap
+            sap = _get_sap_connector()
 
             data = sap.get_customer_account_statement(card_code)
             if data:
