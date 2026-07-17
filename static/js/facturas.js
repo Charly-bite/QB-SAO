@@ -342,6 +342,16 @@ function facturasApp() {
             });
         },
 
+        showECContextMenu(event, inv, customerCode = null) {
+            const code = customerCode || (this.ecSubClientData && this.ecSubClientData.customer ? this.ecSubClientData.customer.card_code : '');
+            const mappedInv = {
+                invoice_number: inv.doc_num,
+                customer_code: code,
+                order_number: inv.order_number || null
+            };
+            this.showContextMenu(event, mappedInv);
+        },
+
         closeRelationshipMap() {
             this.relationshipMapShow = false;
             this.relationshipMapMinimized = false;
