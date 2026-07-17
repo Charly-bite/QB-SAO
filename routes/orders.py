@@ -28,6 +28,30 @@ orders_bp = Blueprint("orders", __name__)
 # Simple in-memory pub/sub for Server-Sent Events (SSE)
 _SUBSCRIBERS = []
 
+
+def _get_sap_connector():
+    sap = current_app.sap_connector
+    if not sap:
+        from core.sap_connector import SAPHanaConnector
+        try:
+            sap_user = os.environ.get("SAP_USER")
+            sap_pass = os.environ.get("SAP_PASS")
+            sap = SAPHanaConnector(
+                host=os.environ.get("SAP_HOST", ""),
+                port=int(os.environ.get("SAP_PORT", 30015)),
+                username=sap_user,
+                password=sap_pass,
+                schema=os.environ.get("SAP_SCHEMA", ""),
+            )
+            current_app.sap_connector = sap
+        except Exception as e:
+            logging.error(f"Failed to initialize SAPHanaConnector: {e}")
+            raise ConnectionError("SAP conector could not be initialized")
+    if not sap.connected:
+        sap.connect()
+    return sap
+
+
 # ── Webhook retry queue ──────────────────────────────────────────────────────
 # When SGA fires a label-printed webhook for an order that isn't loaded yet,
 # we enqueue it here and retry every 30 s (up to MAX_RETRIES attempts).
@@ -74,7 +98,7 @@ def _webhook_retry_worker(app):  # pragma: no cover
                 order_mgr = app.order_status_mgr
                 order = order_mgr.get_order(order_id)
 
-                if not order and app.sap_available and app.sap_connector:
+                if not order and app.sap_available and _get_sap_connector():  # pragma: no cover
                     try:
                         sap = app.sap_connector
                         if not sap.connected:
@@ -616,12 +640,7 @@ def audit_stats():  # pragma: no cover
     limit = request.args.get("limit", 100, type=int)
 
     try:
-        sap = current_app.sap_connector
-        if not sap or not sap.connected:
-            from core.sap_connector import SAPHanaConnector
-            sap = SAPHanaConnector()
-            sap.connect()
-            current_app.sap_connector = sap
+        sap = _get_sap_connector()
 
         deliveries, invoices = sap.get_recent_deliveries_and_invoices_audit(limit=limit)
     except Exception as e:
@@ -908,13 +927,7 @@ def import_from_sap():
         return jsonify({"error": "Número de pedido requerido"}), 400
 
     try:
-        sap = current_app.sap_connector
-        if not sap or not sap.connected:  # pragma: no cover
-            from core.sap_connector import SAPHanaConnector  # pragma: no cover
-
-            sap = SAPHanaConnector()  # pragma: no cover
-            sap.connect()  # pragma: no cover
-            current_app.sap_connector = sap  # pragma: no cover
+        sap = _get_sap_connector()
 
         order_data = sap.get_order_details(order_number)
 
@@ -1025,12 +1038,7 @@ def sga_label_printed():
         # Try to dynamically import it from SAP if SAP is available.
         if current_app.sap_available:
             try:
-                sap = current_app.sap_connector
-                if not sap or not sap.connected:  # pragma: no cover
-                    from core.sap_connector import SAPHanaConnector
-                    sap = SAPHanaConnector()
-                    sap.connect()
-                    current_app.sap_connector = sap
+                sap = _get_sap_connector()
 
                 order_data = sap.get_order_details(order_id)
                 if order_data:
@@ -1163,13 +1171,7 @@ def load_recent_from_sap():
     logging.info(f"Load Recent SAP: limit={limit}, only_open={only_open}")
 
     try:
-        sap = current_app.sap_connector
-        if not sap or not sap.connected:  # pragma: no cover
-            from core.sap_connector import SAPHanaConnector  # pragma: no cover
-
-            sap = SAPHanaConnector()  # pragma: no cover
-            sap.connect()  # pragma: no cover
-            current_app.sap_connector = sap  # pragma: no cover
+        sap = _get_sap_connector()
 
         # Get recent orders from SAP
         recent_orders = sap.get_recent_orders(limit=limit, only_open=only_open)
@@ -1302,13 +1304,7 @@ def sync_sap_status():
         return jsonify({"error": "Sin permisos"}), 403
 
     try:
-        sap = current_app.sap_connector
-        if not sap or not sap.connected:  # pragma: no cover
-            from core.sap_connector import SAPHanaConnector  # pragma: no cover
-
-            sap = SAPHanaConnector()  # pragma: no cover
-            sap.connect()  # pragma: no cover
-            current_app.sap_connector = sap  # pragma: no cover
+        sap = _get_sap_connector()
 
         order_mgr = current_app.order_status_mgr
 
@@ -1444,13 +1440,7 @@ def visor_sync():
         return jsonify({"error": "SAP no disponible"}), 503
 
     try:
-        sap = current_app.sap_connector
-        if not sap or not sap.connected:  # pragma: no cover
-            from core.sap_connector import SAPHanaConnector  # pragma: no cover
-
-            sap = SAPHanaConnector()  # pragma: no cover
-            sap.connect()  # pragma: no cover
-            current_app.sap_connector = sap  # pragma: no cover
+        sap = _get_sap_connector()
 
         # Get recent active orders (limit 50, only open)
         # This is faster than a full sync
@@ -1824,13 +1814,7 @@ def public_api_sync():
         return jsonify({"error": "SAP no disponible"}), 503
 
     try:
-        sap = current_app.sap_connector
-        if not sap or not sap.connected:  # pragma: no cover
-            from core.sap_connector import SAPHanaConnector  # pragma: no cover
-
-            sap = SAPHanaConnector()  # pragma: no cover
-            sap.connect()  # pragma: no cover
-            current_app.sap_connector = sap  # pragma: no cover
+        sap = _get_sap_connector()
 
         # Get recent active orders (limit 50, only open)
         recent_orders = sap.get_recent_orders(limit=50, only_open=True)
@@ -1981,13 +1965,7 @@ def api_refresh_orders():
                 now = _time.time()
                 if (now - _last_sap_sync) >= _SAP_SYNC_INTERVAL:
                     try:
-                        sap = current_app.sap_connector
-                        if not sap or not sap.connected:  # pragma: no cover
-                            from core.sap_connector import SAPHanaConnector  # pragma: no cover
-
-                            sap = SAPHanaConnector()  # pragma: no cover
-                            sap.connect()  # pragma: no cover
-                            current_app.sap_connector = sap  # pragma: no cover
+                        sap = _get_sap_connector()
 
                         recent_orders = sap.get_recent_orders(limit=50, only_open=False)
 
@@ -2280,12 +2258,7 @@ def api_facturas_pending_summary():  # pragma: no cover
         date_from = (datetime.date.today() - datetime.timedelta(days=30)).isoformat()
 
     try:
-        sap = current_app.sap_connector
-        if not sap or not sap.connected:  # pragma: no cover
-            from core.sap_connector import SAPHanaConnector
-            sap = SAPHanaConnector()
-            sap.connect()
-            current_app.sap_connector = sap
+        sap = _get_sap_connector()
             
         # Get all invoices in range
         all_invoices = sap.get_invoices_date_range(date_from, date_to)
@@ -2366,13 +2339,7 @@ def api_facturas():
     extra_invoices_str = request.args.get("extra_invoices", "").strip()
 
     try:
-        sap = current_app.sap_connector
-        if not sap or not sap.connected:  # pragma: no cover
-            from core.sap_connector import SAPHanaConnector  # pragma: no cover
-
-            sap = SAPHanaConnector()  # pragma: no cover
-            sap.connect()  # pragma: no cover
-            current_app.sap_connector = sap  # pragma: no cover
+        sap = _get_sap_connector()
 
         overrides = getattr(current_app, "factura_metadata_mgr", None)
         db_date = date_filter or datetime.date.today().isoformat()
@@ -4329,12 +4296,7 @@ def api_invoice_relationship_map(invoice_number):
     """
     if current_app.sap_available:
         try:
-            sap = current_app.sap_connector
-            if not sap or not sap.connected:  # pragma: no cover
-                from core.sap_connector import SAPHanaConnector
-                sap = SAPHanaConnector()
-                sap.connect()
-                current_app.sap_connector = sap
+            sap = _get_sap_connector()
                 
             data = sap.get_invoice_relationship_map(invoice_number)
             if data:
@@ -4464,12 +4426,7 @@ def api_customers_search():  # pragma: no cover
 
     if current_app.sap_available:
         try:
-            sap = current_app.sap_connector
-            if not sap or not sap.connected:
-                from core.sap_connector import SAPHanaConnector
-                sap = SAPHanaConnector()
-                sap.connect()
-                current_app.sap_connector = sap
+            sap = _get_sap_connector()
 
             results = sap.search_customers(query, limit=10)
             return jsonify({"success": True, "results": results})
@@ -4490,12 +4447,7 @@ def api_customer_account_statement(card_code):  # pragma: no cover
     """
     if current_app.sap_available:
         try:
-            sap = current_app.sap_connector
-            if not sap or not sap.connected:
-                from core.sap_connector import SAPHanaConnector
-                sap = SAPHanaConnector()
-                sap.connect()
-                current_app.sap_connector = sap
+            sap = _get_sap_connector()
 
             data = sap.get_customer_account_statement(card_code)
             if data:

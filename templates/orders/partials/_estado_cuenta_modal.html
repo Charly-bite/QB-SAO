@@ -137,10 +137,8 @@
                                 <div class="inline-flex border-2 border-slate-300 rounded-lg overflow-hidden shadow-sm">
                                     <button @click="filterOverdue = 'ALL'" class="px-3 py-1 text-[11px] font-extrabold transition-all border-r border-slate-300"
                                         :class="filterOverdue === 'ALL' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">Todas</button>
-                                    <button @click="filterOverdue = 'OVERDUE'" class="px-3 py-1 text-[11px] font-extrabold transition-all border-r border-slate-300"
-                                        :class="filterOverdue === 'OVERDUE' ? 'bg-red-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">Vencidas</button>
-                                    <button @click="filterOverdue = 'CURRENT'" class="px-3 py-1 text-[11px] font-extrabold transition-all border-r border-slate-300"
-                                        :class="filterOverdue === 'CURRENT' ? 'bg-green-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">Al corriente</button>
+                                    <button @click="filterOverdue = 'UNPAID'" class="px-3 py-1 text-[11px] font-extrabold transition-all border-r border-slate-300"
+                                        :class="filterOverdue === 'UNPAID' ? 'bg-red-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">No pagadas</button>
                                     <button @click="filterOverdue = 'PAID'" class="px-3 py-1 text-[11px] font-extrabold transition-all"
                                         :class="filterOverdue === 'PAID' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'">Pagadas</button>
                                 </div>
@@ -199,7 +197,9 @@
                                 <template x-for="(inv, idx) in filteredInvoices()" :key="inv.doc_num">
                                     <tr :class="idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'"
                                         class="border-b border-slate-100 cursor-pointer hover:bg-emerald-50 transition-colors"
-                                        @click="toggleInvoice(inv.doc_num)">
+                                        @click="toggleInvoice(inv.doc_num)"
+                                        @contextmenu.prevent="showECContextMenu($event, inv, data?.customer?.card_code)"
+                                        style="cursor: context-menu;">
                                         <td class="px-2 py-2 text-center">
                                             <input type="checkbox" :checked="selected.includes(inv.doc_num)" @click.stop="toggleInvoice(inv.doc_num)" class="w-3.5 h-3.5 cursor-pointer accent-emerald-500" />
                                         </td>

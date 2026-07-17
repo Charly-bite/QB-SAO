@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import tempfile
+import threading
 import time
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -82,7 +83,8 @@ class OrderStatusManager:
         except Exception as e:  # pragma: no cover
             logger.warning(f"[WARN] OrderStatusManager DB error: {e}")  # pragma: no cover
 
-        # Debounce tracking for _save_database
+        # Debounce and lock tracking for _save_database
+        self._json_write_lock = threading.Lock()
         self._last_save_time = 0.0
         self._dirty = False
         self._SAVE_DEBOUNCE_SECONDS = 5
@@ -281,27 +283,28 @@ class OrderStatusManager:
                 traceback.logger.warning_exc()
 
         # Fallback / sync to JSON (atomic write)
-        try:
-            data = {"orders": self.orders, "last_updated": last_updated}
-            dir_name = os.path.dirname(self.db_path)
-            fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
+        with self._json_write_lock:
             try:
-                with os.fdopen(fd, "w", encoding="utf-8") as f:
-                    json.dump(data, f, indent=2, ensure_ascii=False)
-                os.replace(tmp_path, self.db_path)
-            except Exception:  # pragma: no cover
-                # Always clean up the temp file so we never leave orphans on disk
-                try:  # pragma: no cover
-                    os.unlink(tmp_path)  # pragma: no cover
-                except OSError:  # pragma: no cover
-                    pass  # pragma: no cover
-                raise  # pragma: no cover
-            self._last_save_time = time.time()
-            self._dirty = False
-            return True
-        except Exception as e:
-            logger.warning(f"[WARN] Error saving to JSON: {e}")
-            return False
+                data = {"orders": self.orders, "last_updated": last_updated}
+                dir_name = os.path.dirname(self.db_path)
+                fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
+                try:
+                    with os.fdopen(fd, "w", encoding="utf-8") as f:
+                        json.dump(data, f, indent=2, ensure_ascii=False)
+                    os.replace(tmp_path, self.db_path)
+                except Exception:  # pragma: no cover
+                    # Always clean up the temp file so we never leave orphans on disk
+                    try:  # pragma: no cover
+                        os.unlink(tmp_path)  # pragma: no cover
+                    except OSError:  # pragma: no cover
+                        pass  # pragma: no cover
+                    raise  # pragma: no cover
+                self._last_save_time = time.time()
+                self._dirty = False
+                return True
+            except Exception as e:
+                logger.warning(f"[WARN] Error saving to JSON: {e}")
+                return False
 
     def _save_order(self, order_id: str) -> bool:
         """Persist a single order to SQL via MERGE without rewriting the whole table.
