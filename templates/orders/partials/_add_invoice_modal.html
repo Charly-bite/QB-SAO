@@ -176,8 +176,8 @@
                                    class="extra-invoice-input" />
                         </div>
                         <button @click="addManualInvoiceToList()"
-                                :disabled="!addInvoiceManualNum || addInvoiceManualNum.trim() === ''"
-                                :class="addInvoiceManualNum && addInvoiceManualNum.trim() !== '' ? 'btn-add-extra-invoice-active' : 'btn-add-extra-invoice-disabled'">
+                                :disabled="!addInvoiceManualNum || String(addInvoiceManualNum).trim() === ''"
+                                :class="addInvoiceManualNum && String(addInvoiceManualNum).trim() !== '' ? 'btn-add-extra-invoice-active' : 'btn-add-extra-invoice-disabled'">
                             <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
                             <span class="text-white font-black">+ Agregar Factura</span>
                         </button>
