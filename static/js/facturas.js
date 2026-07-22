@@ -1257,7 +1257,10 @@ function facturasApp() {
         },
 
         canBeInRelation(inv) {
-            return inv.credito_authorized || inv.status === 'Cancelada';
+            if (!inv) return false;
+            const auth = inv.credito_authorized;
+            const isAuth = auth === true || auth === 1 || auth === 'true' || auth === '1' || auth === 'True';
+            return isAuth || inv.status === 'Cancelada';
         },
 
         toggleAll() {
@@ -2699,7 +2702,21 @@ function facturasApp() {
                 this.currentRelacion = data.relacion || null;
 
                 // Sync checkbox state from DB relationship to the invoices list
-                if (this.currentRelacion && this.currentRelacion.invoices) {
+                if (this.currentRelacion && Array.isArray(this.currentRelacion.invoices)) {
+                    const masterInvoicesMap = new Map();
+                    this.invoices.forEach(i => {
+                        const key = String(i.invoice_number);
+                        if (!masterInvoicesMap.has(key)) {
+                            masterInvoicesMap.set(key, i);
+                        }
+                    });
+
+                    // Sanitize currentRelacion.invoices to exclude any invoice that is NOT authorized by Credito and not canceled
+                    this.currentRelacion.invoices = this.currentRelacion.invoices.filter(relInv => {
+                        const masterInv = masterInvoicesMap.get(String(relInv.invoice_number));
+                        return masterInv ? this.canBeInRelation(masterInv) : (relInv.credito_authorized || relInv.status === 'Cancelada');
+                    });
+
                     const relInvoiceNums = new Set(this.currentRelacion.invoices.map(i => String(i.invoice_number)));
                     
                     const toHighlight = [];
@@ -2711,15 +2728,6 @@ function facturasApp() {
                             toHighlight.push(String(i.invoice_number));
                         }
                         i._selected = isSelectedNow;
-                    });
-                    
-                    // Sync metadata (credito_notes, rebote, observaciones, etc.) from master list to relacion invoices
-                    const masterInvoicesMap = new Map();
-                    this.invoices.forEach(i => {
-                        const key = String(i.invoice_number);
-                        if (!masterInvoicesMap.has(key)) {
-                            masterInvoicesMap.set(key, i);
-                        }
                     });
 
                     this.currentRelacion.invoices.forEach(relInv => {
