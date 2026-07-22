@@ -197,7 +197,9 @@
                                 <template x-for="(inv, idx) in filteredInvoices()" :key="inv.doc_num">
                                     <tr :class="idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'"
                                         class="border-b border-slate-100 cursor-pointer hover:bg-emerald-50 transition-colors"
-                                        @click="toggleInvoice(inv.doc_num)">
+                                        @click="toggleInvoice(inv.doc_num)"
+                                        @contextmenu.prevent="showECContextMenu($event, inv, data?.customer?.card_code)"
+                                        style="cursor: context-menu;">
                                         <td class="px-2 py-2 text-center">
                                             <input type="checkbox" :checked="selected.includes(inv.doc_num)" @click.stop="toggleInvoice(inv.doc_num)" class="w-3.5 h-3.5 cursor-pointer accent-emerald-500" />
                                         </td>
