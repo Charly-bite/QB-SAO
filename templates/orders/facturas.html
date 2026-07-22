@@ -225,9 +225,9 @@
                 <!-- Facturas Tab Actions -->
                 <div x-show="activeTab === 'facturas'" x-transition class="flex items-center gap-1.5">
                     <button x-show="canEditFacturas" @click="showAddInvoiceModal()" :disabled="loading" 
-                        class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-white bg-slate-800 rounded-lg hover:bg-slate-700 shadow-sm transition-all duration-200 active:scale-95 h-8" title="Añadir factura">
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                        Añadir Factura
+                        class="btn-style-facturas-pendientes" title="Añadir factura">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                        Facturas pendientes
                     </button>
                 </div>
             </div>
