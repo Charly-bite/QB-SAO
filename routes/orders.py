@@ -3281,17 +3281,35 @@ def api_toggle_relacion_invoice():  # pragma: no cover
     if selected:
         overrides = getattr(current_app, "factura_metadata_mgr", None)
         credito_auths = overrides.get_credito_authorizations() if overrides else {}
-        items_to_check = invoice_data if isinstance(invoice_data, list) else ([invoice_data] if invoice_data else [])
-        for item in items_to_check:
+        
+        target_nums = []
+        if isinstance(invoice_number, list):
+            target_nums.extend(invoice_number)
+        elif invoice_number is not None and str(invoice_number).strip():
+            target_nums.append(invoice_number)
+            
+        if invoice_data:
+            items = invoice_data if isinstance(invoice_data, list) else [invoice_data]
+            for item in items:
+                num = item.get("invoice_number", item.get("id"))
+                if num and str(num) not in [str(x) for x in target_nums]:
+                    target_nums.append(num)
+
+        for num in target_nums:
             try:
-                num = int(item.get("invoice_number", item.get("id", 0)) or 0)
+                n = int(num)
             except (ValueError, TypeError):
-                num = 0
-            status = item.get("status", "")
-            if status != "Cancelada":
-                auth = credito_auths.get(num, {})
-                if not auth.get("credito_authorized"):
-                    return jsonify({"error": f"La factura {num} no cuenta con autorización de Crédito y Cobranza."}), 400
+                continue
+            auth = credito_auths.get(n, {})
+            is_canceled = False
+            if invoice_data:
+                items = invoice_data if isinstance(invoice_data, list) else [invoice_data]
+                for item in items:
+                    if str(item.get("invoice_number", item.get("id"))) == str(num) and item.get("status") == "Cancelada":
+                        is_canceled = True
+                        break
+            if not is_canceled and not auth.get("credito_authorized"):
+                return jsonify({"error": f"La factura {n} no cuenta con autorización de Crédito y Cobranza."}), 400
 
     try:
         relacion = mgr.toggle_invoice_in_relacion(
@@ -3390,7 +3408,21 @@ def api_get_relacion():  # pragma: no cover
         return jsonify({"error": "Relacion manager not available"}), 500
 
     relacion = mgr.get_relacion(date_str)
-    if relacion:
+    if relacion and isinstance(relacion.get("invoices"), list):
+        overrides = getattr(current_app, "factura_metadata_mgr", None)
+        credito_auths = overrides.get_credito_authorizations() if overrides else {}
+        valid_invoices = []
+        for inv in relacion.get("invoices", []):
+            try:
+                inv_num = int(inv.get("invoice_number", inv.get("id", 0)) or 0)
+            except (ValueError, TypeError):
+                inv_num = 0
+            status = inv.get("status", "")
+            auth = credito_auths.get(inv_num, {})
+            is_authorized = bool(auth.get("credito_authorized"))
+            if is_authorized or status == "Cancelada":
+                valid_invoices.append(inv)
+        relacion["invoices"] = valid_invoices
         return jsonify({"relacion": relacion})
     return jsonify({"relacion": None})
 
