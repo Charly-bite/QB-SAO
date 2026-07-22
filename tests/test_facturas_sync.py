@@ -250,6 +250,8 @@ class TestFacturasSyncApi:
             "invoices": [{"invoice_number": "5001", "customer_name": "Test Customer"}],
         }
         app.relacion_mgr = mock_rel_mgr
+        if hasattr(app, "factura_metadata_mgr"):
+            app.factura_metadata_mgr.save_credito_authorization(5001, True, "testadmin", "2026-06-10T10:00:00")
 
         # Test POST /api/relaciones/toggle
         payload = {
@@ -295,6 +297,8 @@ class TestFacturasSyncApi:
             "invoices": [{"invoice_number": "5001", "customer_name": "Test Customer"}],
         }
         app.relacion_mgr = mock_rel_mgr
+        if hasattr(app, "factura_metadata_mgr"):
+            app.factura_metadata_mgr.save_credito_authorization(5001, True, "testadmin", "2026-06-10T10:00:00")
 
         # Test POST /api/relaciones/toggle with client_id
         payload = {
@@ -318,6 +322,25 @@ class TestFacturasSyncApi:
             "username": "testadmin",
             "client_id": "test_client_id_123"
         })
+
+    def test_toggle_relacion_unauthorized_rejected(self, auth_client, app):
+        # Test that toggling an unauthorized invoice is rejected with 400
+        if hasattr(app, "factura_metadata_mgr"):
+            app.factura_metadata_mgr.save_credito_authorization(9999, False, "testadmin", "2026-06-10T10:00:00")
+        
+        payload = {
+            "date": "2026-06-10",
+            "invoice_number": "9999",
+            "selected": True,
+            "invoice_data": {"invoice_number": "9999", "customer_name": "Unauthorized Customer"},
+        }
+        resp = auth_client.post(
+            "/orders/api/relaciones/toggle",
+            data=json.dumps(payload),
+            content_type="application/json"
+        )
+        assert resp.status_code == 400
+        assert "no cuenta con autorización" in resp.get_json()["error"]
 
     @patch("routes.orders._publish_event")
     def test_send_to_credito_endpoint(self, mock_publish, auth_client, app):
