@@ -152,38 +152,46 @@
                 </div>
 
                 <!-- ═══ Manual Entry (always visible) ═══ -->
-                <div class="px-3 py-3">
-                    <div class="flex items-center gap-1.5 mb-2">
-                        <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Agregar Manualmente</span>
-                        <span class="text-[9px] px-1 py-0.5 rounded bg-slate-100 text-slate-400 font-medium">Req. Crédito</span>
+                <div class="px-3.5 py-3 bg-slate-50 border-t border-slate-200">
+                    <div class="flex items-center gap-2 mb-2">
+                        <div class="w-6 h-6 rounded bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-600 font-extrabold shrink-0">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-xs font-black text-slate-800 uppercase tracking-wide">Añadir Factura Extra</span>
+                                <span class="text-[9px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 font-extrabold border border-slate-300">Req. Crédito</span>
+                            </div>
+                            <p class="text-[10px] text-slate-500 font-medium">Agrega folios de otros días a la relación de hoy</p>
+                        </div>
                     </div>
-                    <div class="flex gap-1.5">
+                    <div class="flex gap-2">
                         <div class="relative flex-1">
-                            <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-300 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"/>
                             </svg>
                             <input type="number" x-model="addInvoiceManualNum" 
-                                   placeholder="No. de factura..."
+                                   placeholder="Número de factura..."
                                    @keydown.enter="addManualInvoiceToList()"
-                                   class="block w-full pl-9 pr-2 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-400 transition-colors placeholder:font-normal placeholder:text-slate-400" />
+                                   class="block w-full pl-9 pr-2 py-1.5 border border-slate-300 rounded-lg text-xs font-extrabold text-slate-800 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors placeholder:font-normal placeholder:text-slate-400 bg-white" />
                         </div>
                         <button @click="addManualInvoiceToList()"
                                 :disabled="!addInvoiceManualNum || addInvoiceManualNum.trim() === ''"
-                                class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0"
+                                class="px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center gap-1 shrink-0"
                                 :class="addInvoiceManualNum && addInvoiceManualNum.trim() !== '' 
-                                    ? 'bg-slate-800 text-white hover:bg-slate-700 active:scale-95' 
-                                    : 'bg-slate-100 text-slate-400 cursor-not-allowed'">
-                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                            Agregar
+                                    ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-sm active:scale-95 cursor-pointer' 
+                                    : 'bg-slate-200 text-slate-600 border border-slate-300 opacity-80 cursor-not-allowed'">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+                            + Agregar Factura
                         </button>
                     </div>
                     
                     <!-- Manual chips -->
                     <div x-show="addInvoiceManualList.length > 0" class="flex flex-wrap gap-1 mt-2">
                         <template x-for="num in addInvoiceManualList" :key="num">
-                            <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-200 rounded text-[10px] font-bold text-amber-800">
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-300 rounded text-[10px] font-extrabold text-amber-900 shadow-2xs">
                                 <span x-text="num"></span>
-                                <button @click="removeManualInvoiceFromList(num)" class="text-amber-400 hover:text-red-500 transition-colors ml-0.5">
+                                <button @click="removeManualInvoiceFromList(num)" class="text-amber-500 hover:text-red-600 transition-colors ml-0.5">
                                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
                                 </button>
                             </span>
@@ -191,9 +199,9 @@
                     </div>
 
                     <!-- Crédito info (only when manual entries exist) -->
-                    <div x-show="addInvoiceManualList.length > 0" class="mt-2 flex items-center gap-1.5 px-2 py-1.5 bg-blue-50 border border-blue-100 rounded-lg">
-                        <svg class="w-3 h-3 text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        <p class="text-[10px] text-blue-600 font-medium">Requieren autorización de Crédito para incluirse en Relación de Envío.</p>
+                    <div x-show="addInvoiceManualList.length > 0" class="mt-2 flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-50 border border-blue-200 rounded-lg">
+                        <svg class="w-3.5 h-3.5 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <p class="text-[10px] text-blue-700 font-bold">Requieren autorización de Crédito para incluirse en Relación de Envío.</p>
                     </div>
                 </div>
 
@@ -201,28 +209,28 @@
         </div>
 
         <!-- Footer (compact) -->
-        <div class="px-3 py-2.5 border-t border-slate-200 bg-slate-50 shrink-0 flex items-center justify-between">
-            <span class="text-[11px] text-slate-500 font-medium">
+        <div class="px-3.5 py-2.5 border-t border-slate-200 bg-slate-100 shrink-0 flex items-center justify-between">
+            <span class="text-[11px] text-slate-600 font-bold">
                 <template x-if="addInvoiceTotalSelected > 0">
-                    <span><strong class="text-slate-700" x-text="addInvoiceTotalSelected"></strong> seleccionada(s)</span>
+                    <span><strong class="text-slate-800 font-extrabold" x-text="addInvoiceTotalSelected"></strong> seleccionada(s)</span>
                 </template>
                 <template x-if="addInvoiceTotalSelected === 0">
-                    <span class="text-slate-400">Selecciona o agrega facturas</span>
+                    <span class="text-slate-500 font-medium">Selecciona o agrega facturas</span>
                 </template>
             </span>
-            <div class="flex items-center gap-1.5">
+            <div class="flex items-center gap-2">
                 <button @click="closeAddInvoiceModal()"
-                        class="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-all">
+                        class="px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-200 transition-all">
                     Cancelar
                 </button>
                 <button @click="addSelectedInvoices()"
                         :disabled="addInvoiceTotalSelected === 0"
-                        class="px-4 py-1.5 rounded-lg text-[11px] font-bold text-white transition-all flex items-center gap-1 active:scale-95"
+                        class="px-4 py-1.5 rounded-lg text-xs font-extrabold text-white transition-all flex items-center gap-1.5"
                         :class="addInvoiceTotalSelected > 0 
-                            ? 'bg-amber-500 hover:bg-amber-600 shadow-sm' 
-                            : 'bg-slate-300 cursor-not-allowed'">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                    <span x-text="addInvoiceTotalSelected > 0 ? 'Añadir ' + addInvoiceTotalSelected : 'Añadir'"></span>
+                            ? 'bg-amber-500 hover:bg-amber-600 shadow-sm active:scale-95 cursor-pointer' 
+                            : 'bg-slate-200 text-slate-600 border border-slate-300 opacity-75 cursor-not-allowed'">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+                    <span x-text="addInvoiceTotalSelected > 0 ? 'Añadir ' + addInvoiceTotalSelected + ' Factura(s)' : 'Añadir Facturas'"></span>
                 </button>
             </div>
         </div>
