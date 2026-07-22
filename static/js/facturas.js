@@ -342,6 +342,16 @@ function facturasApp() {
             });
         },
 
+        showECContextMenu(event, inv, customerCode = null) {
+            const code = customerCode || (this.ecSubClientData && this.ecSubClientData.customer ? this.ecSubClientData.customer.card_code : '');
+            const mappedInv = {
+                invoice_number: inv.doc_num,
+                customer_code: code,
+                order_number: inv.order_number || null
+            };
+            this.showContextMenu(event, mappedInv);
+        },
+
         closeRelationshipMap() {
             this.relationshipMapShow = false;
             this.relationshipMapMinimized = false;
@@ -2690,7 +2700,7 @@ function facturasApp() {
                     
                     const toHighlight = [];
                     this.invoices.forEach(i => {
-                        const isSelectedNow = relInvoiceNums.has(String(i.invoice_number));
+                        const isSelectedNow = relInvoiceNums.has(String(i.invoice_number)) && this.canBeInRelation(i);
                         const wasSelectedBefore = prevSelected.has(String(i.invoice_number));
                         
                         if (isSelectedNow !== wasSelectedBefore) {
@@ -2809,8 +2819,8 @@ function facturasApp() {
             const targetNums = new Set(invoiceList.map(i => String(i.invoice_number)));
 
             if (selected) {
-                // Add missing
-                const toAdd = invoiceList.filter(i => i.status !== 'Cancelada');
+                // Add missing (only if status is Cancelada or authorized by Credito)
+                const toAdd = invoiceList.filter(i => i.status === 'Cancelada' || this.canBeInRelation(i));
                 // Remove existing instances to prevent duplicates
                 const filtered = currentInvoices.filter(i => !targetNums.has(String(i.invoice_number)));
                 updatedInvoices = [...filtered, ...toAdd];
