@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/facturas.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/facturas.css') }}?v=6">
 <div class="space-y-3" x-data="facturasApp()" x-init="init()" @refresh-data.window.debounce.500ms="fetchInvoices()" @keydown.window="handleGlobalKeydown($event)" :class="{'print-selected-only': invoices.some(i => i._selected)}">
 
     <!-- Global Header -->
