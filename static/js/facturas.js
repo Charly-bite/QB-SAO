@@ -979,7 +979,7 @@ function facturasApp() {
         },
 
         addManualInvoiceToList() {
-            const raw = (this.addInvoiceManualNum || '').trim();
+            const raw = String(this.addInvoiceManualNum || '').trim();
             if (!raw || isNaN(raw)) return;
             const numInt = parseInt(raw, 10);
             
