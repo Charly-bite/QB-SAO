@@ -152,17 +152,17 @@
                 </div>
 
                 <!-- ═══ Manual Entry (always visible) ═══ -->
-                <div class="px-4 py-3 bg-slate-100 border-t border-b border-slate-300 my-1">
+                <div class="extra-invoice-banner">
                     <div class="flex items-center gap-2 mb-2">
-                        <div class="w-7 h-7 rounded-lg bg-amber-500 flex items-center justify-center text-white font-black shrink-0 shadow-sm">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        <div class="extra-invoice-icon-box">
+                            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                         </div>
                         <div>
                             <div class="flex items-center gap-2">
-                                <span class="text-xs font-black text-slate-900 uppercase tracking-wide">Añadir Factura Extra</span>
-                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-extrabold border border-amber-300">Req. Crédito</span>
+                                <span class="extra-invoice-title">Añadir Factura Extra</span>
+                                <span class="extra-invoice-badge">Req. Crédito</span>
                             </div>
-                            <p class="text-[11px] text-slate-600 font-bold">Agrega folios de otros días a la relación de hoy</p>
+                            <p class="extra-invoice-subtitle">Agrega folios de otros días a la relación de hoy</p>
                         </div>
                     </div>
                     <div class="flex gap-2 items-center">
@@ -173,14 +173,11 @@
                             <input type="number" x-model="addInvoiceManualNum" 
                                    placeholder="Número de factura..."
                                    @keydown.enter="addManualInvoiceToList()"
-                                   class="block w-full pl-9 pr-3 py-2 border-2 border-slate-300 rounded-lg text-xs font-black text-slate-900 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all placeholder:font-bold placeholder:text-slate-500 bg-white" />
+                                   class="extra-invoice-input" />
                         </div>
                         <button @click="addManualInvoiceToList()"
                                 :disabled="!addInvoiceManualNum || addInvoiceManualNum.trim() === ''"
-                                class="px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 shrink-0 border"
-                                :style="addInvoiceManualNum && addInvoiceManualNum.trim() !== '' 
-                                    ? 'background-color: #f59e0b !important; color: #ffffff !important; border-color: #d97706 !important; cursor: pointer;' 
-                                    : 'background-color: #334155 !important; color: #ffffff !important; border-color: #475569 !important; opacity: 1 !important; cursor: not-allowed;'">
+                                :class="addInvoiceManualNum && addInvoiceManualNum.trim() !== '' ? 'btn-add-extra-invoice-active' : 'btn-add-extra-invoice-disabled'">
                             <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
                             <span class="text-white font-black">+ Agregar Factura</span>
                         </button>
