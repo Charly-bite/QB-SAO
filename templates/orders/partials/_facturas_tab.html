@@ -103,10 +103,12 @@
                                 </div>
                             </td>
                             <!-- Checkbox -->
-                            <td class="px-2 py-1.5 border border-slate-400 text-center align-middle" 
-                                :class="{'cursor-pointer': canEditFacturas && canBeInRelation(inv), 'cursor-not-allowed bg-red-50/50': !canBeInRelation(inv)}"
-                                @click.stop="if(canEditFacturas) { handleCheck({target: {checked: !inv._selected}, shiftKey: $event.shiftKey, preventDefault: () => {}}, inv); }">
-                                <input type="checkbox" :checked="inv._selected" :disabled="!canEditFacturas || !canBeInRelation(inv)" class="w-4 h-4 text-amber-500 rounded focus:ring-amber-500 border-slate-300 pointer-events-none disabled:opacity-50">
+                            <td class="px-2 py-1.5 border border-slate-400 text-center align-middle transition-colors" 
+                                :class="{'cursor-pointer': canEditFacturas && canBeInRelation(inv), 'cursor-not-allowed': !canBeInRelation(inv)}"
+                                :style="!canBeInRelation(inv) ? 'background-color: #fff1f2 !important;' : ''"
+                                :title="!canBeInRelation(inv) ? 'No autorizada por Crédito y Cobranza (bloqueada)' : (inv._selected ? 'Desmarcar de la relación' : 'Marcar para la relación')"
+                                @click.stop="if(canEditFacturas && canBeInRelation(inv)) { handleCheck({target: {checked: !inv._selected}, shiftKey: $event.shiftKey, preventDefault: () => {}}, inv); }">
+                                <input type="checkbox" :checked="inv._selected" :disabled="!canEditFacturas || !canBeInRelation(inv)" class="w-4 h-4 text-amber-500 rounded focus:ring-amber-500 border-slate-300 pointer-events-none transition-opacity" :class="!canBeInRelation(inv) ? 'opacity-20 grayscale' : 'opacity-100'">
                             </td>
                             <!-- Posición -->
                             <td class="px-2 py-1.5 border border-slate-400 text-center align-middle font-bold text-slate-700 text-sm group">
