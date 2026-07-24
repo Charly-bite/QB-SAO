@@ -162,18 +162,26 @@ def create_app(config_name: Optional[str] = None) -> "OpenOMSApp":
             logger.info("Prometheus metrics already registered, skipping.")
 
 
+    from core.database_client import DatabaseClient
+    from core.schema_initializer import init_db_schema
     from core.factura_metadata_manager import FacturaMetadataManager
     from core.relacion_manager import RelacionManager
     from core.audit_manager import AuditManager
     
-    # Initialize managers
-    app.user_manager = UserManager()
+    # Initialize shared database client & schema
+    db_client = DatabaseClient()
+    db_client.connect()
+    init_db_schema(db_client)
+
+    # Initialize managers using shared db_client (single connection pool)
+    app.db_client = db_client
+    app.user_manager = UserManager(db_client=db_client)
     app.permission_manager = PermissionManager()
     app.permission_manager.load(app.user_manager.sql_engine)
-    app.order_status_mgr = OrderStatusManager()
-    app.factura_metadata_mgr = FacturaMetadataManager()
-    app.relacion_mgr = RelacionManager()
-    app.audit_mgr = AuditManager()
+    app.order_status_mgr = OrderStatusManager(db_client=db_client)
+    app.factura_metadata_mgr = FacturaMetadataManager(db_client=db_client)
+    app.relacion_mgr = RelacionManager(db_client=db_client)
+    app.audit_mgr = AuditManager(db_client=db_client)
 
     # SAP Connector (lazy connection)
     app.sap_connector = None
@@ -342,13 +350,20 @@ def create_app(config_name: Optional[str] = None) -> "OpenOMSApp":
 
         overall_status = "ok" if (sql_ok and sap_ok and worker_alive) else "degraded"
 
+        # SSE connection monitoring (P0 fix — thread starvation prevention)
+        from routes.orders import _sse_registry
+        sse_total = _sse_registry.count()
+        sse_by_user = _sse_registry.count_by_user()
+
         return jsonify({
             "status": overall_status,
             "sql_db": {"ok": sql_ok, "error": sql_error},
             "sap_db": {"ok": sap_ok, "error": sap_error},
             "sap_worker_alive": worker_alive,
             "sga_available": check_sga_status(),
-            "active_orders_loaded": len(app.order_status_mgr.get_active_orders())
+            "active_orders_loaded": len(app.order_status_mgr.get_active_orders()),
+            "sse_connections": sse_total,
+            "sse_connections_by_user": sse_by_user,
         }), 200 if overall_status == "ok" else 503
 
     return app
