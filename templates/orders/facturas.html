@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/facturas.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/facturas.css') }}?v=9">
 <div class="space-y-3" x-data="facturasApp()" x-init="init()" @refresh-data.window.debounce.500ms="fetchInvoices()" @keydown.window="handleGlobalKeydown($event)" :class="{'print-selected-only': invoices.some(i => i._selected)}">
 
     <!-- Global Header -->
@@ -224,10 +224,10 @@
 
                 <!-- Facturas Tab Actions -->
                 <div x-show="activeTab === 'facturas'" x-transition class="flex items-center gap-1.5">
-                    <button x-show="canEditFacturas" @click="showAddInvoiceModal()" :disabled="loading" 
-                        class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-white bg-slate-800 rounded-lg hover:bg-slate-700 shadow-sm transition-all duration-200 active:scale-95 h-8" title="Añadir factura">
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                        Añadir Factura
+                    <button x-show="canEditFacturas" @click="showAddInvoiceModal('manual')" :disabled="loading" 
+                        class="btn-style-facturas-pendientes" title="Agregar factura manual">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+                        + Agregar Factura
                     </button>
                 </div>
             </div>
@@ -303,5 +303,5 @@
         }
     };
 </script>
-<script src="{{ url_for('static', filename='js/facturas.js') }}?v=3"></script>
+<script src="{{ url_for('static', filename='js/facturas.js') }}?v=8"></script>
 {% endblock %}

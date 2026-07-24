@@ -27,7 +27,7 @@ class RelacionManager:
 
     TABLE_NAME = "seguimiento_relacion_envios"
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: Optional[str] = None, db_client: Optional[Any] = None):
         if db_path is None:
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             db_path = os.path.join(base_dir, "data", "relacion_envios.json")
@@ -36,8 +36,11 @@ class RelacionManager:
         self.local_relaciones: Dict[str, Any] = {}  # keyed by folio
         self._json_write_lock = threading.Lock()
 
-        self.db_client = DatabaseClient()
-        self.db_client.connect()
+        if db_client is not None:
+            self.db_client = db_client
+        else:
+            self.db_client = DatabaseClient()
+            self.db_client.connect()
         self._ensure_table_exists()
         self._load_fallback()
 
