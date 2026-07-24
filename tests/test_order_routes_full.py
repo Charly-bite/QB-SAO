@@ -19,28 +19,28 @@ import pytest
 
 class TestPublishEvent:
     def test_broadcast_to_subscribers(self, app):
-        from routes.orders import _publish_event, _SUBSCRIBERS
+        from routes.orders import _publish_event, _sse_registry
 
         q = queue.Queue()
-        _SUBSCRIBERS.append(q)
+        _sse_registry.add(q, username="test_broadcast")
         try:
             _publish_event({"type": "test"})
             assert not q.empty()
             event = q.get_nowait()
             assert event["type"] == "test"
         finally:
-            _SUBSCRIBERS.remove(q)
+            _sse_registry.remove(q)
 
     def test_handles_full_queue(self, app):
-        from routes.orders import _publish_event, _SUBSCRIBERS
+        from routes.orders import _publish_event, _sse_registry
 
         q = queue.Queue(maxsize=1)
         q.put({"old": True})  # Fill it
-        _SUBSCRIBERS.append(q)
+        _sse_registry.add(q, username="test_full_queue")
         try:
             _publish_event({"type": "new"})  # Should not raise
         finally:
-            _SUBSCRIBERS.remove(q)
+            _sse_registry.remove(q)
 
 
 class TestStreamEndpoint:

@@ -232,6 +232,8 @@
             overflow: hidden !important;
         }
     </style>
+    <!-- Mostrador manages its own SSE via _connectSSE(); skip base.html's global SSE to avoid doubling threads -->
+    <script>window.__skipGlobalSSE = true;</script>
     
 {% endblock %}
 

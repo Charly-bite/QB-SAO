@@ -316,6 +316,8 @@ function facturasApp() {
         addInvoiceManualList: [],
         addInvoiceLoading: false,
         addInvoiceOtherDaysPending: [], // [{date, label, invoices: [...]}]
+        addInvoiceMode: 'all',
+        liveSearchOpen: false,
 
         showContextMenu(event, inv) {
             if (this.activeTab !== 'facturas' && this.activeTab !== 'credito') return;
@@ -832,48 +834,67 @@ function facturasApp() {
         // Add Invoice Modal Methods
         // ══════════════════════════════════════════════════════
 
-        async showAddInvoiceModal() {
+        async showAddInvoiceModal(mode = 'all') {
+            const isManualMode = (mode === 'manual' || mode === true);
+            this.addInvoiceMode = isManualMode ? 'manual' : 'all';
             this.addInvoiceModalOpen = true;
             this.addInvoiceSearchQuery = '';
             this.addInvoiceSelectedPending = [];
             this.addInvoiceManualNum = '';
             this.addInvoiceManualList = [];
             this.addInvoiceOtherDaysPending = [];
+            this.liveSearchOpen = true;
             
-            // Fetch pending invoices from other days
-            this.addInvoiceLoading = true;
-            try {
-                const res = await fetch(`${cfg.apiFacturasPendingSummaryUrl}?_=${Date.now()}`, { cache: 'no-store' });
-                const data = await res.json();
-                if (res.ok && data.days) {
-                    const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-                    const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-                    
-                    // Get current-day invoice numbers to exclude duplicates
-                    const currentDayNums = new Set(this.invoices.map(i => i.invoice_number));
-                    
-                    this.addInvoiceOtherDaysPending = data.days
-                        .filter(day => day.date !== this.selectedDate && day.invoices && day.invoices.length > 0)
-                        .map(day => {
-                            let label = day.date;
-                            try {
-                                const [y, m, d] = day.date.split('-').map(Number);
-                                const dateObj = new Date(y, m - 1, d);
-                                label = dayNames[dateObj.getDay()] + ' ' + d + ' ' + monthNames[m - 1] + ' ' + y;
-                            } catch(_) {}
-                            return {
-                                date: day.date,
-                                label: label,
-                                invoices: day.invoices.filter(inv => !currentDayNums.has(inv.invoice_number))
-                            };
-                        })
-                        .filter(day => day.invoices.length > 0);
+            // Asynchronously fetch pending summary for live search / other days
+            const fetchPendingPromise = (async () => {
+                try {
+                    const res = await fetch(`${cfg.apiFacturasPendingSummaryUrl}?_=${Date.now()}`, { cache: 'no-store' });
+                    const data = await res.json();
+                    if (res.ok && data.days) {
+                        const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+                        const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+                        
+                        const currentDayNums = new Set(this.invoices.map(i => i.invoice_number));
+                        
+                        this.addInvoiceOtherDaysPending = data.days
+                            .filter(day => day.date !== this.selectedDate && day.invoices && day.invoices.length > 0)
+                            .map(day => {
+                                let label = day.date;
+                                try {
+                                    const [y, m, d] = day.date.split('-').map(Number);
+                                    const dateObj = new Date(y, m - 1, d);
+                                    label = dayNames[dateObj.getDay()] + ' ' + d + ' ' + monthNames[m - 1] + ' ' + y;
+                                } catch(_) {}
+                                return {
+                                    date: day.date,
+                                    label: label,
+                                    invoices: day.invoices.filter(inv => !currentDayNums.has(inv.invoice_number))
+                                };
+                            })
+                            .filter(day => day.invoices.length > 0);
+                    }
+                } catch (e) {
+                    console.error('Error fetching pending summary for modal:', e);
                 }
-            } catch (e) {
-                console.error('Error fetching pending summary for modal:', e);
-            } finally {
+            })();
+
+            if (isManualMode) {
                 this.addInvoiceLoading = false;
+                this.$nextTick(() => {
+                    setTimeout(() => {
+                        const input = this.$refs.manualInvoiceInput;
+                        if (input) {
+                            input.focus();
+                            input.select();
+                        }
+                    }, 50);
+                });
+                return;
             }
+
+            this.addInvoiceLoading = true;
+            await fetchPendingPromise;
+            this.addInvoiceLoading = false;
         },
 
         closeAddInvoiceModal() {
@@ -979,7 +1000,7 @@ function facturasApp() {
         },
 
         addManualInvoiceToList() {
-            const raw = (this.addInvoiceManualNum || '').trim();
+            const raw = String(this.addInvoiceManualNum || '').trim();
             if (!raw || isNaN(raw)) return;
             const numInt = parseInt(raw, 10);
             
@@ -1005,6 +1026,75 @@ function facturasApp() {
 
         removeManualInvoiceFromList(num) {
             this.addInvoiceManualList = this.addInvoiceManualList.filter(n => n !== num);
+        },
+
+        async addManualInvoiceDirectly() {
+            this.addManualInvoiceToList();
+            if (this.addInvoiceMode === 'manual' && this.addInvoiceManualList.length > 0) {
+                await this.addSelectedInvoices();
+            }
+        },
+
+        get liveSearchResults() {
+            const raw = String(this.addInvoiceManualNum || '').trim().toLowerCase();
+            if (!raw) return [];
+
+            const allMap = new Map();
+
+            for (const inv of (this.invoices || [])) {
+                if (inv && inv.invoice_number) {
+                    allMap.set(String(inv.invoice_number), {
+                        invoice_number: inv.invoice_number,
+                        customer_name: inv.customer_name || 'Cliente desconocido',
+                        date: inv.invoice_date || inv.date || this.selectedDate,
+                        total: inv.total || 0,
+                        currency: inv.currency || 'MXN',
+                        payment_terms: inv.payment_terms || ''
+                    });
+                }
+            }
+
+            for (const day of (this.addInvoiceOtherDaysPending || [])) {
+                for (const inv of (day.invoices || [])) {
+                    if (inv && inv.invoice_number && !allMap.has(String(inv.invoice_number))) {
+                        allMap.set(String(inv.invoice_number), {
+                            invoice_number: inv.invoice_number,
+                            customer_name: inv.customer_name || 'Cliente desconocido',
+                            date: inv.invoice_date || inv.date || day.date,
+                            total: inv.total || 0,
+                            currency: inv.currency || 'MXN',
+                            payment_terms: inv.payment_terms || ''
+                        });
+                    }
+                }
+            }
+
+            const results = [];
+            for (const inv of allMap.values()) {
+                const numStr = String(inv.invoice_number).toLowerCase();
+                const custStr = String(inv.customer_name).toLowerCase();
+
+                if (numStr.includes(raw) || custStr.includes(raw)) {
+                    results.push(inv);
+                }
+            }
+
+            results.sort((a, b) => {
+                const numA = String(a.invoice_number);
+                const numB = String(b.invoice_number);
+                if (numA === raw) return -1;
+                if (numB === raw) return 1;
+                if (numA.startsWith(raw) && !numB.startsWith(raw)) return -1;
+                if (!numA.startsWith(raw) && numB.startsWith(raw)) return 1;
+                return b.invoice_number - a.invoice_number;
+            });
+
+            return results.slice(0, 10);
+        },
+
+        selectLiveSearchResult(inv) {
+            this.addInvoiceManualNum = String(inv.invoice_number);
+            this.liveSearchOpen = false;
         },
 
         async addSelectedInvoices() {
@@ -1257,7 +1347,10 @@ function facturasApp() {
         },
 
         canBeInRelation(inv) {
-            return inv.credito_authorized || inv.status === 'Cancelada';
+            if (!inv) return false;
+            const auth = inv.credito_authorized;
+            const isAuth = auth === true || auth === 1 || auth === 'true' || auth === '1' || auth === 'True';
+            return isAuth || inv.status === 'Cancelada';
         },
 
         toggleAll() {
@@ -2699,7 +2792,21 @@ function facturasApp() {
                 this.currentRelacion = data.relacion || null;
 
                 // Sync checkbox state from DB relationship to the invoices list
-                if (this.currentRelacion && this.currentRelacion.invoices) {
+                if (this.currentRelacion && Array.isArray(this.currentRelacion.invoices)) {
+                    const masterInvoicesMap = new Map();
+                    this.invoices.forEach(i => {
+                        const key = String(i.invoice_number);
+                        if (!masterInvoicesMap.has(key)) {
+                            masterInvoicesMap.set(key, i);
+                        }
+                    });
+
+                    // Sanitize currentRelacion.invoices to exclude any invoice that is NOT authorized by Credito and not canceled
+                    this.currentRelacion.invoices = this.currentRelacion.invoices.filter(relInv => {
+                        const masterInv = masterInvoicesMap.get(String(relInv.invoice_number));
+                        return masterInv ? this.canBeInRelation(masterInv) : (relInv.credito_authorized || relInv.status === 'Cancelada');
+                    });
+
                     const relInvoiceNums = new Set(this.currentRelacion.invoices.map(i => String(i.invoice_number)));
                     
                     const toHighlight = [];
@@ -2711,15 +2818,6 @@ function facturasApp() {
                             toHighlight.push(String(i.invoice_number));
                         }
                         i._selected = isSelectedNow;
-                    });
-                    
-                    // Sync metadata (credito_notes, rebote, observaciones, etc.) from master list to relacion invoices
-                    const masterInvoicesMap = new Map();
-                    this.invoices.forEach(i => {
-                        const key = String(i.invoice_number);
-                        if (!masterInvoicesMap.has(key)) {
-                            masterInvoicesMap.set(key, i);
-                        }
                     });
 
                     this.currentRelacion.invoices.forEach(relInv => {
