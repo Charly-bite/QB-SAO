@@ -9,9 +9,12 @@ logger = logging.getLogger(__name__)
 class AuditManager:
     TABLE_NAME = "audit_logs"
 
-    def __init__(self):
-        self.db_client = DatabaseClient()
-        self.db_client.connect()
+    def __init__(self, db_client=None):
+        if db_client is not None:
+            self.db_client = db_client
+        else:
+            self.db_client = DatabaseClient()
+            self.db_client.connect()
         self._ensure_table_exists()
         self._cleanup_old_logs()
 

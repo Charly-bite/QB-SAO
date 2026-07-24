@@ -25,8 +25,95 @@ _weather_cache = {"data": None, "timestamp": 0}
 
 orders_bp = Blueprint("orders", __name__)
 
-# Simple in-memory pub/sub for Server-Sent Events (SSE)
-_SUBSCRIBERS = []
+# ── SSE Connection Registry ──────────────────────────────────────────────────
+# Managed pub/sub for Server-Sent Events (SSE) with per-user and global limits.
+# Prevents Waitress thread exhaustion caused by unbounded SSE connections.
+# See: P0 fix for July 23 2026 incident (Billing locked out by SSE starvation).
+_SSE_LOCK = threading.Lock()
+_SSE_PER_USER_LIMIT = 3       # Max SSE connections per user (covers ~3 tabs)
+_SSE_GLOBAL_LIMIT = 100       # Hard cap (leaves threads free for API requests)
+
+
+class _SSERegistry:
+    """Thread-safe SSE subscriber registry with per-user and global limits.
+
+    Each SSE connection (``/stream`` or ``/stream_web``) registers a
+    ``queue.Queue`` here.  When the per-user or global cap is reached the
+    *oldest* connection for that user (or globally) is evicted by pushing a
+    ``None`` poison-pill into its queue, which causes the generator to exit
+    and free the Waitress worker thread.
+    """
+
+    def __init__(self):
+        self._subscribers: list = []  # [{"queue": q, "username": str, "created_at": float}, ...]
+
+    # ── Mutators ─────────────────────────────────────────────────────────
+
+    def add(self, q, username: str = "anonymous"):
+        """Register a new SSE subscriber queue, evicting old ones if limits are exceeded."""
+        with _SSE_LOCK:
+            entry = {"queue": q, "username": username, "created_at": time.time()}
+
+            # Evict oldest connections for THIS user if over per-user limit
+            user_entries = [e for e in self._subscribers if e["username"] == username]
+            while len(user_entries) >= _SSE_PER_USER_LIMIT:
+                oldest = user_entries.pop(0)
+                self._subscribers.remove(oldest)
+                try:
+                    oldest["queue"].put(None, block=False)
+                except Exception:
+                    pass
+                logging.info(
+                    f"SSE: Evicted oldest connection for user={username} "
+                    f"(per-user limit of {_SSE_PER_USER_LIMIT} reached)"
+                )
+
+            # Evict globally if over global limit
+            while len(self._subscribers) >= _SSE_GLOBAL_LIMIT:
+                oldest = self._subscribers.pop(0)
+                try:
+                    oldest["queue"].put(None, block=False)
+                except Exception:
+                    pass
+                logging.warning(
+                    f"SSE: Evicted oldest global connection (user={oldest['username']}, "
+                    f"global limit of {_SSE_GLOBAL_LIMIT} reached)"
+                )
+
+            self._subscribers.append(entry)
+            user_count = len([e for e in self._subscribers if e["username"] == username])
+            logging.info(
+                f"SSE: New connection for user={username} "
+                f"(user_total={user_count}, global_total={len(self._subscribers)})"
+            )
+
+    def remove(self, q):
+        """Unregister a subscriber queue (called from the generator's ``finally`` block)."""
+        with _SSE_LOCK:
+            self._subscribers = [e for e in self._subscribers if e["queue"] is not q]
+
+    # ── Read-only accessors ──────────────────────────────────────────────
+
+    def queues(self) -> list:
+        """Return a snapshot of all active queues (safe to iterate outside the lock)."""
+        with _SSE_LOCK:
+            return [e["queue"] for e in self._subscribers]
+
+    def count(self) -> int:
+        """Total number of active SSE connections."""
+        with _SSE_LOCK:
+            return len(self._subscribers)
+
+    def count_by_user(self) -> dict:
+        """Per-user connection counts, e.g. ``{"AzucenaL": 2, "admin": 1}``."""
+        with _SSE_LOCK:
+            counts: dict = {}
+            for e in self._subscribers:
+                counts[e["username"]] = counts.get(e["username"], 0) + 1
+            return counts
+
+
+_sse_registry = _SSERegistry()
 
 
 def _get_sap_connector():
@@ -63,7 +150,7 @@ _WEBHOOK_RETRY_INTERVAL = 30      # seconds between attempts
 
 def _publish_event(event: dict):
     # Push event to all subscriber queues (non-blocking)
-    for q in list(_SUBSCRIBERS):
+    for q in _sse_registry.queues():
         try:
             q.put(event, block=False)
         except queue.Full:
@@ -299,7 +386,7 @@ def _check_delivery_and_invoice(sap, order_mgr, recent_orders):  # pragma: no co
         if doc_entry and order_id and order_id in order_mgr.orders:
             entry_to_oid[int(doc_entry)] = order_id
             # Persist doc_entry on the local order for future lookups
-            order_mgr.orders[order_id]["doc_entry"] = int(doc_entry)
+            order_mgr.update_order_fields(order_id, {"doc_entry": int(doc_entry)})
 
     # Also include older local orders that have a stored doc_entry and
     # are still at a status eligible for auto-transition.  This catches
@@ -338,7 +425,7 @@ def _check_delivery_and_invoice(sap, order_mgr, recent_orders):  # pragma: no co
             if not oid:
                 continue
             dn = delivery_info["delivery_num"]
-            order_mgr.orders[oid]["delivery_number"] = str(dn)
+            order_mgr.update_order_fields(oid, {"delivery_number": str(dn)}, save=False)
             order_mgr.update_status(
                 oid,
                 OrderStatus.PICKING.value,  # "Entregado"
@@ -373,7 +460,7 @@ def _check_delivery_and_invoice(sap, order_mgr, recent_orders):  # pragma: no co
             oid = eligible_for_factura.get(de)
             if not oid:
                 continue
-            order_mgr.orders[oid]["factura_number"] = str(invoice_num)
+            order_mgr.update_order_fields(oid, {"factura_number": str(invoice_num)}, save=False)
             order_mgr.update_status(
                 oid,
                 OrderStatus.INVOICING.value,  # "Facturacion"
@@ -462,26 +549,26 @@ def stream():
 
     Sends a ':keepalive' comment every 25 s so the connection is never idle
     long enough for a proxy or browser to drop it.
+    Uses _sse_registry for managed connection tracking and eviction.
     """
     q = queue.Queue()
-    _SUBSCRIBERS.append(q)
+    _sse_registry.add(q, username="monitor_token")
 
     def event_stream(local_q):  # pragma: no cover
         try:  # pragma: no cover
             while True:  # pragma: no cover
                 try:  # pragma: no cover
                     data = local_q.get(timeout=25)  # pragma: no cover
+                    if data is None:  # Poison pill — evicted by registry  # pragma: no cover
+                        break  # pragma: no cover
                     yield f"data: {json_mod.dumps(data, ensure_ascii=False)}\n\n"  # pragma: no cover
                 except queue.Empty:  # pragma: no cover
                     # No event in 25 s — send a keepalive comment so the
                     # connection stays open through proxies and idle timeouts
                     yield ": keepalive\n\n"  # pragma: no cover
         finally:
-            # Clean up when client disconnects
-            try:  # pragma: no cover
-                _SUBSCRIBERS.remove(local_q)  # pragma: no cover
-            except ValueError:  # pragma: no cover
-                pass  # pragma: no cover
+            # Clean up when client disconnects or is evicted
+            _sse_registry.remove(local_q)  # pragma: no cover
 
     resp = Response(event_stream(q), mimetype='text/event-stream')
     resp.headers['Cache-Control'] = 'no-cache'
@@ -496,12 +583,14 @@ def stream_web():
 
     Sends a ':keepalive' comment every 25 s so the connection is never idle
     long enough for a proxy or browser to drop it.
+    Uses _sse_registry for managed connection tracking and eviction.
     """
     import queue as _queue
     import json as _json
 
+    username = current_user.username if current_user.is_authenticated else "anonymous"
     q = _queue.Queue()
-    _SUBSCRIBERS.append(q)
+    _sse_registry.add(q, username=username)
 
     def event_stream(local_q):
         # Flush headers and establish SSE connection immediately
@@ -510,15 +599,14 @@ def stream_web():
             while True:
                 try:
                     data = local_q.get(timeout=25)
+                    if data is None:  # Poison pill — evicted by registry
+                        break
                     yield f"data: {_json.dumps(data, ensure_ascii=False)}\n\n"
                 except _queue.Empty:
                     # Keepalive — prevents proxy / browser from closing idle connection
                     yield ": keepalive\n\n"
         finally:
-            try:
-                _SUBSCRIBERS.remove(local_q)
-            except ValueError:
-                pass
+            _sse_registry.remove(local_q)
 
     resp = Response(event_stream(q), mimetype='text/event-stream')
     resp.headers['Cache-Control'] = 'no-cache'
