@@ -73,7 +73,7 @@ def _mock_database_client(request):
     We patch at the SOURCE module so both local imports in user_manager and
     order_status_manager pick up the mock, but we skip the connect() mock for connection tests."""
     module_name = request.module.__name__ if request.module else ""
-    if "test_database_client" in module_name or "test_sga_robustness" in module_name:
+    if "test_database_client" in module_name or "test_sga_robustness" in module_name or "test_coverage_completion" in module_name:
         with (
             patch("core.database_client.pyodbc") as mock_pyodbc,
             patch("core.database_client.create_engine") as _mock_engine,
