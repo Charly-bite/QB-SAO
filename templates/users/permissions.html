@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block title %}Gestión de Permisos — QB-SAO{% endblock %}
+{% block content %}
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/facturas.css') }}">
+
+<div class="space-y-6" x-data="permissionsMatrix()" x-init="init()">
+
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print-hide">
+        <div>
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-indigo-500/15 flex items-center justify-center">
+                    <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tight">Gestión de Permisos</h1>
+                    <p class="text-xs text-slate-500 mt-0.5">Los cambios toman efecto inmediatamente en el próximo inicio de sesión.</p>
+                </div>
+            </div>
+        </div>
+        <a href="{{ url_for('users.index') }}"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-all">
+            ← Volver a Usuarios
+        </a>
+    </div>
+
+    <!-- Save status indicator -->
+    <div x-show="saveStatus" x-cloak x-transition
+        class="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-lg text-sm font-semibold"
+        :class="saveStatus === 'ok' ? 'bg-emerald-500 text-white' : saveStatus === 'error' ? 'bg-red-500 text-white' : 'bg-slate-700 text-white'">
+        <template x-if="saveStatus === 'saving'">
+            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+        </template>
+        <template x-if="saveStatus === 'ok'">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        </template>
+        <template x-if="saveStatus === 'error'">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </template>
+        <span x-text="saveStatus === 'saving' ? 'Guardando...' : saveStatus === 'ok' ? 'Guardado ✓' : 'Error al guardar'"></span>
+    </div>
+
+    <!-- Permission Matrix -->
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+
+                <!-- Role header row -->
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                        <th class="text-left px-5 py-4 font-bold text-slate-500 uppercase tracking-wider w-72">
+                            Permiso
+                        </th>
+                        {% for role in roles %}
+                        <th class="px-4 py-4 text-center font-bold uppercase tracking-wider min-w-[110px]"
+                            :class="highlightedRole === '{{ role.value }}' ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600' : 'text-slate-500'">
+                            <div class="flex flex-col items-center gap-1.5">
+                                <div class="w-8 h-8 rounded-lg flex items-center justify-center text-white text-[10px] font-black"
+                                    style="background: {{ loop.cycle('linear-gradient(135deg,#6366f1,#8b5cf6)', 'linear-gradient(135deg,#0ea5e9,#06b6d4)', 'linear-gradient(135deg,#f59e0b,#f97316)', 'linear-gradient(135deg,#10b981,#059669)', 'linear-gradient(135deg,#ef4444,#f43f5e)', 'linear-gradient(135deg,#8b5cf6,#d946ef)', 'linear-gradient(135deg,#64748b,#475569)') }}">
+                                    {{ role.value[:2]|upper }}
+                                </div>
+                                <span>{{ role.value|replace('_',' ')|title }}</span>
+                                {% if role.value != 'admin' %}
+                                <button @click="resetRole('{{ role.value }}')"
+                                    class="text-[9px] text-slate-400 hover:text-red-500 transition-colors font-normal normal-case"
+                                    title="Restablecer defaults">
+                                    ↺ defaults
+                                </button>
+                                {% else %}
+                                <span class="text-[9px] text-indigo-400 font-normal">Siempre todo</span>
+                                {% endif %}
+                            </div>
+                        </th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% set sections = [
+                        ('🧭 Navegación', ['nav.pedidos','nav.facturas','nav.monitor','nav.dashboard','nav.users']),
+                        ('📄 Facturas — Subtabs', ['facturas.tab.facturas','facturas.tab.credito','facturas.tab.relaciones','facturas.tab.pendientes','facturas.tab.almacen']),
+                        ('⚡ Facturas — Acciones', ['facturas.edit','facturas.sign.facturacion','facturas.sign.credito','facturas.sign.almacen','facturas.authorize']),
+                        ('📦 Pedidos', ['orders.edit','orders.print_labels','orders.see_all']),
+                    ] %}
+
+                    {% for section_title, keys in sections %}
+                    <!-- Section header -->
+                    <tr class="bg-slate-50/60 dark:bg-slate-800/40 border-t border-slate-200 dark:border-slate-700">
+                        <td colspan="{{ roles|length + 1 }}" class="px-5 py-2.5 font-bold text-slate-600 dark:text-slate-400 text-[11px] uppercase tracking-widest">
+                            {{ section_title }}
+                        </td>
+                    </tr>
+
+                    {% for pkey in keys %}
+                    {% if pkey in permission_labels %}
+                    <tr class="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors"
+                        @mouseenter="highlightedRow = '{{ pkey }}'"
+                        @mouseleave="highlightedRow = ''">
+
+                        <!-- Permission label -->
+                        <td class="px-5 py-3 text-slate-700 dark:text-slate-300 font-medium"
+                            :class="highlightedRow === '{{ pkey }}' ? 'text-indigo-600 dark:text-indigo-400' : ''">
+                            {{ permission_labels[pkey].split('—')[-1].strip() }}
+                            <div class="text-[10px] text-slate-400 font-mono mt-0.5">{{ pkey }}</div>
+                        </td>
+
+                        <!-- Checkbox per role -->
+                        {% for role in roles %}
+                        <td class="px-4 py-3 text-center"
+                            :class="highlightedRole === '{{ role.value }}' ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''">
+                            {% if role.value == 'admin' %}
+                            <!-- Admin always has every permission -->
+                            <div class="w-5 h-5 mx-auto rounded bg-indigo-500 flex items-center justify-center">
+                                <svg class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                </svg>
+                            </div>
+                            {% else %}
+                            <button
+                                @click="toggle('{{ role.value }}', '{{ pkey }}')"
+                                @mouseenter="highlightedRole = '{{ role.value }}'"
+                                @mouseleave="highlightedRole = ''"
+                                class="w-5 h-5 mx-auto rounded border-2 transition-all duration-150 flex items-center justify-center group"
+                                :class="hasPermission('{{ role.value }}', '{{ pkey }}')
+                                    ? 'bg-emerald-500 border-emerald-500 shadow-sm hover:bg-emerald-600'
+                                    : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 hover:border-emerald-400'"
+                                :title="hasPermission('{{ role.value }}', '{{ pkey }}') ? 'Quitar permiso' : 'Dar permiso'"
+                            >
+                                <svg x-show="hasPermission('{{ role.value }}', '{{ pkey }}')"
+                                    class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                </svg>
+                            </button>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="flex flex-wrap items-center gap-4 text-xs text-slate-500 px-1">
+        <div class="flex items-center gap-1.5">
+            <div class="w-4 h-4 rounded bg-emerald-500"></div>
+            <span>Permiso activo</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+            <div class="w-4 h-4 rounded bg-white border-2 border-slate-300"></div>
+            <span>Sin permiso</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+            <div class="w-4 h-4 rounded bg-indigo-500"></div>
+            <span>Admin (siempre activo)</span>
+        </div>
+        <span class="text-slate-400">·</span>
+        <span>Los cambios se guardan automáticamente y toman efecto en el próximo inicio de sesión del usuario.</span>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/permissions.js') }}"></script>
+
+<!-- Seed initial state from server -->
+<script>
+    window.__permissionsConfig = {
+        roles: {{ roles | map(attribute='value') | list | tojson }},
+        initialPermissions: {
+            {% for role in roles %}
+            "{{ role.value }}": {{ all_permissions.get(role.value, []) | list | tojson }}{% if not loop.last %},{% endif %}
+            {% endfor %}
+        },
+        apiUrl: "{{ url_for('users.permissions_api') }}",
+        saveUrl: "/users/permissions/"
+    };
+</script>
+
+{% endblock %}

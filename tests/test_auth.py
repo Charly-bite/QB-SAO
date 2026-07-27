@@ -145,3 +145,39 @@ class TestIsSafeUrl:
         loc = resp.headers.get('Location', '')
         assert 'evil.com' not in loc
 
+
+class TestReyesMLoginLoader:
+    """Verify load_user assigns correct permissions to ReyesM in app."""
+
+    def test_load_user_reyesm_permissions(self, app):
+        with app.app_context():
+            um = app.user_manager
+            if 'reyesm' not in um.users:
+                um.create_user(
+                    username='reyesm',
+                    password='testpass123',
+                    full_name='Reyes Martinez',
+                    role='viewer',
+                )
+            
+            # Retrieve the user loader from the login manager
+            login_mgr = app.login_manager
+            user_loader_func = login_mgr._user_callback
+            assert user_loader_func is not None
+            
+            # Load user
+            user = user_loader_func('reyesm')
+            assert user is not None
+            assert user.username == 'reyesm'
+            
+            # Verify permissions are injected correctly
+            for perm in [
+                "nav.facturas",
+                "nav.monitor",
+                "facturas.tab.relaciones",
+                "facturas.tab.pendientes",
+                "facturas.tab.almacen"
+            ]:
+                assert user.has_permission(perm) is True
+
+

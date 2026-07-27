@@ -13,8 +13,22 @@ function indexData() {
         timer: 10,
         loading: false,
         searchQuery: '',
-        dateFrom: new Date().toISOString().split('T')[0],
-        dateTo: new Date().toISOString().split('T')[0],
+        dateFrom: (function() {
+            try {
+                const saved = localStorage.getItem('qb_orders_date_from');
+                return saved !== null ? saved : new Date().toISOString().split('T')[0];
+            } catch (e) {
+                return new Date().toISOString().split('T')[0];
+            }
+        })(),
+        dateTo: (function() {
+            try {
+                const saved = localStorage.getItem('qb_orders_date_to');
+                return saved !== null ? saved : new Date().toISOString().split('T')[0];
+            } catch (e) {
+                return new Date().toISOString().split('T')[0];
+            }
+        })(),
         maxOrders: '50',
         activeTopFilter: 'all',
         activeStats: {},
@@ -262,6 +276,18 @@ function indexData() {
                 const saved = localStorage.getItem('qb_saved_views');
                 if (saved) this.savedViews = JSON.parse(saved);
             } catch(e) { console.warn(e); }
+
+            // Watch date range filters to persist them
+            this.$watch('dateFrom', val => {
+                try {
+                    localStorage.setItem('qb_orders_date_from', val !== null && val !== undefined ? val : '');
+                } catch(e) { console.warn(e); }
+            });
+            this.$watch('dateTo', val => {
+                try {
+                    localStorage.setItem('qb_orders_date_to', val !== null && val !== undefined ? val : '');
+                } catch(e) { console.warn(e); }
+            });
         },
 
         async refreshData() {
@@ -282,6 +308,7 @@ function indexData() {
 
         formatDate(s) {
             if (!s) return '-';
+            // Handle YYYY-MM-DD or YYYY-MM-DD HH:MM:SS
             const clean = String(s).split('T')[0].split(' ')[0];
             if (clean.match(/^\d{4}-\d{2}-\d{2}$/)) {
                 const [y, m, d] = clean.split('-');

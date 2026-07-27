@@ -12,9 +12,11 @@ import datetime
 import json
 import logging
 import os
+import threading
 import tempfile
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+# Force Flask reload to clear memory cache
 from core.database_client import DatabaseClient
 
 logger = logging.getLogger(__name__)
@@ -25,16 +27,20 @@ class RelacionManager:
 
     TABLE_NAME = "seguimiento_relacion_envios"
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: Optional[str] = None, db_client: Optional[Any] = None):
         if db_path is None:
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             db_path = os.path.join(base_dir, "data", "relacion_envios.json")
             os.makedirs(os.path.dirname(db_path), exist_ok=True)
         self.db_path = db_path
         self.local_relaciones: Dict[str, Any] = {}  # keyed by folio
+        self._json_write_lock = threading.Lock()
 
-        self.db_client = DatabaseClient()
-        self.db_client.connect()
+        if db_client is not None:
+            self.db_client = db_client
+        else:
+            self.db_client = DatabaseClient()
+            self.db_client.connect()
         self._ensure_table_exists()
         self._load_fallback()
 
@@ -84,9 +90,38 @@ class RelacionManager:
                     """)
             except Exception:  # pragma: no cover
                 pass  # column likely exists
-            logger.info(f"Verified {self.TABLE_NAME} table exists")
+            # Create child table for normalized invoices
+            child_table = "seguimiento_relacion_invoices"
+            query_child = f"""
+                IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='{child_table}' and xtype='U')
+                BEGIN
+                    CREATE TABLE {child_table} (
+                        id              INT IDENTITY(1,1) PRIMARY KEY,
+                        folio           VARCHAR(30) NOT NULL,
+                        invoice_number  VARCHAR(30) NOT NULL,
+                        is_checked      BIT NOT NULL DEFAULT 1,
+                        shipping_type   VARCHAR(50) NULL,
+                        observaciones   VARCHAR(MAX) NULL,
+                        data_json       VARCHAR(MAX) NULL,
+                        created_at      DATETIME DEFAULT GETDATE(),
+                        updated_at      DATETIME DEFAULT GETDATE(),
+                        CONSTRAINT UQ_relacion_invoice UNIQUE (folio, invoice_number)
+                    )
+                END
+            """
+            with self.db_client.engine.begin() as conn:
+                conn.exec_driver_sql(query_child)
+                conn.exec_driver_sql(f"""
+                    IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='IX_relacion_invoices_folio' AND object_id=OBJECT_ID('{child_table}'))
+                    CREATE INDEX IX_relacion_invoices_folio ON {child_table} (folio)
+                """)
+                conn.exec_driver_sql(f"""
+                    IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='IX_relacion_invoices_invoice' AND object_id=OBJECT_ID('{child_table}'))
+                    CREATE INDEX IX_relacion_invoices_invoice ON {child_table} (invoice_number)
+                """)
+            logger.info(f"Verified {self.TABLE_NAME} and {child_table} tables exist")
         except Exception as e:  # pragma: no cover
-            logger.error(f"Failed to create {self.TABLE_NAME}: {e}")
+            logger.error(f"Failed to create tables: {e}")
 
     # ── Fallback JSON Persistence ────────────────────────────────────────
 
@@ -101,22 +136,23 @@ class RelacionManager:
 
     def _save_fallback(self):
         """Save relaciones to JSON fallback file."""
-        try:
-            dir_name = os.path.dirname(self.db_path)
-            os.makedirs(dir_name, exist_ok=True)
-            fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
+        with self._json_write_lock:
             try:
-                with os.fdopen(fd, "w", encoding="utf-8") as f:
-                    json.dump(self.local_relaciones, f, indent=2, ensure_ascii=False)
-                os.replace(tmp_path, self.db_path)
-            except Exception:  # pragma: no cover
+                dir_name = os.path.dirname(self.db_path)
+                os.makedirs(dir_name, exist_ok=True)
+                fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
                 try:
-                    os.unlink(tmp_path)
-                except OSError:
-                    pass
-                raise
-        except Exception as e:  # pragma: no cover
-            logger.error(f"Error saving relacion fallback: {e}")
+                    with os.fdopen(fd, "w", encoding="utf-8") as f:
+                        json.dump(self.local_relaciones, f, indent=2, ensure_ascii=False)
+                    os.replace(tmp_path, self.db_path)
+                except Exception:  # pragma: no cover
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
+                    raise
+            except Exception as e:  # pragma: no cover
+                logger.error(f"Error saving relacion fallback: {e}")
 
     # ── Folio Generation ─────────────────────────────────────────────────
 
@@ -151,8 +187,53 @@ class RelacionManager:
                         FROM seguimiento_relacion_envios
                         WHERE folio = ?
                     """
-                    row = conn.exec_driver_sql(query, [folio]).fetchone()
+                    row = conn.exec_driver_sql(query, (folio,)).fetchone()
                     if row:
+                        parent_invoices = json.loads(row[6]) if row[6] else []
+                        
+                        # Load normalized invoices from child table
+                        child_rows = conn.exec_driver_sql(
+                            "SELECT invoice_number, is_checked, shipping_type, observaciones, data_json FROM seguimiento_relacion_invoices WHERE folio = ?",
+                            (folio,)
+                        ).fetchall()
+                        
+                        if child_rows:
+                            invoices = []
+                            for c_row in child_rows:
+                                try:
+                                    inv = json.loads(c_row[4]) if c_row[4] else {}
+                                except Exception:
+                                    inv = {}
+                                inv["invoice_number"] = c_row[0]
+                                inv["_selected"] = bool(c_row[1])
+                                inv["shipping_type"] = c_row[2] or "LOCAL"
+                                inv["observaciones"] = c_row[3] or ""
+                                inv["nota"] = c_row[3] or ""
+                                invoices.append(inv)
+                        elif parent_invoices:
+                            # Self-healing migration/backfill
+                            invoices = parent_invoices
+                            try:
+                                with self.db_client.engine.begin() as write_conn:
+                                    for inv in invoices:
+                                        inv_num = str(inv.get("invoice_number", ""))
+                                        is_checked = 1 if inv.get("_selected", True) else 0
+                                        ship_type = inv.get("shipping_type", "LOCAL")
+                                        obs = inv.get("observaciones", inv.get("nota", ""))
+                                        write_conn.exec_driver_sql(
+                                            """
+                                            INSERT INTO seguimiento_relacion_invoices 
+                                                (folio, invoice_number, is_checked, shipping_type, observaciones, data_json)
+                                            VALUES (?, ?, ?, ?, ?, ?)
+                                            """,
+                                            (folio, inv_num, is_checked, ship_type, obs, json.dumps(inv, ensure_ascii=False))
+                                        )
+                                logger.info(f"[SELF-HEALING] Backfilled {len(invoices)} invoices for folio {folio} to seguimiento_relacion_invoices.")
+                            except Exception as migration_err:
+                                logger.error(f"Failed self-healing backfill for {folio}: {migration_err}")
+                        else:
+                            invoices = []
+
                         relacion = {
                             "folio": row[0],
                             "relacion_date": row[1],
@@ -160,8 +241,8 @@ class RelacionManager:
                             "updated_at": row[3].isoformat() if row[3] else None,
                             "created_by": row[4],
                             "updated_by": row[5],
-                            "invoices": json.loads(row[6]) if row[6] else [],
-                            "invoice_numbers": row[7].split(",") if row[7] else [],
+                            "invoices": invoices,
+                            "invoice_numbers": [str(inv.get("invoice_number", "")) for inv in invoices],
                             "status": row[8],
                             "is_closed": bool(row[9]),
                             "rolled_from": row[10],
@@ -234,7 +315,7 @@ class RelacionManager:
                         """
                         conn.exec_driver_sql(
                             query,
-                            [invoices_json, invoice_numbers_str, username, relacion["notes"], folio],
+                            (invoices_json, invoice_numbers_str, username, relacion["notes"], folio),
                         )
                     else:
                         query = """
@@ -245,10 +326,26 @@ class RelacionManager:
                         """
                         conn.exec_driver_sql(
                             query,
-                            [
+                            (
                                 folio, date_str, username, username,
                                 invoices_json, invoice_numbers_str, relacion["notes"],
-                            ],
+                            ),
+                        )
+                    
+                    # Synchronize child table
+                    conn.exec_driver_sql("DELETE FROM seguimiento_relacion_invoices WHERE folio = ?", (folio,))
+                    for inv in invoices:
+                        inv_num = str(inv.get("invoice_number", ""))
+                        is_checked = 1 if inv.get("_selected", True) else 0
+                        ship_type = inv.get("shipping_type", "LOCAL")
+                        obs = inv.get("observaciones", inv.get("nota", ""))
+                        conn.exec_driver_sql(
+                            """
+                            INSERT INTO seguimiento_relacion_invoices 
+                                (folio, invoice_number, is_checked, shipping_type, observaciones, data_json)
+                            VALUES (?, ?, ?, ?, ?, ?)
+                            """,
+                            (folio, inv_num, is_checked, ship_type, obs, json.dumps(inv, ensure_ascii=False))
                         )
             except Exception as e:  # pragma: no cover
                 logger.error(f"Error saving relacion {folio} to SQL: {e}")
@@ -319,6 +416,7 @@ class RelacionManager:
         action: str,
         username: str,
         full_name: str = "",
+        signature_path: str = "",
     ) -> Dict[str, Any]:
         """
         Sign or unsign a specific area of the relación.
@@ -329,6 +427,7 @@ class RelacionManager:
             action: 'sign' or 'unsign'
             username: The username performing the action
             full_name: Display name for the signature
+            signature_path: Path to the user's uploaded signature image
 
         Returns:
             Updated signatures dict
@@ -345,6 +444,7 @@ class RelacionManager:
                 "name": full_name or username,
                 "user": username,
                 "at": datetime.datetime.now().isoformat(),
+                "signature_path": signature_path,
             }
         elif action == "unsign":
             signatures.pop(area, None)
@@ -363,7 +463,7 @@ class RelacionManager:
                         SET signatures_json = ?, updated_at = GETDATE()
                         WHERE folio = ?
                         """,
-                        [signatures_json, folio],
+                        (signatures_json, folio),
                     )
             except Exception as e:  # pragma: no cover
                 logger.error(f"Error saving signatures for {folio}: {e}")
@@ -384,7 +484,7 @@ class RelacionManager:
                 with self.db_client.engine.connect() as conn:
                     row = conn.exec_driver_sql(
                         "SELECT signatures_json FROM seguimiento_relacion_envios WHERE folio = ?",
-                        [folio],
+                        (folio,),
                     ).fetchone()
                     if row and row[0]:
                         return json.loads(row[0])
@@ -435,13 +535,32 @@ class RelacionManager:
         if relacion is None and self.db_client.engine:
             try:
                 with self.db_client.engine.connect() as conn:
-                    row = conn.exec_driver_sql(
-                        "SELECT invoices_json FROM seguimiento_relacion_envios WHERE folio = ?",
-                        [folio],
-                    ).fetchone()
-                    if row and row[0]:
-                        invoices = json.loads(row[0])
+                    child_rows = conn.exec_driver_sql(
+                        "SELECT invoice_number, is_checked, shipping_type, observaciones, data_json FROM seguimiento_relacion_invoices WHERE folio = ?",
+                        (folio,)
+                    ).fetchall()
+                    if child_rows:
+                        invoices = []
+                        for c_row in child_rows:
+                            try:
+                                inv = json.loads(c_row[4]) if c_row[4] else {}
+                            except Exception:
+                                inv = {}
+                            inv["invoice_number"] = c_row[0]
+                            inv["_selected"] = bool(c_row[1])
+                            inv["shipping_type"] = c_row[2] or "LOCAL"
+                            inv["observaciones"] = c_row[3] or ""
+                            inv["nota"] = c_row[3] or ""
+                            invoices.append(inv)
                         relacion = {"invoices": invoices, "folio": folio}
+                    else:
+                        row = conn.exec_driver_sql(
+                            "SELECT invoices_json FROM seguimiento_relacion_envios WHERE folio = ?",
+                            (folio,),
+                        ).fetchone()
+                        if row and row[0]:
+                            invoices = json.loads(row[0])
+                            relacion = {"invoices": invoices, "folio": folio}
             except Exception as e:
                 logger.error(f"Error fetching relacion {folio} for auth: {e}")
 
@@ -482,7 +601,17 @@ class RelacionManager:
                         SET invoices_json = ?, updated_at = GETDATE()
                         WHERE folio = ?
                         """,
-                        [invoices_json, folio],
+                        (invoices_json, folio),
+                    )
+                    
+                    inv_num = str(updated_invoice.get("invoice_number", ""))
+                    conn.exec_driver_sql(
+                        """
+                        UPDATE seguimiento_relacion_invoices
+                        SET data_json = ?, updated_at = GETDATE()
+                        WHERE folio = ? AND invoice_number = ?
+                        """,
+                        (json.dumps(updated_invoice, ensure_ascii=False), folio, inv_num),
                     )
             except Exception as e:  # pragma: no cover
                 logger.error(f"Error saving authorization for {folio}: {e}")
@@ -535,14 +664,28 @@ class RelacionManager:
             try:
                 with self.db_client.engine.connect() as conn:
                     query = """
-                        SELECT invoice_numbers FROM seguimiento_relacion_envios
-                        WHERE status = 'active' AND invoice_numbers IS NOT NULL
+                        SELECT DISTINCT i.invoice_number 
+                        FROM seguimiento_relacion_invoices i
+                        INNER JOIN seguimiento_relacion_envios e ON i.folio = e.folio
+                        WHERE e.status = 'active' AND i.is_checked = 1
                     """
                     rows = conn.exec_driver_sql(query).fetchall()
-                    for row in rows:
-                        if row[0]:
-                            used.update(n.strip() for n in row[0].split(",") if n.strip())
-                    return used
+                    if rows:
+                        for row in rows:
+                            if row[0]:
+                                used.add(str(row[0]).strip())
+                        return used
+                    else:
+                        # Fallback to legacy string split if child table has no rows
+                        query_legacy = """
+                            SELECT invoice_numbers FROM seguimiento_relacion_envios
+                            WHERE status = 'active' AND invoice_numbers IS NOT NULL
+                        """
+                        rows_legacy = conn.exec_driver_sql(query_legacy).fetchall()
+                        for row in rows_legacy:
+                            if row[0]:
+                                used.update(n.strip() for n in row[0].split(",") if n.strip())
+                        return used
             except Exception as e:
                 logger.error(f"Error fetching used invoices: {e}")
 
@@ -663,7 +806,7 @@ class RelacionManager:
                         SET is_closed = 1, updated_at = GETDATE(), updated_by = ?
                         WHERE folio = ? AND is_closed = 0
                     """
-                    conn.exec_driver_sql(query, [username, folio])
+                    conn.exec_driver_sql(query, (username, folio))
             except Exception as e:  # pragma: no cover
                 logger.error(f"Error closing relacion {folio}: {e}")
 
@@ -673,55 +816,14 @@ class RelacionManager:
             self.local_relaciones[folio]["updated_at"] = datetime.datetime.now().isoformat()
             self.local_relaciones[folio]["updated_by"] = username
 
-        # 2. Roll unsent invoices to next business day
-        rolled_count = 0
-        if unsent_invoices:
-            next_folio = self.generate_folio(next_day)
-            existing_next = self.get_relacion(next_day)
-
-            if existing_next:
-                # Merge with existing — add only new invoices
-                existing_nums = set(existing_next.get("invoice_numbers", []))
-                new_invoices = existing_next.get("invoices", [])[:]
-                for inv in unsent_invoices:
-                    inv_num = str(inv.get("invoice_number", ""))
-                    if inv_num not in existing_nums:
-                        new_invoices.append(inv)
-                        rolled_count += 1
-                if rolled_count > 0:
-                    self.create_or_update_relacion(
-                        next_day, new_invoices, username,
-                        notes=f"Incluye {rolled_count} facturas del {date_str}"
-                    )
-            else:
-                # Create new relación for next day with rolled invoices
-                rolled_count = len(unsent_invoices)
-                rel = self.create_or_update_relacion(
-                    next_day, unsent_invoices, username,
-                    notes=f"Rollover de {rolled_count} facturas del {date_str}"
-                )
-                # Mark the rolled_from reference
-                if self.db_client.engine:
-                    try:
-                        with self.db_client.engine.begin() as conn:
-                            conn.exec_driver_sql(
-                                "UPDATE seguimiento_relacion_envios SET rolled_from = ? WHERE folio = ?",
-                                [folio, next_folio]
-                            )
-                    except Exception:  # pragma: no cover
-                        pass
-
         self._save_fallback()
 
         result = {
             "closed_folio": folio,
             "closed_date": date_str,
             "next_business_day": next_day,
-            "rolled_invoices": rolled_count,
-            "next_folio": self.generate_folio(next_day) if rolled_count > 0 else None,
+            "rolled_invoices": 0,
+            "next_folio": None,
         }
-        logger.info(
-            f"Día cerrado: {folio} by {username}. "
-            f"Rolled {rolled_count} invoices to {next_day}"
-        )
+        logger.info(f"Día cerrado: {folio} by {username}.")
         return result

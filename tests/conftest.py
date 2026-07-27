@@ -18,6 +18,10 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
+# Disable integrated security and pymssql driver options during test runs
+os.environ["SQL_INTEGRATED_SECURITY"] = "no"
+os.environ["SQL_USE_PYMSSQL"] = "no"
+
 
 # ---------------------------------------------------------------------------
 # Mock external drivers BEFORE any application import
@@ -27,6 +31,20 @@ if PROJECT_ROOT not in sys.path:
 _hdbcli_mock = MagicMock()
 sys.modules.setdefault("hdbcli", _hdbcli_mock)
 sys.modules.setdefault("hdbcli.dbapi", _hdbcli_mock.dbapi)
+
+# pyodbc requires system-level drivers (unixODBC) which may be missing in CI/Sandbox
+try:
+    import pyodbc
+except ImportError:
+    _pyodbc_mock = MagicMock()
+    sys.modules.setdefault("pyodbc", _pyodbc_mock)
+
+# stub pymssql when not available
+try:
+    import pymssql
+except ImportError:
+    _pymssql_mock = MagicMock()
+    sys.modules.setdefault("pymssql", _pymssql_mock)
 
 
 # ---------------------------------------------------------------------------
@@ -55,7 +73,7 @@ def _mock_database_client(request):
     We patch at the SOURCE module so both local imports in user_manager and
     order_status_manager pick up the mock, but we skip the connect() mock for connection tests."""
     module_name = request.module.__name__ if request.module else ""
-    if "test_database_client" in module_name or "test_sga_robustness" in module_name:
+    if "test_database_client" in module_name or "test_sga_robustness" in module_name or "test_coverage_completion" in module_name:
         with (
             patch("core.database_client.pyodbc") as mock_pyodbc,
             patch("core.database_client.create_engine") as _mock_engine,

@@ -44,7 +44,10 @@ class Config:
     # Defaults
     DEBUG = False
     TESTING = False
-    SESSION_COOKIE_SECURE = False
+    SESSION_COOKIE_SECURE = os.environ.get('SESSION_COOKIE_SECURE', 'False').lower() == 'true'
+
+    # Disable static file caching so browsers always fetch fresh JS/CSS after deploys
+    SEND_FILE_MAX_AGE_DEFAULT = 0
 
 
 class DevelopmentConfig(Config):
@@ -62,7 +65,7 @@ class StagingConfig(Config):
 class ProductionConfig(Config):
     """Production deployment."""
     DEBUG = False
-    SESSION_COOKIE_SECURE = True  # Requires HTTPS
+    SESSION_COOKIE_SECURE = False  # Set False because we run on raw HTTP (Waitress on IP)
 
     @classmethod
     def init_app(cls, app):

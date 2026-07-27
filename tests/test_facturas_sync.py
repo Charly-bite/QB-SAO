@@ -55,6 +55,46 @@ class TestFacturaMetadataManagerFallback:
         extras = mgr.get_daily_extras("2026-06-10")
         assert extras == [99901, 99902]
 
+    @patch("core.factura_metadata_manager.DatabaseClient")
+    def test_background_writer_and_exceptions(self, mock_db_client, temp_db_path):
+        import sys
+        import time
+        from unittest.mock import patch, MagicMock
+
+        mgr = FacturaMetadataManager(db_path=temp_db_path)
+
+        # 1. Cover line 595 (inv_str not in local_metadata in save_sent_to_credito)
+        mgr.save_sent_to_credito(99999, True)
+        assert mgr.local_metadata["99999"]["sent_to_credito"] is True
+
+        # 2. Force a write to the actual background queue.
+        # This will execute lines 41-51 of _process_write_queue.
+        mgr._write_queue.put((temp_db_path, {"test_key": "test_val"}))
+        mgr._write_queue.join()  # waits until task_done is called
+        
+        with open(temp_db_path, "r", encoding="utf-8") as f:
+            saved_data = json.load(f)
+        assert saved_data.get("test_key") == "test_val"
+
+        # 3. Test queue execution failure (invalid directory/file to trigger exception in _execute_write):
+        mgr._write_queue.put(("::invalid_path::/nonexistent.json", {"k": "v"}))
+        time.sleep(0.1)
+        mgr._write_queue.join()
+
+        # 4. Test _enqueue_write else branch:
+        # Patch sys.modules to temporarily not have "pytest"
+        with patch.dict("sys.modules", {}):
+            mgr._enqueue_write(temp_db_path, {"test_key": "pytest_off"})
+            mgr._write_queue.join()
+            
+        with open(temp_db_path, "r", encoding="utf-8") as f:
+            saved_data = json.load(f)
+        assert saved_data.get("test_key") == "pytest_off"
+
+        # 5. Test exit sentinel:
+        mgr._write_queue.put(None)
+        time.sleep(0.1)
+
 
 # ---------------------------------------------------------------------------
 # API integration & Broadcasting tests
@@ -210,6 +250,8 @@ class TestFacturasSyncApi:
             "invoices": [{"invoice_number": "5001", "customer_name": "Test Customer"}],
         }
         app.relacion_mgr = mock_rel_mgr
+        if hasattr(app, "factura_metadata_mgr"):
+            app.factura_metadata_mgr.save_credito_authorization(5001, True, "testadmin", "2026-06-10T10:00:00")
 
         # Test POST /api/relaciones/toggle
         payload = {
@@ -255,6 +297,8 @@ class TestFacturasSyncApi:
             "invoices": [{"invoice_number": "5001", "customer_name": "Test Customer"}],
         }
         app.relacion_mgr = mock_rel_mgr
+        if hasattr(app, "factura_metadata_mgr"):
+            app.factura_metadata_mgr.save_credito_authorization(5001, True, "testadmin", "2026-06-10T10:00:00")
 
         # Test POST /api/relaciones/toggle with client_id
         payload = {
@@ -278,3 +322,125 @@ class TestFacturasSyncApi:
             "username": "testadmin",
             "client_id": "test_client_id_123"
         })
+
+    def test_toggle_relacion_unauthorized_rejected(self, auth_client, app):
+        # Test that toggling an unauthorized invoice is rejected with 400
+        if hasattr(app, "factura_metadata_mgr"):
+            app.factura_metadata_mgr.save_credito_authorization(9999, False, "testadmin", "2026-06-10T10:00:00")
+        
+        payload = {
+            "date": "2026-06-10",
+            "invoice_number": "9999",
+            "selected": True,
+            "invoice_data": {"invoice_number": "9999", "customer_name": "Unauthorized Customer"},
+        }
+        resp = auth_client.post(
+            "/orders/api/relaciones/toggle",
+            data=json.dumps(payload),
+            content_type="application/json"
+        )
+        assert resp.status_code == 400
+        assert "no cuenta con autorización" in resp.get_json()["error"]
+
+    @patch("routes.orders._publish_event")
+    def test_send_to_credito_endpoint(self, mock_publish, auth_client, app):
+        payload = {
+            "sent": True
+        }
+        resp = auth_client.post(
+            "/orders/api/facturas/5001/send-to-credito",
+            data=json.dumps(payload),
+            content_type="application/json"
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["success"] is True
+        assert data["sent_to_credito"] is True
+        assert self.mgr.local_metadata["5001"]["sent_to_credito"] is True
+        
+        mock_publish.assert_called_with({
+            "type": "factura_sent_to_credito_changed",
+            "invoice_number": "5001",
+            "sent_to_credito": True
+        })
+
+    @patch("routes.orders._publish_event")
+    def test_auto_authorize_ventas_mostrador_endpoint(self, mock_publish, auth_client, app):
+        payload = {
+            "authorized": True,
+            "customer_name": "VENTAS MOSTRADOR GDL"
+        }
+        resp = auth_client.post(
+            "/orders/api/facturas/5001/authorize",
+            data=json.dumps(payload),
+            content_type="application/json"
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["success"] is True
+        assert data["invoice"]["credito_authorized"] is True
+
+    @patch("routes.orders._publish_event")
+    def test_facturacion_can_auto_authorize_mostrador_only(self, mock_publish, app):
+        print("PERMS IN TEST:", app.permission_manager.get_permissions("facturacion"))
+        um = app.user_manager
+        if "testfacturacion" not in um.users:
+            um.create_user(
+                username="testfacturacion",
+                password="facturapass123",
+                full_name="Test Invoicing",
+                role="facturacion",
+            )
+        um.users["testfacturacion"]["must_change_password"] = False
+        
+        # Configure mock SAP side effect to return normal client for 5002
+        def get_invoices(date_str=None, extra_invoice_numbers=None):
+            if extra_invoice_numbers and 5002 in extra_invoice_numbers:
+                return [{
+                    "invoice_number": 5002,
+                    "customer_name": "NORMAL CUSTOMER S.A.",
+                    "total": 100.0,
+                    "currency": "MXN",
+                    "status": "Abierta"
+                }]
+            return [{
+                "invoice_number": 5001,
+                "customer_name": "VENTAS MOSTRADOR GDL",
+                "total": 100.0,
+                "currency": "MXN",
+                "status": "Abierta"
+            }]
+        self.mock_sap.get_todays_invoices.side_effect = get_invoices
+        
+        client = app.test_client()
+        client.post(
+            "/login",
+            data={"username": "testfacturacion", "password": "facturapass123"},
+            follow_redirects=True
+        )
+
+        # 1. Authorizing normal invoice should fail with 403
+        payload_normal = {
+            "authorized": True,
+            "customer_name": "NORMAL CUSTOMER S.A."
+        }
+        resp = client.post(
+            "/orders/api/facturas/5002/authorize",
+            data=json.dumps(payload_normal),
+            content_type="application/json"
+        )
+        assert resp.status_code == 403
+
+        # 2. Authorizing mostrador invoice should succeed with 200
+        payload_mostrador = {
+            "authorized": True,
+            "customer_name": "VENTAS MOSTRADOR GDL"
+        }
+        resp = client.post(
+            "/orders/api/facturas/5001/authorize",
+            data=json.dumps(payload_mostrador),
+            content_type="application/json"
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["success"] is True

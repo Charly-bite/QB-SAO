@@ -82,9 +82,13 @@ class TestOrderRetrieval:
         assert any(o['order_id'] == '5001' for o in pending)
 
     def test_get_active_orders(self, osm):
+        osm.orders['5002'] = {'order_id': '5002', 'status': 'Enviado al cliente', 'order_date': '2026-02-02'}
+        osm.orders['5003'] = {'order_id': '5003', 'status': 'Cancelado', 'order_date': '2026-02-03'}
         active = osm.get_active_orders()
         ids = [o['order_id'] for o in active]
         assert '5001' in ids
+        assert '5002' not in ids
+        assert '5003' not in ids
 
 
 class TestStatusTransitions:
@@ -199,3 +203,23 @@ class TestExportForWeb:
         assert 'status_counts' in data
         assert 'generated_at' in data
         assert len(data['orders']) >= 1
+
+
+class TestSaveDatabaseSqlException:
+
+    def test_save_database_handles_sql_exception_without_attribute_error(self, osm):
+        """Verify that _save_database catches SQL errors cleanly using logger.warning with exc_info=True."""
+        mock_engine = MagicMock()
+        mock_conn = MagicMock()
+        mock_conn.exec_driver_sql.side_effect = Exception("Transient SQL connection drop")
+        mock_engine.begin.return_value.__enter__.return_value = mock_conn
+        osm.sql_engine = mock_engine
+
+        with patch("core.order_status_manager.logger") as mock_logger:
+            # Should not raise AttributeError: module 'traceback' has no attribute 'logger'
+            osm._save_database()
+            mock_logger.warning.assert_called_once()
+            call_args, call_kwargs = mock_logger.warning.call_args
+            assert "[WARN] Error saving to SQL: Transient SQL connection drop" in call_args[0]
+            assert call_kwargs.get("exc_info") is True
+

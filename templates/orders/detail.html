@@ -519,6 +519,30 @@ endblock %} {% block page_title %}Detalle de Pedido{% endblock %}
         </div>
     </div>
     {% endif %}
+
+    <!-- Modal para notas de envío -->
+    <div x-show="showNoteModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm" style="display: none;" x-transition>
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden" @click.away="showNoteModal = false">
+            <div class="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="font-bold text-slate-800 text-lg">Nota de Envío</h3>
+                <button @click="showNoteModal = false" class="text-slate-400 hover:text-slate-600 focus:outline-none">
+                    <i class="fa-solid fa-times text-lg"></i>
+                </button>
+            </div>
+            <div class="p-6">
+                <p class="text-sm text-slate-600 mb-4">Ingrese una nota o información adicional para este envío (Opcional):</p>
+                <textarea x-model="statusNote" class="w-full border border-slate-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow" rows="4" placeholder="Ej: Entregado a la fletera, número de guía..."></textarea>
+            </div>
+            <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+                <button @click="showNoteModal = false" class="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-200 bg-slate-100 rounded-lg transition-colors">
+                    Cancelar
+                </button>
+                <button @click="submitNote()" class="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm">
+                    Guardar y Actualizar
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -526,15 +550,40 @@ endblock %} {% block page_title %}Detalle de Pedido{% endblock %}
         return {
             orderId: "{{ order.order_id }}",
             updatingStatus: null,
+            showNoteModal: false,
+            pendingStatusUpdate: null,
+            statusNote: "",
 
             async updateStatus(newStatus) {
+                if (newStatus === 'Enviado al cliente') {
+                    this.pendingStatusUpdate = newStatus;
+                    this.statusNote = "";
+                    this.showNoteModal = true;
+                    return;
+                }
+                this._performUpdateStatus(newStatus, "");
+            },
+
+            async submitNote() {
+                this.showNoteModal = false;
+                const statusToUpdate = this.pendingStatusUpdate;
+                const noteToSubmit = this.statusNote;
+                this.pendingStatusUpdate = null;
+                this.statusNote = "";
+                
+                if (statusToUpdate) {
+                    this._performUpdateStatus(statusToUpdate, noteToSubmit);
+                }
+            },
+
+            async _performUpdateStatus(newStatus, notes) {
                 if (this.updatingStatus) return;
                 this.updatingStatus = newStatus;
                 try {
                     const res = await fetch(`/orders/${this.orderId}/status`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ status: newStatus, notes: "" }),
+                        body: JSON.stringify({ status: newStatus, notes: notes }),
                     });
 
                     const data = await res.json();
