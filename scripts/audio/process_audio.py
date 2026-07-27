@@ -39,6 +39,7 @@ def process_audio(input_file, output_file):
     print("Done!")
 
 if __name__ == "__main__":
-    input_wav = r"c:\Users\CarlosAlbertoAcevesC\Desktop\DEV SAO\Grabacion_Jocelyn.wav"
-    output_wav = r"c:\Users\CarlosAlbertoAcevesC\Desktop\DEV SAO\static\audio\announcement_jocelyn.wav"
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    input_wav = os.path.join(base_dir, "static", "audio", "announcement_jocelyn.wav")
+    output_wav = os.path.join(base_dir, "static", "audio", "announcement_jocelyn_processed.wav")
     process_audio(input_wav, output_wav)

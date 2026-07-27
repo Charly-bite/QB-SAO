@@ -70,6 +70,7 @@ from flask_wtf.csrf import CSRFError, CSRFProtect  # noqa: E402
 from config import config_by_name, get_config  # noqa: E402
 from core.order_status_manager import OrderStatus, OrderStatusManager  # noqa: E402
 from core.user_manager import UserManager, UserRole  # noqa: E402
+from core.permission_manager import PermissionManager  # noqa: E402
 from extensions import limiter as _limiter  # noqa: E402
 
 # Optional SAP connector
@@ -88,6 +89,7 @@ class OpenOMSApp(Flask):
     """Flask subclass that declares custom app-level attributes for type safety."""
 
     user_manager: "UserManager"
+    permission_manager: "PermissionManager"
     order_status_mgr: "OrderStatusManager"
     sap_connector: "Optional[_SAPHanaConnectorType]"
     sap_available: bool
@@ -160,16 +162,26 @@ def create_app(config_name: Optional[str] = None) -> "OpenOMSApp":
             logger.info("Prometheus metrics already registered, skipping.")
 
 
+    from core.database_client import DatabaseClient
+    from core.schema_initializer import init_db_schema
     from core.factura_metadata_manager import FacturaMetadataManager
     from core.relacion_manager import RelacionManager
     from core.audit_manager import AuditManager
     
-    # Initialize managers
-    app.user_manager = UserManager()
-    app.order_status_mgr = OrderStatusManager()
-    app.factura_metadata_mgr = FacturaMetadataManager()
-    app.relacion_mgr = RelacionManager()
-    app.audit_mgr = AuditManager()
+    # Initialize shared database client & schema
+    db_client = DatabaseClient()
+    db_client.connect()
+    init_db_schema(db_client)
+
+    # Initialize managers using shared db_client (single connection pool)
+    app.db_client = db_client
+    app.user_manager = UserManager(db_client=db_client)
+    app.permission_manager = PermissionManager()
+    app.permission_manager.load(app.user_manager.sql_engine)
+    app.order_status_mgr = OrderStatusManager(db_client=db_client)
+    app.factura_metadata_mgr = FacturaMetadataManager(db_client=db_client)
+    app.relacion_mgr = RelacionManager(db_client=db_client)
+    app.audit_mgr = AuditManager(db_client=db_client)
 
     # SAP Connector (lazy connection)
     app.sap_connector = None
@@ -181,11 +193,11 @@ def create_app(config_name: Optional[str] = None) -> "OpenOMSApp":
         if sap_user and sap_pass and SAPHanaConnector is not None:
             try:
                 app.sap_connector = SAPHanaConnector(
-                    host=os.environ.get("SAP_HOST", "20.0.1.9"),
+                    host=os.environ.get("SAP_HOST", ""),
                     port=int(os.environ.get("SAP_PORT", 30015)),
                     username=sap_user,
                     password=sap_pass,
-                    schema=os.environ.get("SAP_SCHEMA", "SBO_QUIMICABOSS"),
+                    schema=os.environ.get("SAP_SCHEMA", ""),
                 )
                 logger.info("✅ SAP Connector initialized (Lazy connection mode)")
             except Exception as e:
@@ -199,7 +211,20 @@ def create_app(config_name: Optional[str] = None) -> "OpenOMSApp":
 
         user_data = app.user_manager.get_user(user_id)
         if user_data:
-            return User(user_data)
+            user = User(user_data)
+            # Inject permission set so has_permission() works on every request
+            perms = set(app.permission_manager.get_permissions(user.role.value))
+            if user.username and user.username.lower() == "reyesm":
+                perms.update({
+                    "nav.facturas",
+                    "nav.monitor",
+                    "facturas.tab.relaciones",
+                    "facturas.tab.pendientes",
+                    "facturas.tab.almacen",
+                })
+                perms.discard("nav.dashboard")
+            user._permissions = frozenset(perms)
+            return user
         return None  # pragma: no cover
 
     # Register blueprints
@@ -325,13 +350,20 @@ def create_app(config_name: Optional[str] = None) -> "OpenOMSApp":
 
         overall_status = "ok" if (sql_ok and sap_ok and worker_alive) else "degraded"
 
+        # SSE connection monitoring (P0 fix — thread starvation prevention)
+        from routes.orders import _sse_registry
+        sse_total = _sse_registry.count()
+        sse_by_user = _sse_registry.count_by_user()
+
         return jsonify({
             "status": overall_status,
             "sql_db": {"ok": sql_ok, "error": sql_error},
             "sap_db": {"ok": sap_ok, "error": sap_error},
             "sap_worker_alive": worker_alive,
             "sga_available": check_sga_status(),
-            "active_orders_loaded": len(app.order_status_mgr.get_active_orders())
+            "active_orders_loaded": len(app.order_status_mgr.get_active_orders()),
+            "sse_connections": sse_total,
+            "sse_connections_by_user": sse_by_user,
         }), 200 if overall_status == "ok" else 503
 
     return app
@@ -358,12 +390,16 @@ if __name__ == "__main__":
     logger.info("=" * 60)
 
     debug_mode = app.config.get("DEBUG", False)
+    host = os.environ.get("FLASK_RUN_HOST", "0.0.0.0")
+    port = int(os.environ.get("FLASK_RUN_PORT", 5009))
+
     if debug_mode:
         from werkzeug.serving import WSGIRequestHandler
         WSGIRequestHandler.protocol_version = "HTTP/1.1"
-        logger.info("🚀 Starting Flask Development Server (HTTP/1.1 Keep-Alive enabled)...")
-        app.run(host="192.168.2.134", port=5009, debug=True, threaded=True)
+        logger.info(f"🚀 Starting Flask Development Server on {host}:{port} (HTTP/1.1 Keep-Alive enabled)...")
+        app.run(host=host, port=port, debug=True, threaded=True)
     else:
         from waitress import serve
-        logger.info("🚀 Starting Waitress Production WSGI Server...")
-        serve(app, host="0.0.0.0", port=5009, threads=200)
+        threads = int(os.environ.get("WAITRESS_THREADS", 200))
+        logger.info(f"🚀 Starting Waitress Production WSGI Server on {host}:{port} with {threads} threads...")
+        serve(app, host=host, port=port, threads=threads)

@@ -4,6 +4,7 @@ User model tests — verifies role predicates, hierarchy, and property accessors
 import pytest
 
 from core.user_manager import UserRole
+from core.permission_manager import DEFAULT_PERMISSIONS
 from models import User
 
 
@@ -21,7 +22,11 @@ def _make_user(**overrides):
         'sap_seller_name': '',
     }
     data.update(overrides)
-    return User(data)
+    user = User(data)
+    # Inject default permissions so has_permission() works without a live app
+    role = data['role']
+    user._permissions = frozenset(DEFAULT_PERMISSIONS.get(role, set()))
+    return user
 
 
 class TestUserInit:
@@ -169,3 +174,83 @@ class TestHasRole:
         assert u.has_role(UserRole.SELLER) is True
         assert u.has_role(UserRole.VIEWER) is True
         assert u.has_role(UserRole.OPERATOR) is False
+
+
+class TestCanViewDashboard:
+    """can_view_dashboard — viewer and admin have nav.dashboard."""
+
+    def test_viewer_can_view(self):
+        u = _make_user(role='viewer')
+        assert u.can_view_dashboard() is True
+
+    def test_seller_cannot_view(self):
+        u = _make_user(role='seller')
+        assert u.can_view_dashboard() is False
+
+    def test_admin_can_view(self):
+        u = _make_user(role='admin')
+        assert u.can_view_dashboard() is True
+
+
+class TestCanViewUsers:
+    """can_view_users — only admin has nav.users."""
+
+    def test_admin_can_view(self):
+        u = _make_user(role='admin')
+        assert u.can_view_users() is True
+
+    def test_viewer_cannot_view(self):
+        u = _make_user(role='viewer')
+        assert u.can_view_users() is False
+
+
+class TestCanEditOrders:
+    """can_edit_orders — operators and admins have orders.edit."""
+
+    def test_admin_can_edit(self):
+        u = _make_user(role='admin')
+        assert u.can_edit_orders() is True
+
+    def test_operator_can_edit(self):
+        u = _make_user(role='operator')
+        assert u.can_edit_orders() is True
+
+    def test_viewer_cannot_edit(self):
+        u = _make_user(role='viewer')
+        assert u.can_edit_orders() is False
+
+
+class TestReyesMPermissions:
+    """Verify that ReyesM gets specific permissions regardless of their role."""
+
+    @pytest.mark.parametrize("permission", [
+        "nav.facturas",
+        "nav.monitor",
+        "facturas.tab.relaciones",
+        "facturas.tab.pendientes",
+        "facturas.tab.almacen"
+    ])
+    def test_reyesm_has_required_permissions(self, permission):
+        u = _make_user(username="ReyesM", role="viewer")
+        assert u.has_permission(permission) is True
+
+    @pytest.mark.parametrize("permission", [
+        "nav.facturas",
+        "nav.monitor",
+        "facturas.tab.relaciones",
+        "facturas.tab.pendientes",
+        "facturas.tab.almacen"
+    ])
+    def test_reyesm_case_insensitive_has_required_permissions(self, permission):
+        u = _make_user(username="reyesm", role="viewer")
+        assert u.has_permission(permission) is True
+
+    def test_reyesm_does_not_have_unrelated_permissions(self):
+        u = _make_user(username="ReyesM", role="viewer")
+        assert u.has_permission("nav.users") is False
+        assert u.has_permission("facturas.edit") is False
+
+    def test_reyesm_does_not_have_dashboard_permission(self):
+        u = _make_user(username="ReyesM", role="viewer")
+        assert u.has_permission("nav.dashboard") is False
+

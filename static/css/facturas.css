@@ -35,6 +35,143 @@
 .row-color-gris { background-color: #e2e8f0 !important; }
 .row-color-gris:hover { background-color: #f1f5f9 !important; }
 .btn-color-gris { background-color: #94a3b8 !important; border-color: transparent !important; }
+
+/* ══════════════════════════════════════════════════════
+   Añadir Factura Extra Banner & High Contrast Buttons
+   ══════════════════════════════════════════════════════ */
+.extra-invoice-banner {
+    background-color: #f1f5f9 !important;
+    border: 2px solid #cbd5e1 !important;
+    border-radius: 0.75rem !important;
+    padding: 0.75rem 1rem !important;
+    margin-top: 0.5rem !important;
+    margin-bottom: 0.5rem !important;
+}
+
+.extra-invoice-icon-box {
+    width: 1.75rem !important;
+    height: 1.75rem !important;
+    border-radius: 0.5rem !important;
+    background-color: #f59e0b !important;
+    color: #ffffff !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+}
+
+.extra-invoice-title {
+    font-size: 0.75rem !important;
+    font-weight: 900 !important;
+    color: #0f172a !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.025em !important;
+}
+
+.extra-invoice-badge {
+    font-size: 0.625rem !important;
+    padding: 0.125rem 0.5rem !important;
+    border-radius: 9999px !important;
+    background-color: #fef3c7 !important;
+    color: #92400e !important;
+    font-weight: 800 !important;
+    border: 1px solid #fde68a !important;
+}
+
+.extra-invoice-subtitle {
+    font-size: 0.6875rem !important;
+    color: #475569 !important;
+    font-weight: 700 !important;
+}
+
+.extra-invoice-input {
+    background-color: #ffffff !important;
+    border: 2px solid #cbd5e1 !important;
+    border-radius: 0.5rem !important;
+    padding: 0.5rem 0.75rem 0.5rem 2.25rem !important;
+    font-size: 0.75rem !important;
+    font-weight: 900 !important;
+    color: #0f172a !important;
+    outline: none !important;
+    width: 100% !important;
+}
+.extra-invoice-input::placeholder {
+    color: #64748b !important;
+    font-weight: 700 !important;
+}
+
+.btn-style-agregar-factura {
+    background-color: #f59e0b !important;
+    color: #ffffff !important;
+    border: 1px solid #d97706 !important;
+    border-radius: 0.625rem !important;
+    padding: 0.375rem 0.875rem !important;
+    font-size: 0.75rem !important;
+    font-weight: 800 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.375rem !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease-in-out !important;
+}
+.btn-style-agregar-factura:hover {
+    background-color: #d97706 !important;
+}
+
+.btn-style-facturas-pendientes {
+    background-color: #1b263b !important;
+    color: #ffffff !important;
+    border: 1px solid #0f172a !important;
+    border-radius: 0.625rem !important;
+    padding: 0.375rem 0.875rem !important;
+    font-size: 0.75rem !important;
+    font-weight: 800 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.375rem !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease-in-out !important;
+}
+.btn-style-facturas-pendientes:hover {
+    background-color: #0f172a !important;
+}
+
+.btn-add-extra-invoice-disabled {
+    background-color: #1b263b !important;
+    color: #ffffff !important;
+    border: 1px solid #0f172a !important;
+    border-radius: 0.625rem !important;
+    padding: 0.4rem 0.875rem !important;
+    font-size: 0.75rem !important;
+    font-weight: 800 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.375rem !important;
+    cursor: not-allowed !important;
+    opacity: 0.75 !important;
+}
+
+.btn-add-extra-invoice-active {
+    background-color: #1b263b !important;
+    color: #ffffff !important;
+    border: 1px solid #0f172a !important;
+    border-radius: 0.625rem !important;
+    padding: 0.4rem 0.875rem !important;
+    font-size: 0.75rem !important;
+    font-weight: 800 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.375rem !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15) !important;
+    cursor: pointer !important;
+    opacity: 1 !important;
+}
+.btn-add-extra-invoice-active:hover {
+    background-color: #0f172a !important;
+}
 /* Highlight effect classes to bypass Tailwind compilation */
 tr.invoice-row {
     transition: background-color 1s ease, transform 600ms cubic-bezier(0.25, 0.8, 0.25, 1) !important;
@@ -59,7 +196,7 @@ tr.invoice-row.invoice-row-highlighted {
     /* Force landscape and tight margins */
     @page {
         size: letter landscape;
-        margin: 3mm;
+        margin: 2mm !important;
     }
 
     /* Scale everything down aggressively */
@@ -68,13 +205,13 @@ tr.invoice-row.invoice-row-highlighted {
         print-color-adjust: exact !important;
         margin: 0 !important;
         padding: 0 !important;
-        font-size: 7.5px !important;
+        font-size: 6.8px !important;
     }
 
     /* Prevent SVGs from expanding */
     svg {
-        max-width: 1rem !important;
-        max-height: 1rem !important;
+        max-width: 0.9rem !important;
+        max-height: 0.9rem !important;
     }
 
     /* Hide ALL UI controls */
@@ -99,19 +236,19 @@ tr.invoice-row.invoice-row-highlighted {
     table {
         width: 100% !important;
         page-break-inside: avoid !important;
-        font-size: 7.5px !important;
+        font-size: 6.8px !important;
         border-collapse: collapse !important;
     }
     td, th {
-        padding: 0px 3px !important;
-        font-size: 7.5px !important;
-        line-height: 1.1 !important;
+        padding: 0px 2px !important;
+        font-size: 6.8px !important;
+        line-height: 1.05 !important;
     }
-    .text-[9px] {
-        font-size: 7px !important;
+    .text-\[9px\] {
+        font-size: 6px !important;
     }
-    .py-3 { padding-top: 0.25rem !important; padding-bottom: 0.25rem !important; }
-    .px-6 { padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
+    .py-3 { padding-top: 0.15rem !important; padding-bottom: 0.15rem !important; }
+    .px-6 { padding-left: 0.3rem !important; padding-right: 0.3rem !important; }
     
     /* Ocultar botones e interfaces no deseadas en impresión */
     .print\:hidden {
@@ -123,16 +260,31 @@ tr.invoice-row.invoice-row-highlighted {
         page-break-inside: avoid;
         height: auto !important;
         min-height: 0 !important;
-        line-height: 1.1 !important;
+        line-height: 1.05 !important;
     }
     /* Compact spacer rows — nearly invisible */
     tr[style*="height: 16px"], tr[style*="height: 18px"] {
-        height: 2px !important;
+        height: 1.5px !important;
     }
     /* Compact data and header rows */
     tr[style*="height: 26px"], tr[style*="height: 28px"],
-    tr[style*="height: 30px"], tr[style*="height: 32px"] {
-        height: 13px !important;
+    tr[style*="height: 32px"] {
+        height: 11px !important;
+    }
+    tr[style*="height: 22px"] {
+        height: 9px !important;
+    }
+    /* Larger spacers */
+    tr[style*="height: 30px"],
+    tr[style*="height: 20px"] {
+        height: 3px !important;
+    }
+    tr[style*="height: 6px"] {
+        height: 1px !important;
+    }
+    /* Thin signature lines */
+    tr[style*="height: 2px"] {
+        height: 1.5px !important;
     }
 
     /* Hide drag handle columns */
@@ -166,13 +318,13 @@ tr.invoice-row.invoice-row-highlighted {
     /* Compact the relaciones table specifically */
     #relaciones-table td,
     #relaciones-table th {
-        padding: 0px 2px !important;
-        font-size: 7.5px !important;
-        line-height: 1.05 !important;
+        padding: 0px 1.5px !important;
+        font-size: 6.8px !important;
+        line-height: 1.02 !important;
     }
-    /* Shrink ANEXADAS banner/title rows */
-    #relaciones-table tfoot tr[style*="height"] {
-        height: 11px !important;
+    /* Shrink signature images in footer */
+    #relaciones-table tfoot img {
+        max-height: 18px !important;
     }
 
     /* Remove shadows, rounded corners */
