@@ -722,7 +722,7 @@ class RelacionManager:
                         WHERE {where}
                         ORDER BY relacion_date DESC, created_at DESC
                     """
-                    rows = conn.exec_driver_sql(query, params).fetchall()
+                    rows = conn.exec_driver_sql(query, tuple(params)).fetchall()
                     for row in rows:
                         inv_nums = row[6].split(",") if row[6] else []
                         results.append({

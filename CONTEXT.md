@@ -152,7 +152,7 @@ Four environment classes, selected via `FLASK_ENV`:
 
 **Secret key** is auto-generated and persisted in `.flask_secret_key` (or read from `SECRET_KEY` env var).
 
-**Session lifetime:** 8 hours (`PERMANENT_SESSION_LIFETIME`).
+**Session lifetime:** 16 hours (`PERMANENT_SESSION_LIFETIME`).
 
 ---
 
