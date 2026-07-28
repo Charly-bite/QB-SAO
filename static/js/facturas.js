@@ -681,6 +681,11 @@ function facturasApp() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ area, action }),
                 });
+                if (res.redirected) {
+                    alert('Su sesión ha expirado. Por favor, recargue la página.');
+                    window.location.reload();
+                    return;
+                }
                 const data = await res.json();
                 if (data.success && data.signatures) {
                     this.signatures = {
@@ -693,15 +698,7 @@ function facturasApp() {
                 }
             } catch (e) {
                 console.error('Error toggling signature:', e);
-                // Optimistic fallback
-                if (isSigned) {
-                    this.signatures[area] = null;
-                } else {
-                    this.signatures[area] = { 
-                        name: this.currentUserFullName,
-                        signature_path: this.currentUserSignature
-                    };
-                }
+                alert('Error de conexión al actualizar la firma.');
             }
         },
 
@@ -2994,12 +2991,32 @@ function facturasApp() {
                     body: JSON.stringify(payload)
                 });
 
+                if (res.redirected) {
+                    alert('Su sesión ha expirado. Por favor, recargue la página.');
+                    window.location.reload();
+                    return;
+                }
+
                 if (res.ok) {
                     const data = await res.json();
                     this.currentRelacion = data.relacion;
+                } else {
+                    console.error('Server error toggling relationship selection');
+                    invoiceList.forEach(i => {
+                        i._selected = !selected;
+                    });
+                    this.invoices = [...this.invoices];
+                    this.fetchInvoices();
+                    alert('Error al actualizar la relación en el servidor.');
                 }
             } catch (e) {
                 console.error('Error toggling invoice in relationship:', e);
+                invoiceList.forEach(i => {
+                    i._selected = !selected;
+                });
+                this.invoices = [...this.invoices];
+                this.fetchInvoices();
+                alert('Error de conexión al actualizar la relación.');
             }
         },
 
@@ -3153,6 +3170,11 @@ function facturasApp() {
                         authorized: newValue,
                     }),
                 });
+                if (res.redirected) {
+                    alert('Su sesión ha expirado. Por favor, recargue la página.');
+                    window.location.reload();
+                    return;
+                }
                 const data = await res.json();
                 if (data.success && data.invoice) {
                     // Update the local invoice data
@@ -3162,12 +3184,7 @@ function facturasApp() {
                 }
             } catch (e) {
                 console.error('Error authorizing invoice:', e);
-                // Optimistic update
-                inv.credito_authorized = newValue;
-                if (newValue) {
-                    inv.credito_authorized_name = this.currentUserFullName;
-                    inv.credito_authorized_at = new Date().toISOString();
-                }
+                alert('Error de conexión al autorizar la factura.');
             }
         },
 
@@ -3199,6 +3216,11 @@ function facturasApp() {
                         shipping_type: inv.shipping_type,
                     }),
                 });
+                if (res.redirected) {
+                    alert('Su sesión ha expirado. Por favor, recargue la página.');
+                    window.location.reload();
+                    return;
+                }
                 const data = await res.json();
                 if (data.success && data.invoice) {
                     Object.assign(inv, data.invoice);

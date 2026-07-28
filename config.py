@@ -35,7 +35,7 @@ class Config:
     SECRET_KEY = _generate_secret_key()
 
     # Session
-    PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
+    PERMANENT_SESSION_LIFETIME = timedelta(hours=16)
     SESSION_COOKIE_NAME = "sao_session"  # Prevent collision with SGA on same IP
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
