@@ -1,21 +1,27 @@
-import pyodbc
+import os
+import sys
 import json
 import collections
+from dotenv import load_dotenv
 
-conn_str = "DRIVER={ODBC Driver 17 for SQL Server};SERVER=192.168.2.237;DATABASE=SGA_Database;UID=sga_app_user;PWD=QuimicaBoss_2026!;TrustServerCertificate=yes"
+# Add parent directory to path so we can import core modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from core.database_client import DatabaseClient
 
 def main():
-    try:
-        conn = pyodbc.connect(conn_str)
-        cursor = conn.cursor()
-    except Exception as e:
-        print(f"Error connecting to DB: {e}")
+    load_dotenv()
+    db = DatabaseClient()
+    if not db.connect():
+        print("Error connecting to DB")
         return
 
     # 1. Get printed labels from SGA history
     print("Fetching SGA Print Jobs...")
-    cursor.execute("SELECT details FROM history_logs WHERE event_type = 'DIRECT_PRINT_JOB'")
-    rows = cursor.fetchall()
+    try:
+        rows = db.execute_query("SELECT details FROM history_logs WHERE event_type = 'DIRECT_PRINT_JOB'")
+    except Exception as e:
+        print(f"Error fetching history logs: {e}")
+        return
     
     printed_orders = {}
     for row in rows:
@@ -31,8 +37,12 @@ def main():
 
     # 2. Get SAO order statuses
     print("Fetching SAO Order Statuses...")
-    cursor.execute("SELECT order_id, status FROM seguimiento_order_status")
-    sao_rows = cursor.fetchall()
+    try:
+        sao_rows = db.execute_query("SELECT order_id, status FROM seguimiento_order_status")
+    except Exception as e:
+        print(f"Error fetching SAO order statuses: {e}")
+        return
+        
     sao_orders = {str(r[0]): r[1] for r in sao_rows}
     
     print(f"Found {len(sao_orders)} orders tracked in SAO.")

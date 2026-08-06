@@ -660,6 +660,8 @@
                 loadingMessage: 'CARGANDO...',
                 _audioCtx: null,
                 _soundEnabled: true,
+                _globalES: null,
+                _globalSSETimer: null,
                 isMostrador: {{ 'true' if current_user.is_authenticated and current_user.username|lower == 'mostrador' else 'false' }},
                 isTiemposTv: {{ 'true' if request.endpoint in ['orders.tiempos_tv', 'orders.tiempos_tv_test'] or 'tiempos-tv' in request.path else 'false' }},
                 sapOnline: {{ 'true' if sap_available else 'false' }},
@@ -675,7 +677,10 @@
                         console.log("📺 On waiting times TV screen: disabling global SSE notifications and sound.");
                         return;
                     }
-                    this.setupGlobalSSE();
+                    // Skip SSE if the child page manages its own connection (e.g. monitor pages)
+                    if (!window.__skipGlobalSSE) {
+                        this.setupGlobalSSE();
+                    }
                     setInterval(() => this.checkSystemsHealth(), 30000);
 
                     // Show loading overlay on form submissions
@@ -709,30 +714,45 @@
                 },
                 
                 setupGlobalSSE() {
-                    const eventSource = new EventSource('/orders/stream_web');
-                    eventSource.onmessage = (e) => {
-                        const data = JSON.parse(e.data);
-                        
-                        // Emit raw SSE data so child pages don't need their own SSE connection
-                        window.dispatchEvent(new CustomEvent('sse-message', { detail: data }));
-                        
-                        if (data.type === 'sync_completed') {
-                            // Tell current page to refresh its data
-                            window.dispatchEvent(new CustomEvent('refresh-data'));
-                        }
-                        else if (data.type === 'status_changed') {
-                            // Tell current page to refresh
-                            window.dispatchEvent(new CustomEvent('refresh-data'));
-                            // Play sound and show toast
-                            this._playNotificationSound();
-                            this._showStatusToast(data);
-                        }
-                    };
-                    eventSource.onerror = () => {
-                        console.error("Global SSE Connection lost. Reconnecting in 5s...");
-                        eventSource.close();
-                        setTimeout(() => this.setupGlobalSSE(), 5000);
-                    };
+                    // Guard: don't open a second connection if already alive
+                    if (this._globalES && this._globalES.readyState === EventSource.OPEN) return;
+
+                    // Close any existing connection before opening a new one
+                    if (this._globalES) { try { this._globalES.close(); } catch(e) {} }
+                    if (this._globalSSETimer) { clearTimeout(this._globalSSETimer); this._globalSSETimer = null; }
+
+                    try {
+                        this._globalES = new EventSource('/orders/stream_web');
+
+                        this._globalES.onmessage = (e) => {
+                            const data = JSON.parse(e.data);
+
+                            // Emit raw SSE data so child pages don't need their own SSE connection
+                            window.dispatchEvent(new CustomEvent('sse-message', { detail: data }));
+
+                            if (data.type === 'sync_completed') {
+                                // Tell current page to refresh its data
+                                window.dispatchEvent(new CustomEvent('refresh-data'));
+                            }
+                            else if (data.type === 'status_changed') {
+                                // Tell current page to refresh
+                                window.dispatchEvent(new CustomEvent('refresh-data'));
+                                // Play sound and show toast
+                                this._playNotificationSound();
+                                this._showStatusToast(data);
+                            }
+                        };
+
+                        this._globalES.onerror = () => {
+                            console.warn("Global SSE Connection lost. Reconnecting in 5s...");
+                            if (this._globalES) { try { this._globalES.close(); } catch(e) {} }
+                            this._globalES = null;
+                            if (this._globalSSETimer) clearTimeout(this._globalSSETimer);
+                            this._globalSSETimer = setTimeout(() => this.setupGlobalSSE(), 5000);
+                        };
+                    } catch (e) {
+                        console.warn('SSE not supported', e);
+                    }
                 },
                 
                 _playNotificationSound() {

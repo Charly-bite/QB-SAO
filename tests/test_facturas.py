@@ -352,3 +352,105 @@ class TestApiFacturasRelationshipMap:
         assert res_data["data"]["order"]["doc_num"] == 12245  # fallback subtraction (invoice_number - 100)
         app.sap_available = True
 
+
+class TestApiFacturaAuthorize:
+    @pytest.fixture
+    def billing_client(self, app):
+        client = app.test_client()
+        with app.app_context():
+            um = app.user_manager
+            if "testbilling" not in um.users:
+                um.create_user(
+                    username="testbilling",
+                    password="billingpass123",
+                    full_name="Test Billing",
+                    role="billing",
+                )
+            client.post(
+                "/login",
+                data={
+                    "username": "testbilling",
+                    "password": "billingpass123",
+                },
+                follow_redirects=True,
+            )
+        return client
+
+    def test_authorize_requires_login(self, client):
+        resp = client.post("/orders/api/facturas/12345/authorize", json={"authorized": True})
+        assert resp.status_code in (302, 401)
+
+    def test_authorize_billing_blocked_for_normal_customer(self, billing_client, app):
+        # When shipping_type is LOCAL and customer is normal, a billing user is blocked
+        mock_sap = MagicMock()
+        mock_sap.connected = True
+        mock_sap.get_todays_invoices.return_value = [
+            {
+                "invoice_number": 12345,
+                "customer_name": "NORMAL CUSTOMER",
+                "shipping_type": "LOCAL"
+            }
+        ]
+        app.sap_connector = mock_sap
+
+        resp = billing_client.post("/orders/api/facturas/12345/authorize", json={
+            "authorized": True,
+            "customer_name": "NORMAL CUSTOMER",
+            "shipping_type": "LOCAL"
+        })
+        assert resp.status_code == 403
+        assert "Solo Crédito y Cobranza" in resp.get_json()["error"]
+
+    def test_authorize_billing_allowed_for_mostrador_customer_name(self, billing_client, app):
+        # When customer name contains VENTAS MOSTRADOR, billing user is allowed
+        app.sap_available = True
+        mock_sap = MagicMock()
+        mock_sap.connected = True
+        mock_sap.get_todays_invoices.return_value = [
+            {
+                "invoice_number": 12345,
+                "customer_name": "VENTAS MOSTRADOR EXTRA",
+                "shipping_type": "LOCAL"
+            }
+        ]
+        app.sap_connector = mock_sap
+
+        # Mock the metadata manager authorize/save
+        mock_mgr = MagicMock()
+        mock_mgr.get_overrides.return_value = ({}, {}, {})
+        app.factura_metadata_mgr = mock_mgr
+
+        resp = billing_client.post("/orders/api/facturas/12345/authorize", json={
+            "authorized": True,
+            "customer_name": "VENTAS MOSTRADOR EXTRA",
+            "shipping_type": "LOCAL"
+        })
+        # If allowed, it moves past permission check
+        assert resp.status_code != 403
+
+    def test_authorize_billing_allowed_for_special_shipping_type(self, billing_client, app):
+        # When customer is normal but shipping type is VENTA MOSTRADOR, billing user is allowed
+        app.sap_available = True
+        mock_sap = MagicMock()
+        mock_sap.connected = True
+        mock_sap.get_todays_invoices.return_value = [
+            {
+                "invoice_number": 12345,
+                "customer_name": "MIGUEL ANGEL",
+                "shipping_type": "VENTA MOSTRADOR"
+            }
+        ]
+        app.sap_connector = mock_sap
+
+        mock_mgr = MagicMock()
+        mock_mgr.get_overrides.return_value = ({}, {}, {})
+        app.factura_metadata_mgr = mock_mgr
+
+        resp = billing_client.post("/orders/api/facturas/12345/authorize", json={
+            "authorized": True,
+            "customer_name": "MIGUEL ANGEL",
+            "shipping_type": "VENTA MOSTRADOR"
+        })
+        assert resp.status_code != 403
+
+

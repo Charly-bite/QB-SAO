@@ -25,8 +25,119 @@ _weather_cache = {"data": None, "timestamp": 0}
 
 orders_bp = Blueprint("orders", __name__)
 
-# Simple in-memory pub/sub for Server-Sent Events (SSE)
-_SUBSCRIBERS = []
+# ── SSE Connection Registry ──────────────────────────────────────────────────
+# Managed pub/sub for Server-Sent Events (SSE) with per-user and global limits.
+# Prevents Waitress thread exhaustion caused by unbounded SSE connections.
+# See: P0 fix for July 23 2026 incident (Billing locked out by SSE starvation).
+_SSE_LOCK = threading.Lock()
+_SSE_PER_USER_LIMIT = 3       # Max SSE connections per user (covers ~3 tabs)
+_SSE_GLOBAL_LIMIT = 100       # Hard cap (leaves threads free for API requests)
+
+
+class _SSERegistry:
+    """Thread-safe SSE subscriber registry with per-user and global limits.
+
+    Each SSE connection (``/stream`` or ``/stream_web``) registers a
+    ``queue.Queue`` here.  When the per-user or global cap is reached the
+    *oldest* connection for that user (or globally) is evicted by pushing a
+    ``None`` poison-pill into its queue, which causes the generator to exit
+    and free the Waitress worker thread.
+    """
+
+    def __init__(self):
+        self._subscribers: list = []  # [{"queue": q, "username": str, "created_at": float}, ...]
+
+    # ── Mutators ─────────────────────────────────────────────────────────
+
+    def add(self, q, username: str = "anonymous"):
+        """Register a new SSE subscriber queue, evicting old ones if limits are exceeded."""
+        with _SSE_LOCK:
+            entry = {"queue": q, "username": username, "created_at": time.time()}
+
+            # Evict oldest connections for THIS user if over per-user limit
+            user_entries = [e for e in self._subscribers if e["username"] == username]
+            while len(user_entries) >= _SSE_PER_USER_LIMIT:
+                oldest = user_entries.pop(0)
+                self._subscribers.remove(oldest)
+                try:
+                    oldest["queue"].put(None, block=False)
+                except Exception:
+                    pass
+                logging.info(
+                    f"SSE: Evicted oldest connection for user={username} "
+                    f"(per-user limit of {_SSE_PER_USER_LIMIT} reached)"
+                )
+
+            # Evict globally if over global limit
+            while len(self._subscribers) >= _SSE_GLOBAL_LIMIT:
+                oldest = self._subscribers.pop(0)
+                try:
+                    oldest["queue"].put(None, block=False)
+                except Exception:
+                    pass
+                logging.warning(
+                    f"SSE: Evicted oldest global connection (user={oldest['username']}, "
+                    f"global limit of {_SSE_GLOBAL_LIMIT} reached)"
+                )
+
+            self._subscribers.append(entry)
+            user_count = len([e for e in self._subscribers if e["username"] == username])
+            logging.info(
+                f"SSE: New connection for user={username} "
+                f"(user_total={user_count}, global_total={len(self._subscribers)})"
+            )
+
+    def remove(self, q):
+        """Unregister a subscriber queue (called from the generator's ``finally`` block)."""
+        with _SSE_LOCK:
+            self._subscribers = [e for e in self._subscribers if e["queue"] is not q]
+
+    # ── Read-only accessors ──────────────────────────────────────────────
+
+    def queues(self) -> list:
+        """Return a snapshot of all active queues (safe to iterate outside the lock)."""
+        with _SSE_LOCK:
+            return [e["queue"] for e in self._subscribers]
+
+    def count(self) -> int:
+        """Total number of active SSE connections."""
+        with _SSE_LOCK:
+            return len(self._subscribers)
+
+    def count_by_user(self) -> dict:
+        """Per-user connection counts, e.g. ``{"AzucenaL": 2, "admin": 1}``."""
+        with _SSE_LOCK:
+            counts: dict = {}
+            for e in self._subscribers:
+                counts[e["username"]] = counts.get(e["username"], 0) + 1
+            return counts
+
+
+_sse_registry = _SSERegistry()
+
+
+def _get_sap_connector():
+    sap = current_app.sap_connector
+    if not sap:
+        from core.sap_connector import SAPHanaConnector
+        try:
+            sap_user = os.environ.get("SAP_USER")
+            sap_pass = os.environ.get("SAP_PASS")
+            sap = SAPHanaConnector(
+                host=os.environ.get("SAP_HOST", ""),
+                port=int(os.environ.get("SAP_PORT", 30015)),
+                username=sap_user,
+                password=sap_pass,
+                schema=os.environ.get("SAP_SCHEMA", ""),
+            )
+            current_app.sap_connector = sap
+        except Exception as e:
+            logging.error(f"Failed to initialize SAPHanaConnector: {e}")
+            raise ConnectionError("SAP conector could not be initialized")
+    if not sap.connected:
+        sap.connect()
+    return sap
+
 
 # ── Webhook retry queue ──────────────────────────────────────────────────────
 # When SGA fires a label-printed webhook for an order that isn't loaded yet,
@@ -39,7 +150,7 @@ _WEBHOOK_RETRY_INTERVAL = 30      # seconds between attempts
 
 def _publish_event(event: dict):
     # Push event to all subscriber queues (non-blocking)
-    for q in list(_SUBSCRIBERS):
+    for q in _sse_registry.queues():
         try:
             q.put(event, block=False)
         except queue.Full:
@@ -74,7 +185,7 @@ def _webhook_retry_worker(app):  # pragma: no cover
                 order_mgr = app.order_status_mgr
                 order = order_mgr.get_order(order_id)
 
-                if not order and app.sap_available and app.sap_connector:
+                if not order and app.sap_available and _get_sap_connector():  # pragma: no cover
                     try:
                         sap = app.sap_connector
                         if not sap.connected:
@@ -275,7 +386,7 @@ def _check_delivery_and_invoice(sap, order_mgr, recent_orders):  # pragma: no co
         if doc_entry and order_id and order_id in order_mgr.orders:
             entry_to_oid[int(doc_entry)] = order_id
             # Persist doc_entry on the local order for future lookups
-            order_mgr.orders[order_id]["doc_entry"] = int(doc_entry)
+            order_mgr.update_order_fields(order_id, {"doc_entry": int(doc_entry)})
 
     # Also include older local orders that have a stored doc_entry and
     # are still at a status eligible for auto-transition.  This catches
@@ -314,7 +425,7 @@ def _check_delivery_and_invoice(sap, order_mgr, recent_orders):  # pragma: no co
             if not oid:
                 continue
             dn = delivery_info["delivery_num"]
-            order_mgr.orders[oid]["delivery_number"] = str(dn)
+            order_mgr.update_order_fields(oid, {"delivery_number": str(dn)}, save=False)
             order_mgr.update_status(
                 oid,
                 OrderStatus.PICKING.value,  # "Entregado"
@@ -349,7 +460,7 @@ def _check_delivery_and_invoice(sap, order_mgr, recent_orders):  # pragma: no co
             oid = eligible_for_factura.get(de)
             if not oid:
                 continue
-            order_mgr.orders[oid]["factura_number"] = str(invoice_num)
+            order_mgr.update_order_fields(oid, {"factura_number": str(invoice_num)}, save=False)
             order_mgr.update_status(
                 oid,
                 OrderStatus.INVOICING.value,  # "Facturacion"
@@ -438,26 +549,26 @@ def stream():
 
     Sends a ':keepalive' comment every 25 s so the connection is never idle
     long enough for a proxy or browser to drop it.
+    Uses _sse_registry for managed connection tracking and eviction.
     """
     q = queue.Queue()
-    _SUBSCRIBERS.append(q)
+    _sse_registry.add(q, username="monitor_token")
 
     def event_stream(local_q):  # pragma: no cover
         try:  # pragma: no cover
             while True:  # pragma: no cover
                 try:  # pragma: no cover
                     data = local_q.get(timeout=25)  # pragma: no cover
+                    if data is None:  # Poison pill — evicted by registry  # pragma: no cover
+                        break  # pragma: no cover
                     yield f"data: {json_mod.dumps(data, ensure_ascii=False)}\n\n"  # pragma: no cover
                 except queue.Empty:  # pragma: no cover
                     # No event in 25 s — send a keepalive comment so the
                     # connection stays open through proxies and idle timeouts
                     yield ": keepalive\n\n"  # pragma: no cover
         finally:
-            # Clean up when client disconnects
-            try:  # pragma: no cover
-                _SUBSCRIBERS.remove(local_q)  # pragma: no cover
-            except ValueError:  # pragma: no cover
-                pass  # pragma: no cover
+            # Clean up when client disconnects or is evicted
+            _sse_registry.remove(local_q)  # pragma: no cover
 
     resp = Response(event_stream(q), mimetype='text/event-stream')
     resp.headers['Cache-Control'] = 'no-cache'
@@ -472,12 +583,14 @@ def stream_web():
 
     Sends a ':keepalive' comment every 25 s so the connection is never idle
     long enough for a proxy or browser to drop it.
+    Uses _sse_registry for managed connection tracking and eviction.
     """
     import queue as _queue
     import json as _json
 
+    username = current_user.username if current_user.is_authenticated else "anonymous"
     q = _queue.Queue()
-    _SUBSCRIBERS.append(q)
+    _sse_registry.add(q, username=username)
 
     def event_stream(local_q):
         # Flush headers and establish SSE connection immediately
@@ -486,15 +599,14 @@ def stream_web():
             while True:
                 try:
                     data = local_q.get(timeout=25)
+                    if data is None:  # Poison pill — evicted by registry
+                        break
                     yield f"data: {_json.dumps(data, ensure_ascii=False)}\n\n"
                 except _queue.Empty:
                     # Keepalive — prevents proxy / browser from closing idle connection
                     yield ": keepalive\n\n"
         finally:
-            try:
-                _SUBSCRIBERS.remove(local_q)
-            except ValueError:
-                pass
+            _sse_registry.remove(local_q)
 
     resp = Response(event_stream(q), mimetype='text/event-stream')
     resp.headers['Cache-Control'] = 'no-cache'
@@ -616,12 +728,7 @@ def audit_stats():  # pragma: no cover
     limit = request.args.get("limit", 100, type=int)
 
     try:
-        sap = current_app.sap_connector
-        if not sap or not sap.connected:
-            from core.sap_connector import SAPHanaConnector
-            sap = SAPHanaConnector()
-            sap.connect()
-            current_app.sap_connector = sap
+        sap = _get_sap_connector()
 
         deliveries, invoices = sap.get_recent_deliveries_and_invoices_audit(limit=limit)
     except Exception as e:
@@ -908,13 +1015,7 @@ def import_from_sap():
         return jsonify({"error": "Número de pedido requerido"}), 400
 
     try:
-        sap = current_app.sap_connector
-        if not sap or not sap.connected:  # pragma: no cover
-            from core.sap_connector import SAPHanaConnector  # pragma: no cover
-
-            sap = SAPHanaConnector()  # pragma: no cover
-            sap.connect()  # pragma: no cover
-            current_app.sap_connector = sap  # pragma: no cover
+        sap = _get_sap_connector()
 
         order_data = sap.get_order_details(order_number)
 
@@ -1025,12 +1126,7 @@ def sga_label_printed():
         # Try to dynamically import it from SAP if SAP is available.
         if current_app.sap_available:
             try:
-                sap = current_app.sap_connector
-                if not sap or not sap.connected:  # pragma: no cover
-                    from core.sap_connector import SAPHanaConnector
-                    sap = SAPHanaConnector()
-                    sap.connect()
-                    current_app.sap_connector = sap
+                sap = _get_sap_connector()
 
                 order_data = sap.get_order_details(order_id)
                 if order_data:
@@ -1163,13 +1259,7 @@ def load_recent_from_sap():
     logging.info(f"Load Recent SAP: limit={limit}, only_open={only_open}")
 
     try:
-        sap = current_app.sap_connector
-        if not sap or not sap.connected:  # pragma: no cover
-            from core.sap_connector import SAPHanaConnector  # pragma: no cover
-
-            sap = SAPHanaConnector()  # pragma: no cover
-            sap.connect()  # pragma: no cover
-            current_app.sap_connector = sap  # pragma: no cover
+        sap = _get_sap_connector()
 
         # Get recent orders from SAP
         recent_orders = sap.get_recent_orders(limit=limit, only_open=only_open)
@@ -1302,13 +1392,7 @@ def sync_sap_status():
         return jsonify({"error": "Sin permisos"}), 403
 
     try:
-        sap = current_app.sap_connector
-        if not sap or not sap.connected:  # pragma: no cover
-            from core.sap_connector import SAPHanaConnector  # pragma: no cover
-
-            sap = SAPHanaConnector()  # pragma: no cover
-            sap.connect()  # pragma: no cover
-            current_app.sap_connector = sap  # pragma: no cover
+        sap = _get_sap_connector()
 
         order_mgr = current_app.order_status_mgr
 
@@ -1444,13 +1528,7 @@ def visor_sync():
         return jsonify({"error": "SAP no disponible"}), 503
 
     try:
-        sap = current_app.sap_connector
-        if not sap or not sap.connected:  # pragma: no cover
-            from core.sap_connector import SAPHanaConnector  # pragma: no cover
-
-            sap = SAPHanaConnector()  # pragma: no cover
-            sap.connect()  # pragma: no cover
-            current_app.sap_connector = sap  # pragma: no cover
+        sap = _get_sap_connector()
 
         # Get recent active orders (limit 50, only open)
         # This is faster than a full sync
@@ -1824,13 +1902,7 @@ def public_api_sync():
         return jsonify({"error": "SAP no disponible"}), 503
 
     try:
-        sap = current_app.sap_connector
-        if not sap or not sap.connected:  # pragma: no cover
-            from core.sap_connector import SAPHanaConnector  # pragma: no cover
-
-            sap = SAPHanaConnector()  # pragma: no cover
-            sap.connect()  # pragma: no cover
-            current_app.sap_connector = sap  # pragma: no cover
+        sap = _get_sap_connector()
 
         # Get recent active orders (limit 50, only open)
         recent_orders = sap.get_recent_orders(limit=50, only_open=True)
@@ -1981,13 +2053,7 @@ def api_refresh_orders():
                 now = _time.time()
                 if (now - _last_sap_sync) >= _SAP_SYNC_INTERVAL:
                     try:
-                        sap = current_app.sap_connector
-                        if not sap or not sap.connected:  # pragma: no cover
-                            from core.sap_connector import SAPHanaConnector  # pragma: no cover
-
-                            sap = SAPHanaConnector()  # pragma: no cover
-                            sap.connect()  # pragma: no cover
-                            current_app.sap_connector = sap  # pragma: no cover
+                        sap = _get_sap_connector()
 
                         recent_orders = sap.get_recent_orders(limit=50, only_open=False)
 
@@ -2280,12 +2346,7 @@ def api_facturas_pending_summary():  # pragma: no cover
         date_from = (datetime.date.today() - datetime.timedelta(days=30)).isoformat()
 
     try:
-        sap = current_app.sap_connector
-        if not sap or not sap.connected:  # pragma: no cover
-            from core.sap_connector import SAPHanaConnector
-            sap = SAPHanaConnector()
-            sap.connect()
-            current_app.sap_connector = sap
+        sap = _get_sap_connector()
             
         # Get all invoices in range
         all_invoices = sap.get_invoices_date_range(date_from, date_to)
@@ -2366,13 +2427,7 @@ def api_facturas():
     extra_invoices_str = request.args.get("extra_invoices", "").strip()
 
     try:
-        sap = current_app.sap_connector
-        if not sap or not sap.connected:  # pragma: no cover
-            from core.sap_connector import SAPHanaConnector  # pragma: no cover
-
-            sap = SAPHanaConnector()  # pragma: no cover
-            sap.connect()  # pragma: no cover
-            current_app.sap_connector = sap  # pragma: no cover
+        sap = _get_sap_connector()
 
         overrides = getattr(current_app, "factura_metadata_mgr", None)
         db_date = date_filter or datetime.date.today().isoformat()
@@ -2409,6 +2464,7 @@ def api_facturas():
                 inv['credito_authorized_at'] = auth_data['credito_authorized_at']
                 inv['credito_revoked_from_relacion'] = auth_data.get('credito_revoked_from_relacion', False)
                 inv['credito_notes'] = auth_data.get('credito_notes', '')
+                inv['sent_to_credito'] = auth_data.get('sent_to_credito', False)
                 
                 # Resolve full name
                 user_mgr = getattr(current_app, "user_mgr", None)
@@ -2424,6 +2480,7 @@ def api_facturas():
                 inv['credito_authorized_at'] = None
                 inv['credito_revoked_from_relacion'] = False
                 inv['credito_notes'] = ''
+                inv['sent_to_credito'] = False
             order = factura_to_order.get(inv_num_str)
             if order:  # pragma: no cover
                 status = order.get('status')
@@ -3188,6 +3245,23 @@ def api_create_or_update_relacion():  # pragma: no cover
     if not mgr:
         return jsonify({"error": "Relacion manager not available"}), 500
 
+    overrides = getattr(current_app, "factura_metadata_mgr", None)
+    credito_auths = overrides.get_credito_authorizations() if overrides else {}
+
+    # Filter out invoices that are NOT authorized by credito and not canceled
+    valid_invoices = []
+    for inv in invoices:
+        try:
+            inv_num = int(inv.get("invoice_number", inv.get("id", 0)) or 0)
+        except (ValueError, TypeError):
+            inv_num = 0
+        status = inv.get("status", "")
+        auth = credito_auths.get(inv_num, {})
+        is_authorized = bool(auth.get("credito_authorized"))
+        if is_authorized or status == "Cancelada":
+            valid_invoices.append(inv)
+    invoices = valid_invoices
+
     try:
         old_relacion = mgr.get_relacion(date_str)
         old_invoices_set = set(str(i.get("invoice_number")) for i in old_relacion.get("invoices", [])) if old_relacion else set()
@@ -3292,6 +3366,39 @@ def api_toggle_relacion_invoice():  # pragma: no cover
     if not mgr:
         return jsonify({"error": "Relacion manager not available"}), 500
 
+    if selected:
+        overrides = getattr(current_app, "factura_metadata_mgr", None)
+        credito_auths = overrides.get_credito_authorizations() if overrides else {}
+        
+        target_nums = []
+        if isinstance(invoice_number, list):
+            target_nums.extend(invoice_number)
+        elif invoice_number is not None and str(invoice_number).strip():
+            target_nums.append(invoice_number)
+            
+        if invoice_data:
+            items = invoice_data if isinstance(invoice_data, list) else [invoice_data]
+            for item in items:
+                num = item.get("invoice_number", item.get("id"))
+                if num and str(num) not in [str(x) for x in target_nums]:
+                    target_nums.append(num)
+
+        for num in target_nums:
+            try:
+                n = int(num)
+            except (ValueError, TypeError):
+                continue
+            auth = credito_auths.get(n, {})
+            is_canceled = False
+            if invoice_data:
+                items = invoice_data if isinstance(invoice_data, list) else [invoice_data]
+                for item in items:
+                    if str(item.get("invoice_number", item.get("id"))) == str(num) and item.get("status") == "Cancelada":
+                        is_canceled = True
+                        break
+            if not is_canceled and not auth.get("credito_authorized"):
+                return jsonify({"error": f"La factura {n} no cuenta con autorización de Crédito y Cobranza."}), 400
+
     try:
         relacion = mgr.toggle_invoice_in_relacion(
             date_str=date_str,
@@ -3311,7 +3418,10 @@ def api_toggle_relacion_invoice():  # pragma: no cover
         })
 
         if hasattr(current_app, "audit_mgr"):
-            action_desc = "ADD_TO_RELACION" if selected else "REMOVE_FROM_RELACION"
+            if not invoice_number:
+                action_desc = "UPDATE_RELACION_ORDER"
+            else:
+                action_desc = "ADD_TO_RELACION" if selected else "REMOVE_FROM_RELACION"
             current_app.audit_mgr.log_action(
                 username=current_user.username if current_user.is_authenticated else "system",
                 action_type=action_desc,
@@ -3389,7 +3499,21 @@ def api_get_relacion():  # pragma: no cover
         return jsonify({"error": "Relacion manager not available"}), 500
 
     relacion = mgr.get_relacion(date_str)
-    if relacion:
+    if relacion and isinstance(relacion.get("invoices"), list):
+        overrides = getattr(current_app, "factura_metadata_mgr", None)
+        credito_auths = overrides.get_credito_authorizations() if overrides else {}
+        valid_invoices = []
+        for inv in relacion.get("invoices", []):
+            try:
+                inv_num = int(inv.get("invoice_number", inv.get("id", 0)) or 0)
+            except (ValueError, TypeError):
+                inv_num = 0
+            status = inv.get("status", "")
+            auth = credito_auths.get(inv_num, {})
+            is_authorized = bool(auth.get("credito_authorized"))
+            if is_authorized or status == "Cancelada":
+                valid_invoices.append(inv)
+        relacion["invoices"] = valid_invoices
         return jsonify({"relacion": relacion})
     return jsonify({"relacion": None})
 
@@ -3603,7 +3727,7 @@ def api_export_relacion(folio):  # pragma: no cover
 
         # ── Normalize ANEXADAS categories (same as JS) ──
         anexadas_aliases = {
-            'ANEXO MY': 'ANEXADAS MTY', 'ANEXO MTY': 'ANEXADAS MTY',
+            'ANEXO MTY': 'ANEXADAS MTY',
             'ANEXO GDL': 'ANEXADAS GDL', 'ANEXO IRP': 'ANEXADAS IRP',
         }
         for inv in invoices:
@@ -3613,7 +3737,7 @@ def api_export_relacion(folio):  # pragma: no cover
 
         # ── Group invoices by category ──
         main_category_order = [
-            'LOCAL', 'ENVIO LOCAL', 'PAQUETERIA', 'PASE A PAQUETERIA',
+            'LOCAL', 'ENVIO LOCAL', 'VENTA MOSTRADOR', 'PAQUETERIA', 'PASE A PAQUETERIA',
             'PASE DIRECTO', 'PASE PROGRAMADO', 'FLETE INTERNO', 'FORANEO',
         ]
         anexadas_cats = ['ANEXADAS GDL', 'ANEXADAS MTY', 'ANEXADAS IRP']
@@ -3641,6 +3765,7 @@ def api_export_relacion(folio):  # pragma: no cover
         cat_colors = {
             'LOCAL': ('D9D9D9', '000000'),
             'ENVIO LOCAL': ('D9D9D9', '000000'),
+            'VENTA MOSTRADOR': ('D9D9D9', '000000'),
             'PAQUETERIA': ('FF00FF', 'FFFFFF'),
             'PASE A PAQUETERIA': ('FF00FF', 'FFFFFF'),
             'FLETE INTERNO': ('FF00FF', 'FFFFFF'),
@@ -4024,10 +4149,54 @@ def api_authorize_invoice(folio):  # pragma: no cover
 @login_required
 def api_factura_authorize(invoice_number):  # pragma: no cover
     """Authorize or revoke authorization for a specific invoice."""
-    if not current_user.can_authorize_credito():
-        return jsonify({"error": "Solo Crédito y Cobranza puede autorizar envíos."}), 403
-
     data = request.get_json() or {}
+    
+    # Check if this is a Ventas Mostrador or special invoice to allow auto-approval by billing/facturacion
+    is_mostrador = False
+    customer_name = data.get("customer_name", "")
+    
+    # 1. Check customer name first
+    if customer_name and "VENTAS MOSTRADOR" in customer_name.upper():
+        is_mostrador = True
+    
+    # 2. Check shipping type from request or database overrides
+    shipping_type = data.get("shipping_type", "")
+    mgr = getattr(current_app, "factura_metadata_mgr", None)
+    if not shipping_type and mgr:
+        category_overrides, _, _ = mgr.get_overrides()
+        shipping_type = category_overrides.get(invoice_number, "")
+
+    special_categories = {
+        "VENTA MOSTRADOR", "VENTA DE MOSTRADOR", "VENTAS MOSTRADOR",
+        "PASE A PAQUETERIA", "PASE PROGRAMADO", "PASA PROGRAMADO"
+    }
+
+    if shipping_type and str(shipping_type).upper().strip() in special_categories:
+        is_mostrador = True
+
+    if not is_mostrador:
+        try:
+            sap = current_app.sap_connector
+            if sap:
+                if not sap.connected:
+                    sap.connect()
+                invoices = sap.get_todays_invoices(extra_invoice_numbers=[invoice_number])
+                if invoices:
+                    cust_name = invoices[0].get("customer_name", "")
+                    if cust_name and "VENTAS MOSTRADOR" in cust_name.upper():
+                        is_mostrador = True
+                    sap_shipping_type = invoices[0].get("shipping_type", "")
+                    if sap_shipping_type and str(sap_shipping_type).upper().strip() in special_categories:
+                        is_mostrador = True
+        except Exception as e:
+            logging.error(f"Error fetching customer/shipping details from SAP during authorization check: {e}")
+
+    if not current_user.can_authorize_credito():
+        if is_mostrador and current_user.can_edit_facturas():
+            pass
+        else:
+            return jsonify({"error": "Solo Crédito y Cobranza puede autorizar envíos."}), 403
+
     authorized = data.get("authorized", True)
 
     mgr = getattr(current_app, "factura_metadata_mgr", None)
@@ -4135,16 +4304,45 @@ def api_factura_credito_notes(invoice_number):  # pragma: no cover
         logging.error(f"Error saving credito notes {invoice_number}: {e}")
         return jsonify({"error": str(e)}), 500
 
-@orders_bp.route("/api/facturas/<int:invoice_number>/toggle", methods=["POST"])
+@orders_bp.route("/api/facturas/<int:invoice_number>/send-to-credito", methods=["POST"])
 @login_required
-def toggle_factura_status(invoice_number):  # pragma: no cover
-    """Toggle Recibido or Entrega checkbox from the Facturas tab, which updates the related order status."""
+def api_factura_send_to_credito(invoice_number):  # pragma: no cover
+    """Mark an invoice as sent to credit department for authorization."""
     if not current_user.can_edit_facturas():
         return jsonify({"error": "Sin permisos"}), 403
 
     data = request.get_json() or {}
+    sent = data.get("sent", True)
+
+    mgr = getattr(current_app, "factura_metadata_mgr", None)
+    if not mgr:
+        return jsonify({"error": "Metadata manager not available"}), 500
+
+    try:
+        mgr.save_sent_to_credito(invoice_number, sent)
+        
+        _publish_event({
+            "type": "factura_sent_to_credito_changed",
+            "invoice_number": str(invoice_number),
+            "sent_to_credito": sent
+        })
+        
+        return jsonify({"success": True, "sent_to_credito": sent})
+    except Exception as e:
+        logging.error(f"Error saving sent_to_credito {invoice_number}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@orders_bp.route("/api/facturas/<int:invoice_number>/toggle", methods=["POST"])
+@login_required
+def toggle_factura_status(invoice_number):  # pragma: no cover
+    """Toggle Recibido or Entrega checkbox from the Facturas tab, which updates the related order status."""
+    data = request.get_json() or {}
     field = data.get("field") # 'recibido' or 'entrega'
     value = data.get("value") # boolean
+
+    if not current_user.can_edit_facturas():
+        if not (current_user.username and current_user.username.lower() == "reyesm" and field in ["entrega", "rebote"]):
+            return jsonify({"error": "Sin permisos"}), 403
 
     if field not in ['recibido', 'entrega', 'observaciones', 'rebote']:
         return jsonify({"error": "Campo inválido"}), 400
@@ -4254,12 +4452,7 @@ def api_invoice_relationship_map(invoice_number):
     """
     if current_app.sap_available:
         try:
-            sap = current_app.sap_connector
-            if not sap or not sap.connected:  # pragma: no cover
-                from core.sap_connector import SAPHanaConnector
-                sap = SAPHanaConnector()
-                sap.connect()
-                current_app.sap_connector = sap
+            sap = _get_sap_connector()
                 
             data = sap.get_invoice_relationship_map(invoice_number)
             if data:
@@ -4389,12 +4582,7 @@ def api_customers_search():  # pragma: no cover
 
     if current_app.sap_available:
         try:
-            sap = current_app.sap_connector
-            if not sap or not sap.connected:
-                from core.sap_connector import SAPHanaConnector
-                sap = SAPHanaConnector()
-                sap.connect()
-                current_app.sap_connector = sap
+            sap = _get_sap_connector()
 
             results = sap.search_customers(query, limit=10)
             return jsonify({"success": True, "results": results})
@@ -4415,12 +4603,7 @@ def api_customer_account_statement(card_code):  # pragma: no cover
     """
     if current_app.sap_available:
         try:
-            sap = current_app.sap_connector
-            if not sap or not sap.connected:
-                from core.sap_connector import SAPHanaConnector
-                sap = SAPHanaConnector()
-                sap.connect()
-                current_app.sap_connector = sap
+            sap = _get_sap_connector()
 
             data = sap.get_customer_account_statement(card_code)
             if data:
@@ -4451,3 +4634,4 @@ def estado_cuenta_print():  # pragma: no cover
         card_code=card_code,
         invoice_nums=invoice_nums,
     )
+

@@ -20,6 +20,8 @@ window.estadoCuentaWindowApp = function(winConfig) {
         filterSearch: '',
         filterCurrency: 'ALL',
         filterOverdue: 'ALL',
+        filterStartDate: '',
+        filterEndDate: '',
         
         sortColumn: 'doc_num',
         sortDir: 'desc',
@@ -57,7 +59,7 @@ window.estadoCuentaWindowApp = function(winConfig) {
                 const data = await res.json();
                 if (data.success && data.data) {
                     this.data = data.data;
-                    this.selected = data.data.invoices.map(i => i.doc_num);
+                    this.selected = data.data.invoices.filter(i => i.balance > 0).map(i => i.doc_num);
                 } else {
                     alert(data.error || 'Error al obtener estado de cuenta');
                     this.close();
@@ -101,8 +103,10 @@ window.estadoCuentaWindowApp = function(winConfig) {
             let result = this.data.invoices.filter(inv => {
                 if (this.filterSearch && !String(inv.doc_num).includes(this.filterSearch.trim())) return false;
                 if (this.filterCurrency !== 'ALL' && (inv.currency || 'MXN').toUpperCase() !== this.filterCurrency) return false;
-                if (this.filterOverdue === 'OVERDUE' && inv.days_overdue <= 0) return false;
-                if (this.filterOverdue === 'CURRENT' && inv.days_overdue > 0) return false;
+                if (this.filterOverdue === 'UNPAID' && inv.balance <= 0) return false;
+                if (this.filterOverdue === 'PAID' && inv.balance > 0) return false;
+                if (this.filterStartDate && inv.doc_date < this.filterStartDate) return false;
+                if (this.filterEndDate && inv.doc_date > this.filterEndDate) return false;
                 return true;
             });
 
@@ -164,6 +168,11 @@ window.estadoCuentaWindowApp = function(winConfig) {
             return this.selected.length;
         },
 
+        filteredSelectedCount() {
+            const filtered = this.filteredInvoices();
+            return filtered.filter(i => this.selected.includes(i.doc_num)).length;
+        },
+
         selectedTotalMXN() {
             if (!this.data) return 0;
             return this.data.invoices
@@ -179,8 +188,16 @@ window.estadoCuentaWindowApp = function(winConfig) {
         },
 
         generate() {
-            if (this.selectedCount() === 0) return;
-            const invoices = this.selected.join(',');
+            const filtered = this.filteredInvoices();
+            const invoices = filtered
+                .filter(i => this.selected.includes(i.doc_num))
+                .map(i => i.doc_num)
+                .join(',');
+            
+            if (!invoices) {
+                alert('No hay facturas seleccionadas en el filtro actual.');
+                return;
+            }
             const url = `/orders/estado-cuenta?card_code=${this.customerCode}&invoices=${invoices}`;
             window.open(url, '_blank');
             this.close();
@@ -228,6 +245,7 @@ function facturasApp() {
             return order.find(t => tabs[t]) || 'facturas';
         })(),
         creditoSubTab: 'Todas',
+        almacenSubTab: localStorage.getItem('qb_facturas_almacen_subtab') || 'todos',
         
         // Pending Summary Tracking
         pendingSubTab: localStorage.getItem('qb_facturas_pending_subtab') || 'current', // 'calendar', 'all', 'current'
@@ -248,9 +266,10 @@ function facturasApp() {
         currentUserUsername: cfg.currentUserUsername,
         currentUserFullName: cfg.currentUserFullName,
         currentUserSignature: cfg.currentUserSignature,
-        signatures: { facturacion: null, credito: null },
+        signatures: { facturacion: null, credito: null, almacen: null },
         canSignFacturacion: cfg.canSignFacturacion,
         canSignCredito: cfg.canSignCredito,
+        canSignAlmacen: cfg.canSignAlmacen,
         canAuthorizarCredito: cfg.canAuthorizarCredito || false,
         clientId: Math.random().toString(36).substring(2) + Date.now().toString(36),
         _suppressRelacionHighlight: false,
@@ -286,6 +305,8 @@ function facturasApp() {
         ecSubSelectedInvoices: [],
         ecSubFilterCurrency: 'ALL',
         ecSubFilterOverdue: 'ALL',
+        ecSubFilterStartDate: '',
+        ecSubFilterEndDate: '',
 
         // Add Invoice Modal State
         addInvoiceModalOpen: false,
@@ -295,6 +316,8 @@ function facturasApp() {
         addInvoiceManualList: [],
         addInvoiceLoading: false,
         addInvoiceOtherDaysPending: [], // [{date, label, invoices: [...]}]
+        addInvoiceMode: 'all',
+        liveSearchOpen: false,
 
         showContextMenu(event, inv) {
             if (this.activeTab !== 'facturas' && this.activeTab !== 'credito') return;
@@ -319,6 +342,16 @@ function facturasApp() {
                     this.contextMenuX = Math.max(pad, event.clientX - rect.width);
                 }
             });
+        },
+
+        showECContextMenu(event, inv, customerCode = null) {
+            const code = customerCode || (this.ecSubClientData && this.ecSubClientData.customer ? this.ecSubClientData.customer.card_code : '');
+            const mappedInv = {
+                invoice_number: inv.doc_num,
+                customer_code: code,
+                order_number: inv.order_number || null
+            };
+            this.showContextMenu(event, mappedInv);
         },
 
         closeRelationshipMap() {
@@ -495,13 +528,15 @@ function facturasApp() {
             this.ecSubSelectedInvoices = [];
             this.ecSubFilterCurrency = 'ALL';
             this.ecSubFilterOverdue = 'ALL';
+            this.ecSubFilterStartDate = '';
+            this.ecSubFilterEndDate = '';
             try {
                 const res = await fetch(`/orders/api/facturas/estado-cuenta/${client.card_code}`);
                 const json = await res.json();
                 if (json.success && json.data) {
                     this.ecSubClientData = json.data;
-                    // Select all by default
-                    this.ecSubSelectedInvoices = json.data.invoices.map(i => i.doc_num);
+                    // Select only unpaid invoices by default
+                    this.ecSubSelectedInvoices = json.data.invoices.filter(i => i.balance > 0).map(i => i.doc_num);
                 } else {
                     this.ecSubClientData = null;
                 }
@@ -519,6 +554,8 @@ function facturasApp() {
             this.ecSubSelectedInvoices = [];
             this.ecSubSearchQuery = '';
             this.ecSubSearchResults = [];
+            this.ecSubFilterStartDate = '';
+            this.ecSubFilterEndDate = '';
         },
 
         ecSubFilteredInvoices() {
@@ -527,10 +564,16 @@ function facturasApp() {
             if (this.ecSubFilterCurrency !== 'ALL') {
                 list = list.filter(i => (i.currency || 'MXN').toUpperCase() === this.ecSubFilterCurrency);
             }
-            if (this.ecSubFilterOverdue === 'OVERDUE') {
-                list = list.filter(i => i.days_overdue > 0);
-            } else if (this.ecSubFilterOverdue === 'CURRENT') {
-                list = list.filter(i => i.days_overdue <= 0);
+            if (this.ecSubFilterOverdue === 'UNPAID') {
+                list = list.filter(i => i.balance > 0);
+            } else if (this.ecSubFilterOverdue === 'PAID') {
+                list = list.filter(i => i.balance === 0);
+            }
+            if (this.ecSubFilterStartDate) {
+                list = list.filter(i => i.doc_date >= this.ecSubFilterStartDate);
+            }
+            if (this.ecSubFilterEndDate) {
+                list = list.filter(i => i.doc_date <= this.ecSubFilterEndDate);
             }
             return list;
         },
@@ -569,6 +612,11 @@ function facturasApp() {
             return this.ecSubSelectedInvoices.length;
         },
 
+        ecSubFilteredSelectedCount() {
+            const filtered = this.ecSubFilteredInvoices();
+            return filtered.filter(i => this.ecSubSelectedInvoices.includes(i.doc_num)).length;
+        },
+
         ecSubSelectedTotalMXN() {
             if (!this.ecSubClientData) return 0;
             return this.ecSubClientData.invoices
@@ -584,9 +632,17 @@ function facturasApp() {
         },
 
         ecSubGenerateBill() {
-            if (this.ecSubSelectedCount() === 0) return;
+            const filtered = this.ecSubFilteredInvoices();
+            const invoices = filtered
+                .filter(i => this.ecSubSelectedInvoices.includes(i.doc_num))
+                .map(i => i.doc_num)
+                .join(',');
+            
+            if (!invoices) {
+                alert('No hay facturas seleccionadas en el filtro actual.');
+                return;
+            }
             const cardCode = this.ecSubSelectedClient.card_code;
-            const invoices = this.ecSubSelectedInvoices.join(',');
             const url = `/orders/estado-cuenta?card_code=${cardCode}&invoices=${invoices}`;
             window.open(url, '_blank');
         },
@@ -606,11 +662,13 @@ function facturasApp() {
                 const canSign = {
                     facturacion: this.canSignFacturacion,
                     credito: this.canSignCredito,
+                    almacen: this.canSignAlmacen,
                 };
                 if (!canSign[area]) {
                     const labels = {
                         facturacion: 'Facturación',
                         credito: 'Crédito y Cobranza',
+                        almacen: 'Almacén',
                     };
                     alert(`Solo el jefe de ${labels[area]} puede firmar esta área.`);
                     return;
@@ -623,26 +681,24 @@ function facturasApp() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ area, action }),
                 });
+                if (res.redirected) {
+                    alert('Su sesión ha expirado. Por favor, recargue la página.');
+                    window.location.reload();
+                    return;
+                }
                 const data = await res.json();
                 if (data.success && data.signatures) {
                     this.signatures = {
                         facturacion: data.signatures.facturacion || null,
                         credito: data.signatures.credito || null,
+                        almacen: data.signatures.almacen || null,
                     };
                 } else {
                     alert(data.error || 'Error al actualizar firma');
                 }
             } catch (e) {
                 console.error('Error toggling signature:', e);
-                // Optimistic fallback
-                if (isSigned) {
-                    this.signatures[area] = null;
-                } else {
-                    this.signatures[area] = { 
-                        name: this.currentUserFullName,
-                        signature_path: this.currentUserSignature
-                    };
-                }
+                alert('Error de conexión al actualizar la firma.');
             }
         },
 
@@ -775,48 +831,67 @@ function facturasApp() {
         // Add Invoice Modal Methods
         // ══════════════════════════════════════════════════════
 
-        async showAddInvoiceModal() {
+        async showAddInvoiceModal(mode = 'all') {
+            const isManualMode = (mode === 'manual' || mode === true);
+            this.addInvoiceMode = isManualMode ? 'manual' : 'all';
             this.addInvoiceModalOpen = true;
             this.addInvoiceSearchQuery = '';
             this.addInvoiceSelectedPending = [];
             this.addInvoiceManualNum = '';
             this.addInvoiceManualList = [];
             this.addInvoiceOtherDaysPending = [];
+            this.liveSearchOpen = true;
             
-            // Fetch pending invoices from other days
-            this.addInvoiceLoading = true;
-            try {
-                const res = await fetch(`${cfg.apiFacturasPendingSummaryUrl}?_=${Date.now()}`, { cache: 'no-store' });
-                const data = await res.json();
-                if (res.ok && data.days) {
-                    const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-                    const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-                    
-                    // Get current-day invoice numbers to exclude duplicates
-                    const currentDayNums = new Set(this.invoices.map(i => i.invoice_number));
-                    
-                    this.addInvoiceOtherDaysPending = data.days
-                        .filter(day => day.date !== this.selectedDate && day.invoices && day.invoices.length > 0)
-                        .map(day => {
-                            let label = day.date;
-                            try {
-                                const [y, m, d] = day.date.split('-').map(Number);
-                                const dateObj = new Date(y, m - 1, d);
-                                label = dayNames[dateObj.getDay()] + ' ' + d + ' ' + monthNames[m - 1] + ' ' + y;
-                            } catch(_) {}
-                            return {
-                                date: day.date,
-                                label: label,
-                                invoices: day.invoices.filter(inv => !currentDayNums.has(inv.invoice_number))
-                            };
-                        })
-                        .filter(day => day.invoices.length > 0);
+            // Asynchronously fetch pending summary for live search / other days
+            const fetchPendingPromise = (async () => {
+                try {
+                    const res = await fetch(`${cfg.apiFacturasPendingSummaryUrl}?_=${Date.now()}`, { cache: 'no-store' });
+                    const data = await res.json();
+                    if (res.ok && data.days) {
+                        const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+                        const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+                        
+                        const currentDayNums = new Set(this.invoices.map(i => i.invoice_number));
+                        
+                        this.addInvoiceOtherDaysPending = data.days
+                            .filter(day => day.date !== this.selectedDate && day.invoices && day.invoices.length > 0)
+                            .map(day => {
+                                let label = day.date;
+                                try {
+                                    const [y, m, d] = day.date.split('-').map(Number);
+                                    const dateObj = new Date(y, m - 1, d);
+                                    label = dayNames[dateObj.getDay()] + ' ' + d + ' ' + monthNames[m - 1] + ' ' + y;
+                                } catch(_) {}
+                                return {
+                                    date: day.date,
+                                    label: label,
+                                    invoices: day.invoices.filter(inv => !currentDayNums.has(inv.invoice_number))
+                                };
+                            })
+                            .filter(day => day.invoices.length > 0);
+                    }
+                } catch (e) {
+                    console.error('Error fetching pending summary for modal:', e);
                 }
-            } catch (e) {
-                console.error('Error fetching pending summary for modal:', e);
-            } finally {
+            })();
+
+            if (isManualMode) {
                 this.addInvoiceLoading = false;
+                this.$nextTick(() => {
+                    setTimeout(() => {
+                        const input = this.$refs.manualInvoiceInput;
+                        if (input) {
+                            input.focus();
+                            input.select();
+                        }
+                    }, 50);
+                });
+                return;
             }
+
+            this.addInvoiceLoading = true;
+            await fetchPendingPromise;
+            this.addInvoiceLoading = false;
         },
 
         closeAddInvoiceModal() {
@@ -922,7 +997,7 @@ function facturasApp() {
         },
 
         addManualInvoiceToList() {
-            const raw = (this.addInvoiceManualNum || '').trim();
+            const raw = String(this.addInvoiceManualNum || '').trim();
             if (!raw || isNaN(raw)) return;
             const numInt = parseInt(raw, 10);
             
@@ -948,6 +1023,75 @@ function facturasApp() {
 
         removeManualInvoiceFromList(num) {
             this.addInvoiceManualList = this.addInvoiceManualList.filter(n => n !== num);
+        },
+
+        async addManualInvoiceDirectly() {
+            this.addManualInvoiceToList();
+            if (this.addInvoiceMode === 'manual' && this.addInvoiceManualList.length > 0) {
+                await this.addSelectedInvoices();
+            }
+        },
+
+        get liveSearchResults() {
+            const raw = String(this.addInvoiceManualNum || '').trim().toLowerCase();
+            if (!raw) return [];
+
+            const allMap = new Map();
+
+            for (const inv of (this.invoices || [])) {
+                if (inv && inv.invoice_number) {
+                    allMap.set(String(inv.invoice_number), {
+                        invoice_number: inv.invoice_number,
+                        customer_name: inv.customer_name || 'Cliente desconocido',
+                        date: inv.invoice_date || inv.date || this.selectedDate,
+                        total: inv.total || 0,
+                        currency: inv.currency || 'MXN',
+                        payment_terms: inv.payment_terms || ''
+                    });
+                }
+            }
+
+            for (const day of (this.addInvoiceOtherDaysPending || [])) {
+                for (const inv of (day.invoices || [])) {
+                    if (inv && inv.invoice_number && !allMap.has(String(inv.invoice_number))) {
+                        allMap.set(String(inv.invoice_number), {
+                            invoice_number: inv.invoice_number,
+                            customer_name: inv.customer_name || 'Cliente desconocido',
+                            date: inv.invoice_date || inv.date || day.date,
+                            total: inv.total || 0,
+                            currency: inv.currency || 'MXN',
+                            payment_terms: inv.payment_terms || ''
+                        });
+                    }
+                }
+            }
+
+            const results = [];
+            for (const inv of allMap.values()) {
+                const numStr = String(inv.invoice_number).toLowerCase();
+                const custStr = String(inv.customer_name).toLowerCase();
+
+                if (numStr.includes(raw) || custStr.includes(raw)) {
+                    results.push(inv);
+                }
+            }
+
+            results.sort((a, b) => {
+                const numA = String(a.invoice_number);
+                const numB = String(b.invoice_number);
+                if (numA === raw) return -1;
+                if (numB === raw) return 1;
+                if (numA.startsWith(raw) && !numB.startsWith(raw)) return -1;
+                if (!numA.startsWith(raw) && numB.startsWith(raw)) return 1;
+                return b.invoice_number - a.invoice_number;
+            });
+
+            return results.slice(0, 10);
+        },
+
+        selectLiveSearchResult(inv) {
+            this.addInvoiceManualNum = String(inv.invoice_number);
+            this.liveSearchOpen = false;
         },
 
         async addSelectedInvoices() {
@@ -1200,7 +1344,10 @@ function facturasApp() {
         },
 
         canBeInRelation(inv) {
-            return inv.credito_authorized || inv.status === 'Cancelada';
+            if (!inv) return false;
+            const auth = inv.credito_authorized;
+            const isAuth = auth === true || auth === 1 || auth === 'true' || auth === '1' || auth === 'True';
+            return isAuth || inv.status === 'Cancelada';
         },
 
         toggleAll() {
@@ -1287,14 +1434,14 @@ function facturasApp() {
         get invoiceGroups() {
             const groups = {};
             const categoryOrder = [
-                'LOCAL', 'ENVIO LOCAL', 'PAQUETERIA', 'PASE A PAQUETERIA', 
+                'LOCAL', 'ENVIO LOCAL', 'VENTA MOSTRADOR', 'PAQUETERIA', 'PASE A PAQUETERIA', 
                 'PASE DIRECTO', 'PASE PROGRAMADO', 'FLETE INTERNO', 'FORANEO', 
                 'ANEXADAS MTY', 'ANEXADAS GDL', 'ANEXADAS IRP'
             ];
 
             this.filteredInvoices.forEach(i => {
                 let s = (i.shipping_type || 'LOCAL').toUpperCase();
-                if (s === 'ANEXO MY' || s === 'ANEXO MTY') s = 'ANEXADAS MTY';
+                if (s === 'ANEXO MTY') s = 'ANEXADAS MTY';
                 if (s === 'ANEXO GDL') s = 'ANEXADAS GDL';
                 if (s === 'ANEXO IRP') s = 'ANEXADAS IRP';
                 const category = s;
@@ -1335,19 +1482,29 @@ function facturasApp() {
             const _trackManual = this.manualOrder;
 
             if (!this.currentRelacion || !this.currentRelacion.invoices) return [];
+
             const groups = {};
             const categoryOrder = [
-                'LOCAL', 'ENVIO LOCAL', 'PAQUETERIA', 'PASE A PAQUETERIA', 
+                'LOCAL', 'ENVIO LOCAL', 'VENTA MOSTRADOR', 'PAQUETERIA', 'PASE A PAQUETERIA', 
                 'PASE DIRECTO', 'PASE PROGRAMADO', 'FLETE INTERNO', 'FORANEO', 
                 'ANEXADAS MTY', 'ANEXADAS GDL', 'ANEXADAS IRP'
             ];
 
+            // Create a map for O(1) lookups
+            const invoicesMap = new Map();
+            this.invoices.forEach(i => {
+                const key = String(i.invoice_number);
+                if (!invoicesMap.has(key)) {
+                    invoicesMap.set(key, i);
+                }
+            });
+
             this.currentRelacion.invoices.forEach(inv => {
-                const liveInv = this.invoices.find(i => String(i.invoice_number) === String(inv.invoice_number));
+                const liveInv = invoicesMap.get(String(inv.invoice_number));
                 const resolvedInv = liveInv ? { ...inv, ...liveInv } : inv;
 
                 let cat = (resolvedInv.shipping_type || resolvedInv.observaciones || resolvedInv.nota || 'LOCAL').toUpperCase();
-                if (cat === 'ANEXO MY' || cat === 'ANEXO MTY') cat = 'ANEXADAS MTY';
+                if (cat === 'ANEXO MTY') cat = 'ANEXADAS MTY';
                 if (cat === 'ANEXO GDL') cat = 'ANEXADAS GDL';
                 if (cat === 'ANEXO IRP') cat = 'ANEXADAS IRP';
 
@@ -1362,7 +1519,7 @@ function facturasApp() {
                 invoiceIndexMap.set(String(inv.invoice_number), idx);
             });
 
-            return Object.values(groups).sort((a, b) => {
+            const result = Object.values(groups).sort((a, b) => {
                 const ai = categoryOrder.indexOf(a.category);
                 const bi = categoryOrder.indexOf(b.category);
                 const aIdx = ai >= 0 ? ai : 100;
@@ -1377,6 +1534,8 @@ function facturasApp() {
                 });
                 return g;
             });
+
+            return result;
         },
 
         isMatch(i) {
@@ -1446,6 +1605,10 @@ function facturasApp() {
                 if (value === 'relaciones') {
                     this.fetchRelaciones();
                 }
+            });
+
+            this.$watch('almacenSubTab', (value) => {
+                localStorage.setItem('qb_facturas_almacen_subtab', value);
             });
 
             if (this.activeTab === 'relaciones') {
@@ -1635,6 +1798,13 @@ function facturasApp() {
                 if (inv) {
                     inv.credito_authorized = data.authorized;
                     inv.credito_revoked_from_relacion = data.revoked_from_relacion || false;
+                    this.invoices = [...this.invoices];
+                    this.highlightInvoice(data.invoice_number);
+                }
+            } else if (data.type === 'factura_sent_to_credito_changed') {
+                const inv = this.invoices.find(i => String(i.invoice_number) === String(data.invoice_number));
+                if (inv) {
+                    inv.sent_to_credito = data.sent_to_credito;
                     this.invoices = [...this.invoices];
                     this.highlightInvoice(data.invoice_number);
                 }
@@ -2619,12 +2789,26 @@ function facturasApp() {
                 this.currentRelacion = data.relacion || null;
 
                 // Sync checkbox state from DB relationship to the invoices list
-                if (this.currentRelacion && this.currentRelacion.invoices) {
+                if (this.currentRelacion && Array.isArray(this.currentRelacion.invoices)) {
+                    const masterInvoicesMap = new Map();
+                    this.invoices.forEach(i => {
+                        const key = String(i.invoice_number);
+                        if (!masterInvoicesMap.has(key)) {
+                            masterInvoicesMap.set(key, i);
+                        }
+                    });
+
+                    // Sanitize currentRelacion.invoices to exclude any invoice that is NOT authorized by Credito and not canceled
+                    this.currentRelacion.invoices = this.currentRelacion.invoices.filter(relInv => {
+                        const masterInv = masterInvoicesMap.get(String(relInv.invoice_number));
+                        return masterInv ? this.canBeInRelation(masterInv) : (relInv.credito_authorized || relInv.status === 'Cancelada');
+                    });
+
                     const relInvoiceNums = new Set(this.currentRelacion.invoices.map(i => String(i.invoice_number)));
                     
                     const toHighlight = [];
                     this.invoices.forEach(i => {
-                        const isSelectedNow = relInvoiceNums.has(String(i.invoice_number));
+                        const isSelectedNow = relInvoiceNums.has(String(i.invoice_number)) && this.canBeInRelation(i);
                         const wasSelectedBefore = prevSelected.has(String(i.invoice_number));
                         
                         if (isSelectedNow !== wasSelectedBefore) {
@@ -2632,10 +2816,9 @@ function facturasApp() {
                         }
                         i._selected = isSelectedNow;
                     });
-                    
-                    // Sync metadata (credito_notes, rebote, observaciones, etc.) from master list to relacion invoices
+
                     this.currentRelacion.invoices.forEach(relInv => {
-                        const masterInv = this.invoices.find(i => String(i.invoice_number) === String(relInv.invoice_number));
+                        const masterInv = masterInvoicesMap.get(String(relInv.invoice_number));
                         if (masterInv) {
                             relInv.credito_notes = masterInv.credito_notes;
                             relInv.credito_authorized = masterInv.credito_authorized;
@@ -2690,6 +2873,21 @@ function facturasApp() {
             }
         },
 
+        filteredAlmacenInvoices() {
+            if (!this.currentRelacion || !this.currentRelacion.invoices) return [];
+            const invoices = this.currentRelacion.invoices;
+            if (this.almacenSubTab === 'entregados') {
+                return invoices.filter(i => i.entrega);
+            }
+            if (this.almacenSubTab === 'sin_entregar') {
+                return invoices.filter(i => !i.entrega && !i.rebote);
+            }
+            if (this.almacenSubTab === 'rebotados') {
+                return invoices.filter(i => i.rebote);
+            }
+            return invoices;
+        },
+
         async fetchRelaciones() {
             this.relacionLoading = true;
             try {
@@ -2720,8 +2918,8 @@ function facturasApp() {
             const targetNums = new Set(invoiceList.map(i => String(i.invoice_number)));
 
             if (selected) {
-                // Add missing
-                const toAdd = invoiceList.filter(i => i.status !== 'Cancelada');
+                // Add missing (only if status is Cancelada or authorized by Credito)
+                const toAdd = invoiceList.filter(i => i.status === 'Cancelada' || this.canBeInRelation(i));
                 // Remove existing instances to prevent duplicates
                 const filtered = currentInvoices.filter(i => !targetNums.has(String(i.invoice_number)));
                 updatedInvoices = [...filtered, ...toAdd];
@@ -2793,12 +2991,32 @@ function facturasApp() {
                     body: JSON.stringify(payload)
                 });
 
+                if (res.redirected) {
+                    alert('Su sesión ha expirado. Por favor, recargue la página.');
+                    window.location.reload();
+                    return;
+                }
+
                 if (res.ok) {
                     const data = await res.json();
                     this.currentRelacion = data.relacion;
+                } else {
+                    console.error('Server error toggling relationship selection');
+                    invoiceList.forEach(i => {
+                        i._selected = !selected;
+                    });
+                    this.invoices = [...this.invoices];
+                    this.fetchInvoices();
+                    alert('Error al actualizar la relación en el servidor.');
                 }
             } catch (e) {
                 console.error('Error toggling invoice in relationship:', e);
+                invoiceList.forEach(i => {
+                    i._selected = !selected;
+                });
+                this.invoices = [...this.invoices];
+                this.fetchInvoices();
+                alert('Error de conexión al actualizar la relación.');
             }
         },
 
@@ -2952,6 +3170,11 @@ function facturasApp() {
                         authorized: newValue,
                     }),
                 });
+                if (res.redirected) {
+                    alert('Su sesión ha expirado. Por favor, recargue la página.');
+                    window.location.reload();
+                    return;
+                }
                 const data = await res.json();
                 if (data.success && data.invoice) {
                     // Update the local invoice data
@@ -2961,12 +3184,82 @@ function facturasApp() {
                 }
             } catch (e) {
                 console.error('Error authorizing invoice:', e);
-                // Optimistic update
-                inv.credito_authorized = newValue;
-                if (newValue) {
-                    inv.credito_authorized_name = this.currentUserFullName;
-                    inv.credito_authorized_at = new Date().toISOString();
+                alert('Error de conexión al autorizar la factura.');
+            }
+        },
+
+        async autoAuthorizeInvoice(inv) {
+            if (!this.canEditFacturas && !this.canAuthorizarCredito) {
+                alert('No tienes permisos para realizar esta acción.');
+                return;
+            }
+
+            const specialCategories = ['VENTA MOSTRADOR', 'VENTA DE MOSTRADOR', 'VENTAS MOSTRADOR', 'PASE A PAQUETERIA', 'PASE PROGRAMADO', 'PASA PROGRAMADO'];
+            const isMostrador = (inv.customer_name || '').includes('VENTAS MOSTRADOR') ||
+                                specialCategories.includes((inv.shipping_type || '').toUpperCase().trim());
+
+            if (!isMostrador && !this.canAuthorizarCredito) {
+                alert('Solo el departamento de Crédito y Cobranza puede autorizar envíos de clientes normales.');
+                return;
+            }
+
+            const newValue = !inv.credito_authorized;
+
+            try {
+                const res = await fetch(`/orders/api/facturas/${inv.invoice_number}/authorize`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        invoice_number: inv.invoice_number,
+                        authorized: newValue,
+                        customer_name: inv.customer_name,
+                        shipping_type: inv.shipping_type,
+                    }),
+                });
+                if (res.redirected) {
+                    alert('Su sesión ha expirado. Por favor, recargue la página.');
+                    window.location.reload();
+                    return;
                 }
+                const data = await res.json();
+                if (data.success && data.invoice) {
+                    Object.assign(inv, data.invoice);
+                    this.showToast('Éxito', newValue ? 'Factura auto-aprobada' : 'Auto-aprobación revocada', '✅');
+                } else {
+                    alert(data.error || 'Error al autorizar factura');
+                }
+            } catch (e) {
+                console.error('Error auto-authorizing invoice:', e);
+                alert('Error de conexión');
+            }
+        },
+
+        async sendToCredito(inv, sent) {
+            if (!this.canEditFacturas) {
+                alert('No tienes permisos para realizar esta acción.');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/orders/api/facturas/${inv.invoice_number}/send-to-credito`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        invoice_number: inv.invoice_number,
+                        sent: sent,
+                    }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    inv.sent_to_credito = sent;
+                    this.invoices = [...this.invoices];
+                    this.showToast('Éxito', sent ? 'Enviado a Crédito' : 'Cancelado envío a Crédito', '⏰');
+                } else {
+                    alert(data.error || 'Error al enviar a Crédito');
+                }
+            } catch (e) {
+                console.error('Error sending to credito:', e);
+                alert('Error de conexión');
             }
         },
 

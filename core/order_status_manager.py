@@ -8,11 +8,13 @@ Database strategy:
 - WRITE to 'seguimiento_order_status' table (this app's own tracking)
 """
 
+import copy
 import datetime
 import json
 import logging
 import os
 import tempfile
+import threading
 import time
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -61,7 +63,7 @@ class OrderStatusManager:
     # The table SGA_dev writes to (read-only for us)
     READ_TABLE = "order_status"
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: Optional[str] = None, db_client: Optional[Any] = None):
         if db_path is None:
             # Store runtime data in project-root /data/, not inside the source /core/ dir
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -72,17 +74,21 @@ class OrderStatusManager:
         self.orders: Dict[str, Dict[str, Any]] = {}
 
         # Connect to DB
-        from core.database_client import DatabaseClient
+        if db_client is not None:
+            self.db_client = db_client
+            self.sql_engine = db_client.get_sql_engine()
+        else:
+            from core.database_client import DatabaseClient
+            self.db_client = DatabaseClient()
+            self.sql_engine = None
+            try:
+                if self.db_client.connect():
+                    self.sql_engine = self.db_client.get_sql_engine()  # pragma: no cover
+            except Exception as e:  # pragma: no cover
+                logger.warning(f"[WARN] OrderStatusManager DB error: {e}")  # pragma: no cover
 
-        self.db_client = DatabaseClient()
-        self.sql_engine = None
-        try:
-            if self.db_client.connect():
-                self.sql_engine = self.db_client.get_sql_engine()  # pragma: no cover
-        except Exception as e:  # pragma: no cover
-            logger.warning(f"[WARN] OrderStatusManager DB error: {e}")  # pragma: no cover
-
-        # Debounce tracking for _save_database
+        # Debounce and lock tracking for _save_database
+        self._json_write_lock = threading.Lock()
         self._last_save_time = 0.0
         self._dirty = False
         self._SAVE_DEBOUNCE_SECONDS = 5
@@ -276,32 +282,31 @@ class OrderStatusManager:
                         # Passing the entire list to exec_driver_sql performs an executemany
                         conn.exec_driver_sql(merge_sql, records)
             except Exception as e:  # pragma: no cover
-                import traceback
-                logger.warning(f"[WARN] Error saving to SQL: {e}")
-                traceback.logger.warning_exc()
+                logger.warning(f"[WARN] Error saving to SQL: {e}", exc_info=True)
 
         # Fallback / sync to JSON (atomic write)
-        try:
-            data = {"orders": self.orders, "last_updated": last_updated}
-            dir_name = os.path.dirname(self.db_path)
-            fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
+        with self._json_write_lock:
             try:
-                with os.fdopen(fd, "w", encoding="utf-8") as f:
-                    json.dump(data, f, indent=2, ensure_ascii=False)
-                os.replace(tmp_path, self.db_path)
-            except Exception:  # pragma: no cover
-                # Always clean up the temp file so we never leave orphans on disk
-                try:  # pragma: no cover
-                    os.unlink(tmp_path)  # pragma: no cover
-                except OSError:  # pragma: no cover
-                    pass  # pragma: no cover
-                raise  # pragma: no cover
-            self._last_save_time = time.time()
-            self._dirty = False
-            return True
-        except Exception as e:
-            logger.warning(f"[WARN] Error saving to JSON: {e}")
-            return False
+                data = {"orders": copy.deepcopy(self.orders), "last_updated": last_updated}
+                dir_name = os.path.dirname(self.db_path)
+                fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
+                try:
+                    with os.fdopen(fd, "w", encoding="utf-8") as f:
+                        json.dump(data, f, indent=2, ensure_ascii=False)
+                    os.replace(tmp_path, self.db_path)
+                except Exception:  # pragma: no cover
+                    # Always clean up the temp file so we never leave orphans on disk
+                    try:  # pragma: no cover
+                        os.unlink(tmp_path)  # pragma: no cover
+                    except OSError:  # pragma: no cover
+                        pass  # pragma: no cover
+                    raise  # pragma: no cover
+                self._last_save_time = time.time()
+                self._dirty = False
+                return True
+            except Exception as e:
+                logger.warning(f"[WARN] Error saving to JSON: {e}")
+                return False
 
     def _save_order(self, order_id: str) -> bool:
         """Persist a single order to SQL via MERGE without rewriting the whole table.
@@ -528,6 +533,22 @@ class OrderStatusManager:
         # Use targeted single-row MERGE instead of full table rewrite
         return self._save_order(order_id)
 
+    def update_order_fields(
+        self, order_id: str, fields: Dict[str, Any], save: bool = True
+    ) -> bool:
+        """Atomically update arbitrary fields on an order and persist changes."""
+        order_id = str(order_id)
+        if order_id not in self.orders:
+            if not self.get_order(order_id):
+                logger.warning(f"[WARN] Order {order_id} not found for field update")
+                return False
+
+        self.orders[order_id].update(fields)
+        self.orders[order_id]["last_updated"] = datetime.datetime.now().isoformat()
+        if save:
+            return self._save_order(order_id)
+        return True
+
     def get_order(self, order_id: str) -> Optional[Dict[str, Any]]:
         """Get a single order by ID."""
         self.reload_if_needed()
@@ -567,7 +588,7 @@ class OrderStatusManager:
     def get_active_orders(self) -> List[Dict[str, Any]]:
         """Get orders that are not shipped or cancelled."""
         self.reload_if_needed()
-        inactive_statuses = []
+        inactive_statuses = [OrderStatus.SHIPPED.value, OrderStatus.CANCELLED.value]
         active = [
             o for o in self.orders.values() if o.get("status") not in inactive_statuses
         ]
