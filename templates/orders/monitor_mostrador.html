@@ -232,6 +232,8 @@
             overflow: hidden !important;
         }
     </style>
+    <!-- Mostrador manages its own SSE via _connectSSE(); skip base.html's global SSE to avoid doubling threads -->
+    <script>window.__skipGlobalSSE = true;</script>
     
 {% endblock %}
 
@@ -985,8 +987,22 @@
                 currentSeller: '',
                 selectedSeller: '',
                 searchQuery: '',
-                dateFrom: new Date().toISOString().split('T')[0],
-                dateTo: new Date().toISOString().split('T')[0],
+                dateFrom: (function() {
+                    try {
+                        const saved = localStorage.getItem('qb_mostrador_date_from');
+                        return saved !== null ? saved : new Date().toISOString().split('T')[0];
+                    } catch (e) {
+                        return new Date().toISOString().split('T')[0];
+                    }
+                })(),
+                dateTo: (function() {
+                    try {
+                        const saved = localStorage.getItem('qb_mostrador_date_to');
+                        return saved !== null ? saved : new Date().toISOString().split('T')[0];
+                    } catch (e) {
+                        return new Date().toISOString().split('T')[0];
+                    }
+                })(),
                 maxOrders: '0',
                 activeTopFilter: 'all',
                 currentPage: 1,
@@ -1528,6 +1544,18 @@
                 },
 
                 init() {
+                    // Watch date range filters to persist them
+                    this.$watch('dateFrom', val => {
+                        try {
+                            localStorage.setItem('qb_mostrador_date_from', val !== null && val !== undefined ? val : '');
+                        } catch(e) { console.warn(e); }
+                    });
+                    this.$watch('dateTo', val => {
+                        try {
+                            localStorage.setItem('qb_mostrador_date_to', val !== null && val !== undefined ? val : '');
+                        } catch(e) { console.warn(e); }
+                    });
+
                     // ── Initialize robust audio engine for chime + announcements ──
                     this._initAudioEngine();
 

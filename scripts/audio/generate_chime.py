@@ -2,7 +2,7 @@
 import struct, math, wave, os
 
 SAMPLE_RATE = 44100
-OUTPUT = os.path.join(os.path.dirname(__file__), "static", "audio", "chime.wav")
+OUTPUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "static", "audio", "chime.wav"))
 
 def generate_tone(freq, duration, volume=0.5, fade_in=0.01, fade_out=0.15):
     """Generate a sine-wave tone with smooth fade in/out."""

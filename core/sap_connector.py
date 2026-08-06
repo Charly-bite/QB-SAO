@@ -27,7 +27,7 @@ class SAPHanaConnector:
 
     DEFAULT_HOST = os.environ.get("SAP_HOST", os.environ.get("SAP_HANA_HOST", ""))
     DEFAULT_PORT = int(os.environ.get("SAP_PORT", os.environ.get("SAP_HANA_PORT", "30015")))
-    DEFAULT_SCHEMA = os.environ.get("SAP_SCHEMA", os.environ.get("SAP_HANA_SCHEMA", "SBO_QUIMICABOSS"))
+    DEFAULT_SCHEMA = os.environ.get("SAP_SCHEMA", os.environ.get("SAP_HANA_SCHEMA", ""))
     DEFAULT_USER = os.environ.get("SAP_USER", os.environ.get("SAP_HANA_USER", ""))
     DEFAULT_PASS = os.environ.get("SAP_PASS", os.environ.get("SAP_HANA_PASSWORD", ""))
 
@@ -901,7 +901,6 @@ class SAPHanaConnector:
         else:
             base_filter = 'T0."DocDate" = CURRENT_DATE'
         base_filter += f"""
-              AND (T1."TrnspName" NOT IN ('VENTA MOSTRADOR', 'VENTA DE MOSTRADOR', 'VENTAS MOSTRADOR') OR T1."TrnspName" IS NULL)
               AND T0."CardCode" != 'CL1662'
               AND T0."CANCELED" != 'C'
               AND NOT EXISTS (
@@ -916,21 +915,7 @@ class SAPHanaConnector:
                 nums = ",".join(str(int(n)) for n in extra_invoice_numbers if n)
                 if nums:
                     final_filter = f"""({base_filter}) 
-                    OR T0."DocNum" IN ({nums})
-                    OR EXISTS (
-                        SELECT 1 FROM {self._get_table_name("sales_orders")} R0
-                        INNER JOIN {self._get_table_name("invoice_lines")} L2
-                            ON L2."BaseType" = 17 AND L2."BaseEntry" = R0."DocEntry"
-                        WHERE L2."DocEntry" = T0."DocEntry" AND R0."DocNum" IN ({nums})
-                    )
-                    OR EXISTS (
-                        SELECT 1 FROM {self._get_table_name("sales_orders")} R0
-                        INNER JOIN {self._get_table_name("delivery_lines")} D1
-                            ON D1."BaseType" = 17 AND D1."BaseEntry" = R0."DocEntry"
-                        INNER JOIN {self._get_table_name("invoice_lines")} L3
-                            ON L3."BaseType" = 15 AND L3."BaseEntry" = D1."DocEntry"
-                        WHERE L3."DocEntry" = T0."DocEntry" AND R0."DocNum" IN ({nums})
-                    )"""
+                    OR T0."DocNum" IN ({nums})"""
                 else:
                     final_filter = base_filter
             except (ValueError, TypeError):  # pragma: no cover
@@ -960,7 +945,9 @@ class SAPHanaConnector:
                 SO.order_number AS order_number,
                 SO.order_date   AS order_date,
                 COALESCE(M0."dias_mora", 0) AS dias_mora,
-                COALESCE(CR."CreditLine", 0) AS credit_limit
+                COALESCE(CR."CreditLine", 0) AS credit_limit,
+                T0."DocTotalFC" AS total_fc,
+                T0."PaidFC"     AS paid_fc
             FROM {self._get_table_name("invoices")} T0
             LEFT JOIN {self.schema}."OSLP" T3 ON T0."SlpCode" = T3."SlpCode"
             LEFT JOIN {self.schema}."OSHP" T1 ON T0."TrnspCode" = T1."TrnspCode"
@@ -1040,20 +1027,31 @@ class SAPHanaConnector:
             if shipping_type.strip().upper() in ["ENVIO LOCAL", "ENVÍO LOCAL"]:
                 shipping_type = "LOCAL"  # pragma: no cover
 
+            currency = row[6] or "MXN"
+            is_foreign = currency.upper() != "MXN"
+            total = float(row[5]) if row[5] else 0.0
+            paid_to_date = float(row[11]) if row[11] else 0.0
+
+            if is_foreign and len(row) > 20:
+                if row[19] is not None:
+                    total = float(row[19])
+                if row[20] is not None:
+                    paid_to_date = float(row[20])
+
             invoices.append({
                 "invoice_number": int(row[0]),
                 "doc_entry": int(row[1]),
                 "customer_code": row[2] or "",
                 "customer_name": row[3] or "",
                 "invoice_date": str(row[4]),
-                "total": float(row[5]) if row[5] else 0.0,
-                "currency": row[6] or "MXN",
+                "total": total,
+                "currency": currency,
                 "status": status,
                 "doc_status": doc_status,
                 "canceled": canceled,
                 "comments": row[9] or "",
                 "seller_name": row[10] or "SAP System",
-                "paid_to_date": float(row[11]) if row[11] else 0.0,
+                "paid_to_date": paid_to_date,
                 "shipping_type": shipping_type,
                 "payment_terms": row[13] or "CONTADO",
                 "warehouse": row[14] or "",
@@ -1079,7 +1077,6 @@ class SAPHanaConnector:
         base_filter = f"T0.\"DocDate\" >= '{date_from}' AND T0.\"DocDate\" <= '{date_to}'"
         
         base_filter += f"""
-              AND (T1."TrnspName" NOT IN ('VENTA MOSTRADOR', 'VENTA DE MOSTRADOR', 'VENTAS MOSTRADOR') OR T1."TrnspName" IS NULL)
               AND T0."CardCode" != 'CL1662'
               AND T0."CANCELED" != 'C'
               AND NOT EXISTS (
@@ -1110,7 +1107,9 @@ class SAPHanaConnector:
                 T2."PymntGroup" AS payment_terms,
                 WH.warehouse   AS warehouse,
                 SO.order_number AS order_number,
-                SO.order_date   AS order_date
+                SO.order_date   AS order_date,
+                T0."DocTotalFC" AS total_fc,
+                T0."PaidFC"     AS paid_fc
             FROM {self._get_table_name("invoices")} T0
             LEFT JOIN {self.schema}."OSLP" T3 ON T0."SlpCode" = T3."SlpCode"
             LEFT JOIN {self.schema}."OSHP" T1 ON T0."TrnspCode" = T1."TrnspCode"
@@ -1188,20 +1187,31 @@ class SAPHanaConnector:
             if shipping_type.strip().upper() in ["ENVIO LOCAL", "ENVÍO LOCAL"]:
                 shipping_type = "LOCAL"
 
+            currency = row[6] or "MXN"
+            is_foreign = currency.upper() != "MXN"
+            total = float(row[5]) if row[5] else 0.0
+            paid_to_date = float(row[11]) if row[11] else 0.0
+
+            if is_foreign and len(row) > 18:
+                if row[17] is not None:
+                    total = float(row[17])
+                if row[18] is not None:
+                    paid_to_date = float(row[18])
+
             invoices.append({
                 "invoice_number": int(row[0]),
                 "doc_entry": int(row[1]),
                 "customer_code": row[2] or "",
                 "customer_name": row[3] or "",
                 "invoice_date": str(row[4]),
-                "total": float(row[5]) if row[5] else 0.0,
-                "currency": row[6] or "MXN",
+                "total": total,
+                "currency": currency,
                 "status": status,
                 "doc_status": doc_status,
                 "canceled": canceled,
                 "comments": row[9] or "",
                 "seller_name": row[10] or "SAP System",
-                "paid_to_date": float(row[11]) if row[11] else 0.0,
+                "paid_to_date": paid_to_date,
                 "shipping_type": shipping_type,
                 "payment_terms": row[13] or "CONTADO",
                 "warehouse": row[14] or "",
@@ -1338,7 +1348,6 @@ class SAPHanaConnector:
         if not cust_row:
             cursor.close()
             return None
-
         customer = {
             "card_code": cust_row[0],
             "card_name": cust_row[1] or "",
@@ -1366,9 +1375,7 @@ class SAPHanaConnector:
                 T0."DocRate"
             FROM {self._get_table_name("invoices")} T0
             WHERE T0."CardCode" = ?
-              AND T0."DocStatus" = 'O'
               AND T0."CANCELED" = 'N'
-              AND (T0."DocTotal" - T0."PaidToDate") > 0
             ORDER BY T0."DocDueDate" ASC
         """
         cursor.execute(inv_query, [card_code])
@@ -1384,6 +1391,8 @@ class SAPHanaConnector:
             # For foreign-currency invoices use FC fields (actual USD amounts);
             # for local-currency (MXN) invoices use LC fields.
             is_foreign = (currency or "MXN").upper() != "MXN"
+            balance = float(balance_fc) if is_foreign else float(balance_lc)
+            is_overdue = balance > 0 and days and int(days) > 0
 
             inv = {
                 "doc_num": int(doc_num),
@@ -1391,32 +1400,35 @@ class SAPHanaConnector:
                 "due_date": str(due_date).split(" ")[0],
                 "total": float(total_fc) if is_foreign else float(total_lc),
                 "paid": float(paid_fc) if is_foreign else float(paid_lc),
-                "balance": float(balance_fc) if is_foreign else float(balance_lc),
+                "balance": balance,
                 "currency": currency or "MXN",
-                "days_overdue": int(days) if days and int(days) > 0 else 0,
+                "days_overdue": int(days) if is_overdue else 0,
                 "doc_rate": float(doc_rate) if doc_rate else None,
-                "total_lc": float(balance_lc),
+                "total_lc": float(balance_lc) if balance > 0 else 0.0,
             }
             invoices.append(inv)
-            if is_foreign:
-                total_usd += float(balance_fc)
-            else:
-                total_mxn += float(balance_lc)
+            if balance > 0:
+                if is_foreign:
+                    total_usd += float(balance_fc)
+                else:
+                    total_mxn += float(balance_lc)
 
-        # 3. Fetch yesterday's USD→MXN exchange rate from ORTT
+        # 3. Fetch today's (or most recent) USD→MXN exchange rate from ORTT
         exchange_rate = None
         exchange_rate_date = None
         try:
+            import datetime as _dt
+            today_str = _dt.date.today().isoformat()
             rate_query = f"""
                 SELECT TOP 1
                     T0."RateDate",
                     T0."Rate"
                 FROM "{self.schema}"."ORTT" T0
                 WHERE T0."Currency" = 'USD'
-                  AND T0."RateDate" < CURRENT_DATE
+                  AND T0."RateDate" <= ?
                 ORDER BY T0."RateDate" DESC
             """
-            cursor.execute(rate_query)
+            cursor.execute(rate_query, [today_str])
             rate_row = cursor.fetchone()
             if rate_row:
                 exchange_rate_date = str(rate_row[0]).split(" ")[0]
@@ -1457,7 +1469,8 @@ class SAPHanaConnector:
         # 1. Fetch current Invoice details
         inv_query = f"""
             SELECT 
-                T0."DocEntry", T0."DocNum", T0."DocDate", T0."DocTotal", T0."DocCur", T0."DocStatus", T0."CANCELED", T0."PaidToDate", T0."CardCode", T0."CardName"
+                T0."DocEntry", T0."DocNum", T0."DocDate", T0."DocTotal", T0."DocCur", T0."DocStatus", T0."CANCELED", T0."PaidToDate", T0."CardCode", T0."CardName",
+                T0."DocTotalFC", T0."PaidFC"
             FROM {self._get_table_name("invoices")} T0
             WHERE T0."DocNum" = ?
         """
@@ -1467,23 +1480,31 @@ class SAPHanaConnector:
             cursor.close()
             return None
 
-        inv_entry, inv_num, inv_date, inv_total, inv_currency, inv_status, inv_canceled, inv_paid, card_code, card_name = inv_row
+        if len(inv_row) >= 12:
+            inv_entry, inv_num, inv_date, inv_total, inv_currency, inv_status, inv_canceled, inv_paid, card_code, card_name, inv_total_fc, inv_paid_fc = inv_row
+            is_foreign = (inv_currency or "MXN").upper() != "MXN"
+            total = float(inv_total_fc) if is_foreign and inv_total_fc else float(inv_total)
+            paid = float(inv_paid_fc) if is_foreign and inv_paid_fc else float(inv_paid)
+        else:
+            inv_entry, inv_num, inv_date, inv_total, inv_currency, inv_status, inv_canceled, inv_paid, card_code, card_name = inv_row
+            total = float(inv_total)
+            paid = float(inv_paid)
 
         invoice_node = {
             "type": "Factura",
             "doc_num": int(inv_num),
             "doc_entry": int(inv_entry),
             "doc_date": str(inv_date).split(" ")[0],
-            "total": float(inv_total),
+            "total": total,
             "currency": inv_currency,
             "status": "Cancelado" if inv_canceled == "Y" else ("Cerrado" if inv_status == "C" else "Abierto"),
-            "paid_to_date": float(inv_paid)
+            "paid_to_date": paid
         }
 
         # 2. Fetch linked Delivery Note
         del_query = f"""
             SELECT DISTINCT
-                T0."DocEntry", T0."DocNum", T0."DocDate", T0."DocTotal", T0."DocCur", T0."DocStatus", T0."CANCELED"
+                T0."DocEntry", T0."DocNum", T0."DocDate", T0."DocTotal", T0."DocCur", T0."DocStatus", T0."CANCELED", T0."DocTotalFC"
             FROM {self._get_table_name("delivery_notes")} T0
             INNER JOIN {self._get_table_name("invoice_lines")} T1 ON T0."DocEntry" = T1."BaseEntry"
             WHERE T1."BaseType" = 15 AND T1."DocEntry" = ?
@@ -1492,13 +1513,19 @@ class SAPHanaConnector:
         del_row = cursor.fetchone()
         delivery_node = None
         if del_row:
-            del_entry, del_num, del_date, del_total, del_currency, del_status, del_canceled = del_row
+            if len(del_row) >= 8:
+                del_entry, del_num, del_date, del_total, del_currency, del_status, del_canceled, del_total_fc = del_row
+                is_del_foreign = (del_currency or "MXN").upper() != "MXN"
+                del_total_val = float(del_total_fc) if is_del_foreign and del_total_fc else float(del_total)
+            else:
+                del_entry, del_num, del_date, del_total, del_currency, del_status, del_canceled = del_row
+                del_total_val = float(del_total)
             delivery_node = {
                 "type": "Entrega",
                 "doc_num": int(del_num),
                 "doc_entry": int(del_entry),
                 "doc_date": str(del_date).split(" ")[0],
-                "total": float(del_total),
+                "total": del_total_val,
                 "currency": del_currency,
                 "status": "Cancelado" if del_canceled == "Y" else ("Cerrado" if del_status == "C" else "Abierto")
             }
@@ -1508,7 +1535,7 @@ class SAPHanaConnector:
         order_node = None
         order_query_direct = f"""
             SELECT DISTINCT
-                T0."DocEntry", T0."DocNum", T0."DocDate", T0."DocTotal", T0."DocCur", T0."DocStatus", T0."CANCELED"
+                T0."DocEntry", T0."DocNum", T0."DocDate", T0."DocTotal", T0."DocCur", T0."DocStatus", T0."CANCELED", T0."DocTotalFC"
             FROM {self._get_table_name("sales_orders")} T0
             INNER JOIN {self._get_table_name("invoice_lines")} T1 ON T0."DocEntry" = T1."BaseEntry"
             WHERE T1."BaseType" = 17 AND T1."DocEntry" = ?
@@ -1518,7 +1545,7 @@ class SAPHanaConnector:
         if not ord_row and delivery_node:
             order_query_indirect = f"""
                 SELECT DISTINCT
-                    T0."DocEntry", T0."DocNum", T0."DocDate", T0."DocTotal", T0."DocCur", T0."DocStatus", T0."CANCELED"
+                    T0."DocEntry", T0."DocNum", T0."DocDate", T0."DocTotal", T0."DocCur", T0."DocStatus", T0."CANCELED", T0."DocTotalFC"
                 FROM {self._get_table_name("sales_orders")} T0
                 INNER JOIN {self._get_table_name("delivery_lines")} T1 ON T0."DocEntry" = T1."BaseEntry"
                 WHERE T1."BaseType" = 17 AND T1."DocEntry" = ?
@@ -1527,13 +1554,19 @@ class SAPHanaConnector:
             ord_row = cursor.fetchone()
 
         if ord_row:
-            ord_entry, ord_num, ord_date, ord_total, ord_currency, ord_status, ord_canceled = ord_row
+            if len(ord_row) >= 8:
+                ord_entry, ord_num, ord_date, ord_total, ord_currency, ord_status, ord_canceled, ord_total_fc = ord_row
+                is_ord_foreign = (ord_currency or "MXN").upper() != "MXN"
+                ord_total_val = float(ord_total_fc) if is_ord_foreign and ord_total_fc else float(ord_total)
+            else:
+                ord_entry, ord_num, ord_date, ord_total, ord_currency, ord_status, ord_canceled = ord_row
+                ord_total_val = float(ord_total)
             order_node = {
                 "type": "Pedido",
                 "doc_num": int(ord_num),
                 "doc_entry": int(ord_entry),
                 "doc_date": str(ord_date).split(" ")[0],
-                "total": float(ord_total),
+                "total": ord_total_val,
                 "currency": ord_currency,
                 "status": "Cancelado" if ord_canceled == "Y" else ("Cerrado" if ord_status == "C" else "Abierto")
             }
@@ -1542,7 +1575,7 @@ class SAPHanaConnector:
         payments = []
         pay_query = f"""
             SELECT DISTINCT
-                T0."DocEntry", T0."DocNum", T0."DocDate", T0."DocTotal", T0."DocCur", T0."Canceled", T1."SumApplied"
+                T0."DocEntry", T0."DocNum", T0."DocDate", T0."DocTotal", T0."DocCur", T0."Canceled", T1."SumApplied", T1."AppliedFC", T0."DocTotalFC"
             FROM {self._get_table_name("ORCT")} T0
             INNER JOIN {self._get_table_name("RCT2")} T1 ON T0."DocEntry" = T1."DocNum"
             WHERE T1."InvType" = 13 AND T1."DocEntry" = ?
@@ -1550,16 +1583,29 @@ class SAPHanaConnector:
         try:
             cursor.execute(pay_query, [inv_entry])
             for p_row in cursor.fetchall():
-                p_entry, p_num, p_date, p_total, p_currency, p_canceled, p_applied = p_row
+                if len(p_row) >= 9:
+                    p_entry, p_num, p_date, p_total, p_currency, p_canceled, p_applied, p_applied_fc, p_total_fc = p_row
+                    is_p_foreign = (p_currency or "MXN").upper() != "MXN"
+                    p_total_val = float(p_total_fc) if is_p_foreign and p_total_fc else float(p_total)
+                    p_applied_val = float(p_applied_fc) if is_p_foreign and p_applied_fc else float(p_applied)
+                elif len(p_row) >= 8:
+                    p_entry, p_num, p_date, p_total, p_currency, p_canceled, p_applied, p_applied_fc = p_row
+                    is_p_foreign = (p_currency or "MXN").upper() != "MXN"
+                    p_total_val = float(p_total)
+                    p_applied_val = float(p_applied_fc) if is_p_foreign and p_applied_fc else float(p_applied)
+                else:
+                    p_entry, p_num, p_date, p_total, p_currency, p_canceled, p_applied = p_row
+                    p_total_val = float(p_total)
+                    p_applied_val = float(p_applied)
                 payments.append({
                     "type": "Pago Recibido",
                     "doc_num": int(p_num),
                     "doc_entry": int(p_entry),
                     "doc_date": str(p_date).split(" ")[0],
-                    "total": float(p_total),
+                    "total": p_total_val,
                     "currency": p_currency,
                     "status": "Cancelado" if p_canceled == "Y" else "Aplicado",
-                    "applied_total": float(p_applied)
+                    "applied_total": p_applied_val
                 })
         except Exception as e:
             logger.warning(f"Could not fetch incoming payments for invoice {invoice_number}: {e}")

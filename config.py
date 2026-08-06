@@ -35,7 +35,7 @@ class Config:
     SECRET_KEY = _generate_secret_key()
 
     # Session
-    PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
+    PERMANENT_SESSION_LIFETIME = timedelta(hours=16)
     SESSION_COOKIE_NAME = "sao_session"  # Prevent collision with SGA on same IP
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
@@ -44,7 +44,7 @@ class Config:
     # Defaults
     DEBUG = False
     TESTING = False
-    SESSION_COOKIE_SECURE = False
+    SESSION_COOKIE_SECURE = os.environ.get('SESSION_COOKIE_SECURE', 'False').lower() == 'true'
 
     # Disable static file caching so browsers always fetch fresh JS/CSS after deploys
     SEND_FILE_MAX_AGE_DEFAULT = 0

@@ -60,4 +60,5 @@ def analyze_audio(file_path):
     print(f"End Silence: {end_silence:.3f}s")
     
 if __name__ == '__main__':
-    analyze_audio(r"c:\Users\CarlosAlbertoAcevesC\Desktop\DEV SAO\Grabacion_Jocelyn.wav")
+    target = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "static", "audio", "announcement_jocelyn.wav"))
+    analyze_audio(target)

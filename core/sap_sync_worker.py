@@ -1,3 +1,4 @@
+import os
 import threading
 import time
 import logging
@@ -35,13 +36,28 @@ class SAPSyncWorker(threading.Thread):
 
             order_mgr = self.app.order_status_mgr
             sap = self.app.sap_connector
-
-            if not sap or not sap.connected:  # pragma: no cover
+            if not sap:  # pragma: no cover
                 from core.sap_connector import SAPHanaConnector
-                sap = SAPHanaConnector()
-                if not sap.connect():
-                    logger.warning("Worker could not connect to SAP.")
+                try:
+                    sap_user = os.environ.get("SAP_USER")
+                    sap_pass = os.environ.get("SAP_PASS")
+                    sap = SAPHanaConnector(
+                        host=os.environ.get("SAP_HOST", ""),
+                        port=int(os.environ.get("SAP_PORT", 30015)),
+                        username=sap_user,
+                        password=sap_pass,
+                        schema=os.environ.get("SAP_SCHEMA", ""),
+                    )
+                    self.app.sap_connector = sap
+                except Exception as e:
+                    logger.warning(f"Worker could not initialize SAPHanaConnector: {e}")
                     return
+
+            try:
+                sap._ensure_connected()
+            except Exception as e:
+                logger.warning(f"Worker could not connect to SAP: {e}")
+                return
 
             # Import new orders
             try:
