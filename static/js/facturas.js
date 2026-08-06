@@ -316,6 +316,8 @@ function facturasApp() {
         addInvoiceManualList: [],
         addInvoiceLoading: false,
         addInvoiceOtherDaysPending: [], // [{date, label, invoices: [...]}]
+        addInvoiceMode: 'all',
+        liveSearchOpen: false,
 
         showContextMenu(event, inv) {
             if (this.activeTab !== 'facturas' && this.activeTab !== 'credito') return;
@@ -679,6 +681,11 @@ function facturasApp() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ area, action }),
                 });
+                if (res.redirected) {
+                    alert('Su sesión ha expirado. Por favor, recargue la página.');
+                    window.location.reload();
+                    return;
+                }
                 const data = await res.json();
                 if (data.success && data.signatures) {
                     this.signatures = {
@@ -691,15 +698,7 @@ function facturasApp() {
                 }
             } catch (e) {
                 console.error('Error toggling signature:', e);
-                // Optimistic fallback
-                if (isSigned) {
-                    this.signatures[area] = null;
-                } else {
-                    this.signatures[area] = { 
-                        name: this.currentUserFullName,
-                        signature_path: this.currentUserSignature
-                    };
-                }
+                alert('Error de conexión al actualizar la firma.');
             }
         },
 
@@ -832,48 +831,67 @@ function facturasApp() {
         // Add Invoice Modal Methods
         // ══════════════════════════════════════════════════════
 
-        async showAddInvoiceModal() {
+        async showAddInvoiceModal(mode = 'all') {
+            const isManualMode = (mode === 'manual' || mode === true);
+            this.addInvoiceMode = isManualMode ? 'manual' : 'all';
             this.addInvoiceModalOpen = true;
             this.addInvoiceSearchQuery = '';
             this.addInvoiceSelectedPending = [];
             this.addInvoiceManualNum = '';
             this.addInvoiceManualList = [];
             this.addInvoiceOtherDaysPending = [];
+            this.liveSearchOpen = true;
             
-            // Fetch pending invoices from other days
-            this.addInvoiceLoading = true;
-            try {
-                const res = await fetch(`${cfg.apiFacturasPendingSummaryUrl}?_=${Date.now()}`, { cache: 'no-store' });
-                const data = await res.json();
-                if (res.ok && data.days) {
-                    const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-                    const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-                    
-                    // Get current-day invoice numbers to exclude duplicates
-                    const currentDayNums = new Set(this.invoices.map(i => i.invoice_number));
-                    
-                    this.addInvoiceOtherDaysPending = data.days
-                        .filter(day => day.date !== this.selectedDate && day.invoices && day.invoices.length > 0)
-                        .map(day => {
-                            let label = day.date;
-                            try {
-                                const [y, m, d] = day.date.split('-').map(Number);
-                                const dateObj = new Date(y, m - 1, d);
-                                label = dayNames[dateObj.getDay()] + ' ' + d + ' ' + monthNames[m - 1] + ' ' + y;
-                            } catch(_) {}
-                            return {
-                                date: day.date,
-                                label: label,
-                                invoices: day.invoices.filter(inv => !currentDayNums.has(inv.invoice_number))
-                            };
-                        })
-                        .filter(day => day.invoices.length > 0);
+            // Asynchronously fetch pending summary for live search / other days
+            const fetchPendingPromise = (async () => {
+                try {
+                    const res = await fetch(`${cfg.apiFacturasPendingSummaryUrl}?_=${Date.now()}`, { cache: 'no-store' });
+                    const data = await res.json();
+                    if (res.ok && data.days) {
+                        const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+                        const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+                        
+                        const currentDayNums = new Set(this.invoices.map(i => i.invoice_number));
+                        
+                        this.addInvoiceOtherDaysPending = data.days
+                            .filter(day => day.date !== this.selectedDate && day.invoices && day.invoices.length > 0)
+                            .map(day => {
+                                let label = day.date;
+                                try {
+                                    const [y, m, d] = day.date.split('-').map(Number);
+                                    const dateObj = new Date(y, m - 1, d);
+                                    label = dayNames[dateObj.getDay()] + ' ' + d + ' ' + monthNames[m - 1] + ' ' + y;
+                                } catch(_) {}
+                                return {
+                                    date: day.date,
+                                    label: label,
+                                    invoices: day.invoices.filter(inv => !currentDayNums.has(inv.invoice_number))
+                                };
+                            })
+                            .filter(day => day.invoices.length > 0);
+                    }
+                } catch (e) {
+                    console.error('Error fetching pending summary for modal:', e);
                 }
-            } catch (e) {
-                console.error('Error fetching pending summary for modal:', e);
-            } finally {
+            })();
+
+            if (isManualMode) {
                 this.addInvoiceLoading = false;
+                this.$nextTick(() => {
+                    setTimeout(() => {
+                        const input = this.$refs.manualInvoiceInput;
+                        if (input) {
+                            input.focus();
+                            input.select();
+                        }
+                    }, 50);
+                });
+                return;
             }
+
+            this.addInvoiceLoading = true;
+            await fetchPendingPromise;
+            this.addInvoiceLoading = false;
         },
 
         closeAddInvoiceModal() {
@@ -1005,6 +1023,75 @@ function facturasApp() {
 
         removeManualInvoiceFromList(num) {
             this.addInvoiceManualList = this.addInvoiceManualList.filter(n => n !== num);
+        },
+
+        async addManualInvoiceDirectly() {
+            this.addManualInvoiceToList();
+            if (this.addInvoiceMode === 'manual' && this.addInvoiceManualList.length > 0) {
+                await this.addSelectedInvoices();
+            }
+        },
+
+        get liveSearchResults() {
+            const raw = String(this.addInvoiceManualNum || '').trim().toLowerCase();
+            if (!raw) return [];
+
+            const allMap = new Map();
+
+            for (const inv of (this.invoices || [])) {
+                if (inv && inv.invoice_number) {
+                    allMap.set(String(inv.invoice_number), {
+                        invoice_number: inv.invoice_number,
+                        customer_name: inv.customer_name || 'Cliente desconocido',
+                        date: inv.invoice_date || inv.date || this.selectedDate,
+                        total: inv.total || 0,
+                        currency: inv.currency || 'MXN',
+                        payment_terms: inv.payment_terms || ''
+                    });
+                }
+            }
+
+            for (const day of (this.addInvoiceOtherDaysPending || [])) {
+                for (const inv of (day.invoices || [])) {
+                    if (inv && inv.invoice_number && !allMap.has(String(inv.invoice_number))) {
+                        allMap.set(String(inv.invoice_number), {
+                            invoice_number: inv.invoice_number,
+                            customer_name: inv.customer_name || 'Cliente desconocido',
+                            date: inv.invoice_date || inv.date || day.date,
+                            total: inv.total || 0,
+                            currency: inv.currency || 'MXN',
+                            payment_terms: inv.payment_terms || ''
+                        });
+                    }
+                }
+            }
+
+            const results = [];
+            for (const inv of allMap.values()) {
+                const numStr = String(inv.invoice_number).toLowerCase();
+                const custStr = String(inv.customer_name).toLowerCase();
+
+                if (numStr.includes(raw) || custStr.includes(raw)) {
+                    results.push(inv);
+                }
+            }
+
+            results.sort((a, b) => {
+                const numA = String(a.invoice_number);
+                const numB = String(b.invoice_number);
+                if (numA === raw) return -1;
+                if (numB === raw) return 1;
+                if (numA.startsWith(raw) && !numB.startsWith(raw)) return -1;
+                if (!numA.startsWith(raw) && numB.startsWith(raw)) return 1;
+                return b.invoice_number - a.invoice_number;
+            });
+
+            return results.slice(0, 10);
+        },
+
+        selectLiveSearchResult(inv) {
+            this.addInvoiceManualNum = String(inv.invoice_number);
+            this.liveSearchOpen = false;
         },
 
         async addSelectedInvoices() {
@@ -2904,12 +2991,32 @@ function facturasApp() {
                     body: JSON.stringify(payload)
                 });
 
+                if (res.redirected) {
+                    alert('Su sesión ha expirado. Por favor, recargue la página.');
+                    window.location.reload();
+                    return;
+                }
+
                 if (res.ok) {
                     const data = await res.json();
                     this.currentRelacion = data.relacion;
+                } else {
+                    console.error('Server error toggling relationship selection');
+                    invoiceList.forEach(i => {
+                        i._selected = !selected;
+                    });
+                    this.invoices = [...this.invoices];
+                    this.fetchInvoices();
+                    alert('Error al actualizar la relación en el servidor.');
                 }
             } catch (e) {
                 console.error('Error toggling invoice in relationship:', e);
+                invoiceList.forEach(i => {
+                    i._selected = !selected;
+                });
+                this.invoices = [...this.invoices];
+                this.fetchInvoices();
+                alert('Error de conexión al actualizar la relación.');
             }
         },
 
@@ -3063,6 +3170,11 @@ function facturasApp() {
                         authorized: newValue,
                     }),
                 });
+                if (res.redirected) {
+                    alert('Su sesión ha expirado. Por favor, recargue la página.');
+                    window.location.reload();
+                    return;
+                }
                 const data = await res.json();
                 if (data.success && data.invoice) {
                     // Update the local invoice data
@@ -3072,12 +3184,7 @@ function facturasApp() {
                 }
             } catch (e) {
                 console.error('Error authorizing invoice:', e);
-                // Optimistic update
-                inv.credito_authorized = newValue;
-                if (newValue) {
-                    inv.credito_authorized_name = this.currentUserFullName;
-                    inv.credito_authorized_at = new Date().toISOString();
-                }
+                alert('Error de conexión al autorizar la factura.');
             }
         },
 
@@ -3109,6 +3216,11 @@ function facturasApp() {
                         shipping_type: inv.shipping_type,
                     }),
                 });
+                if (res.redirected) {
+                    alert('Su sesión ha expirado. Por favor, recargue la página.');
+                    window.location.reload();
+                    return;
+                }
                 const data = await res.json();
                 if (data.success && data.invoice) {
                     Object.assign(inv, data.invoice);

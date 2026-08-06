@@ -83,3 +83,20 @@ def test_run_loop(mock_app):
     # Ensure sync_sap was called at least once
     assert worker.sync_sap.call_count >= 1
     assert not worker.is_alive()
+
+
+@patch('core.sap_connector.SAPHanaConnector')
+def test_sync_sap_reconnect_fallback_missing_connector(mock_connector_cls, mock_app):
+    """Verify that when sap_connector is None, os.environ.get() is called without NameError."""
+    mock_app.sap_connector = None
+    mock_inst = MagicMock()
+    mock_inst.connected = False
+    mock_inst.connect.return_value = False
+    mock_connector_cls.return_value = mock_inst
+
+    worker = SAPSyncWorker(mock_app)
+    # Should attempt to instantiate SAPHanaConnector using os.environ.get() without NameError
+    worker.sync_sap()
+    mock_connector_cls.assert_called_once()
+    assert mock_app.sap_connector is mock_inst
+

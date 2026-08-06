@@ -42,20 +42,24 @@ class UserManager:
 
     TABLE_NAME = "seguimiento_users"
 
-    def __init__(self, fallback_json_path: Optional[str] = None):
+    def __init__(self, fallback_json_path: Optional[str] = None, db_client: Optional[Any] = None):
         self.users: Dict[str, Dict] = {}
         self.current_user = None
         self.sql_engine = None
 
-        # Try SQL connection
-        try:
-            from core.database_client import DatabaseClient
+        # Connect to DB
+        if db_client is not None:
+            self.db_client = db_client
+            self.sql_engine = db_client.get_sql_engine()
+        else:
+            try:
+                from core.database_client import DatabaseClient
 
-            db = DatabaseClient()
-            if db.connect():
-                self.sql_engine = db.get_sql_engine()  # pragma: no cover
-        except Exception as e:  # pragma: no cover
-            logger.warning(f"UserManager SQL error: {e}")  # pragma: no cover
+                self.db_client = DatabaseClient()
+                if self.db_client.connect():
+                    self.sql_engine = self.db_client.get_sql_engine()  # pragma: no cover
+            except Exception as e:  # pragma: no cover
+                logger.warning(f"UserManager SQL error: {e}")  # pragma: no cover
 
         self._ensure_table_exists()
         self._load_users()

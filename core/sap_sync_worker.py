@@ -1,3 +1,4 @@
+import os
 import threading
 import time
 import logging
@@ -52,10 +53,11 @@ class SAPSyncWorker(threading.Thread):
                     logger.warning(f"Worker could not initialize SAPHanaConnector: {e}")
                     return
 
-            if not sap.connected:  # pragma: no cover
-                if not sap.connect():
-                    logger.warning("Worker could not connect to SAP.")
-                    return
+            try:
+                sap._ensure_connected()
+            except Exception as e:
+                logger.warning(f"Worker could not connect to SAP: {e}")
+                return
 
             # Import new orders
             try:
