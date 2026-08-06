@@ -3418,7 +3418,10 @@ def api_toggle_relacion_invoice():  # pragma: no cover
         })
 
         if hasattr(current_app, "audit_mgr"):
-            action_desc = "ADD_TO_RELACION" if selected else "REMOVE_FROM_RELACION"
+            if not invoice_number:
+                action_desc = "UPDATE_RELACION_ORDER"
+            else:
+                action_desc = "ADD_TO_RELACION" if selected else "REMOVE_FROM_RELACION"
             current_app.audit_mgr.log_action(
                 username=current_user.username if current_user.is_authenticated else "system",
                 action_type=action_desc,
