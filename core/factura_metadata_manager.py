@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class FacturaMetadataManager:
     TABLE_NAME = "factura_metadata"
 
-    def __init__(self, db_path=None):
+    def __init__(self, db_path=None, db_client=None):
         if db_path is None:
             # Store runtime data in project-root /data/, not inside the source /core/ dir
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -29,8 +29,11 @@ class FacturaMetadataManager:
         self._worker_thread = threading.Thread(target=self._process_write_queue, daemon=True)
         self._worker_thread.start()
 
-        self.db_client = DatabaseClient()
-        self.db_client.connect()
+        if db_client is not None:
+            self.db_client = db_client
+        else:
+            self.db_client = DatabaseClient()
+            self.db_client.connect()
         self._ensure_table_exists()
         self._load_fallback()
 
@@ -73,7 +76,13 @@ class FacturaMetadataManager:
             # Write synchronously during tests
             self._execute_write(file_path, data)
         else:
-            self._write_queue.put((file_path, data))  # pragma: no cover
+            try:  # pragma: no cover
+                self._write_queue.put((file_path, data), block=True, timeout=2)  # pragma: no cover
+            except queue.Full:  # pragma: no cover
+                logger.warning(  # pragma: no cover
+                    f"JSON write queue full — dropping write for {file_path}. "  # pragma: no cover
+                    "Data is already persisted to SQL."  # pragma: no cover
+                )  # pragma: no cover
 
     def _ensure_table_exists(self):
         try:

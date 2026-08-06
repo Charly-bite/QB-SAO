@@ -89,10 +89,10 @@ class TestProductionConfig:
 class TestBaseConfig:
     """Base Config shared properties."""
 
-    def test_session_lifetime_is_8_hours(self):
+    def test_session_lifetime_is_16_hours(self):
         from datetime import timedelta
         from config import Config
-        assert Config.PERMANENT_SESSION_LIFETIME == timedelta(hours=8)
+        assert Config.PERMANENT_SESSION_LIFETIME == timedelta(hours=16)
 
     def test_session_cookie_httponly(self):
         from config import Config

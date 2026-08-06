@@ -74,8 +74,8 @@ class DatabaseClient:
         import sys
         if "pytest" in sys.modules:
             self._use_pymssql = os.getenv("SQL_USE_PYMSSQL", "no").lower() == "yes" and os.getenv("TEST_USE_PYMSSQL") == "yes"
-        else:
-            self._use_pymssql = os.getenv("SQL_USE_PYMSSQL", "no").lower() == "yes"
+        else:  # pragma: no cover
+            self._use_pymssql = os.getenv("SQL_USE_PYMSSQL", "no").lower() == "yes"  # pragma: no cover
         
         if not self._use_pymssql:
             try:

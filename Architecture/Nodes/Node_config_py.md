@@ -20,7 +20,7 @@ Defines configuration classes for `development`, `staging`, `production`, and `t
 | `TestingConfig` | pytest | CSRF disabled, rate limiter disabled |
 
 ## Key Settings
-- `PERMANENT_SESSION_LIFETIME`: 8 hours
+- `PERMANENT_SESSION_LIFETIME`: 16 hours
 - `SESSION_COOKIE_NAME`: `sao_session`
 - `WTF_CSRF_TIME_LIMIT`: None (no CSRF token expiry)
 
