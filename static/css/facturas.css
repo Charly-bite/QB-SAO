@@ -425,6 +425,14 @@ tr.invoice-row.invoice-row-highlighted {
         border-radius: 0 !important;
         box-shadow: none !important;
     }
+    /* Kill ALL container borders and outlines in print */
+    .border,
+    .border-slate-200,
+    .border-slate-100,
+    [class*="border"] {
+        border-width: 0 !important;
+        border-style: none !important;
+    }
     .space-y-3 {
         margin: 0 !important;
         padding: 0 !important;
@@ -445,7 +453,7 @@ tr.invoice-row.invoice-row-highlighted {
     .overflow-hidden {
         overflow: visible !important;
     }
-    .bg-white.rounded-xl.shadow-sm.border {
+    .bg-white.rounded-xl.shadow-sm {
         border: none !important;
         padding: 0 !important;
     }
