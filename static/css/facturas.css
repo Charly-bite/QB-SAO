@@ -205,7 +205,7 @@ tr.invoice-row.invoice-row-highlighted {
         print-color-adjust: exact !important;
         margin: 0 !important;
         padding: 0 !important;
-        font-size: 8px !important;
+        font-size: 10px !important;
         background: #fff !important;
     }
 
@@ -264,19 +264,19 @@ tr.invoice-row.invoice-row-highlighted {
         width: 100% !important;
         min-width: 0 !important;
         page-break-inside: avoid !important;
-        font-size: 7.5px !important;
+        font-size: 9.5px !important;
         border-collapse: collapse !important;
         table-layout: fixed !important;
     }
     td, th {
-        padding: 1px 2px !important;
-        font-size: 7.5px !important;
-        line-height: 1.15 !important;
+        padding: 1px 3px !important;
+        font-size: 9.5px !important;
+        line-height: 1.2 !important;
         word-wrap: break-word !important;
         overflow-wrap: break-word !important;
     }
     .text-\[9px\] {
-        font-size: 6.5px !important;
+        font-size: 8px !important;
     }
     .py-3 { padding-top: 0.15rem !important; padding-bottom: 0.15rem !important; }
     .px-6 { padding-left: 0.3rem !important; padding-right: 0.3rem !important; }
@@ -286,7 +286,7 @@ tr.invoice-row.invoice-row-highlighted {
         page-break-inside: avoid;
         height: auto !important;
         min-height: 0 !important;
-        line-height: 1.15 !important;
+        line-height: 1.2 !important;
     }
     /* Compact spacer rows */
     tr[style*="height: 16px"], tr[style*="height: 18px"] {
@@ -295,10 +295,10 @@ tr.invoice-row.invoice-row-highlighted {
     /* Data and header rows */
     tr[style*="height: 26px"], tr[style*="height: 28px"],
     tr[style*="height: 32px"] {
-        height: 14px !important;
+        height: 18px !important;
     }
     tr[style*="height: 22px"] {
-        height: 12px !important;
+        height: 15px !important;
     }
     /* Section spacers */
     tr[style*="height: 30px"],
@@ -348,12 +348,12 @@ tr.invoice-row.invoice-row-highlighted {
     #relaciones-table tfoot {
         display: table-footer-group !important;
     }
-    /* Compact the relaciones cells for portrait */
+    /* Relaciones cells for portrait */
     #relaciones-table td,
     #relaciones-table th {
-        padding: 1px 2px !important;
-        font-size: 7.5px !important;
-        line-height: 1.12 !important;
+        padding: 1px 3px !important;
+        font-size: 9.5px !important;
+        line-height: 1.2 !important;
     }
     /* Shrink signature images in footer */
     #relaciones-table tfoot img {
@@ -361,16 +361,16 @@ tr.invoice-row.invoice-row-highlighted {
     }
     /* Signature box labels */
     #relaciones-table tfoot div[style*="font-size: 12px"] {
-        font-size: 7px !important;
-        padding: 3px !important;
-    }
-    /* Signature cursive name — scale down for portrait */
-    #relaciones-table tfoot span[style*="cursive"] {
         font-size: 9px !important;
+        padding: 4px !important;
+    }
+    /* Signature cursive name */
+    #relaciones-table tfoot span[style*="cursive"] {
+        font-size: 12px !important;
     }
     /* Signature area height */
     #relaciones-table tfoot div[style*="height: 70px"] {
-        height: 30px !important;
+        height: 40px !important;
     }
     /* Signature flex gap */
     #relaciones-table tfoot div[style*="gap: 40px"] {
