@@ -221,6 +221,7 @@ def create_app(config_name: Optional[str] = None) -> "OpenOMSApp":
                     "facturas.tab.relaciones",
                     "facturas.tab.pendientes",
                     "facturas.tab.almacen",
+                    "facturas.sign.almacen",
                 })
                 perms.discard("nav.dashboard")
             user._permissions = frozenset(perms)

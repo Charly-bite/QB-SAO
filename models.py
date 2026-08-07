@@ -54,6 +54,7 @@ class User(UserMixin):
                 "facturas.tab.relaciones",
                 "facturas.tab.pendientes",
                 "facturas.tab.almacen",
+                "facturas.sign.almacen",
             ):
                 return True
         if not self._permissions:
