@@ -193,19 +193,20 @@ tr.invoice-row.invoice-row-highlighted {
 }
 
 @media print {
-    /* Force landscape and tight margins */
+    /* Force portrait and tight margins */
     @page {
-        size: letter landscape;
-        margin: 2mm !important;
+        size: letter portrait;
+        margin: 4mm 3mm !important;
     }
 
-    /* Scale everything down aggressively */
+    /* ── Global print reset ── */
     body {
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
         margin: 0 !important;
         padding: 0 !important;
-        font-size: 6.8px !important;
+        font-size: 10px !important;
+        background: #fff !important;
     }
 
     /* Prevent SVGs from expanding */
@@ -214,14 +215,26 @@ tr.invoice-row.invoice-row-highlighted {
         max-height: 0.9rem !important;
     }
 
-    /* Hide ALL UI controls */
+    /* ══════════════════════════════════════════════════
+       HIDE ALL UI CHROME: nav bar, user greeting,
+       flash messages, system alerts, buttons, controls
+       ══════════════════════════════════════════════════ */
     .print-hide, .export-btn, .controls-container,
-    .qb-nav, .qb-breadcrumbs, nav, header, footer {
+    .qb-nav, .qb-breadcrumbs, .qb-user-btn, .qb-avatar,
+    .qb-dropdown, .qb-flash, .qb-page-title,
+    nav, header, footer {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        overflow: hidden !important;
+    }
+
+    /* Hide system alerts (SAP unavailable, etc.) */
+    div[x-cloak], div[x-show*="sapOnline"], div[x-show*="sgaOnline"] {
         display: none !important;
     }
 
-    /* Hide non-active tabs and UI chrome —
-       scoped to the outer space-y-3 container only */
+    /* Hide non-active tabs and UI chrome */
     .space-y-3 > .flex,
     .space-y-3 > .bg-amber-50,
     .space-y-3 > .bg-white.rounded-xl.shadow-sm.border.border-slate-100,
@@ -232,57 +245,70 @@ tr.invoice-row.invoice-row-highlighted {
         display: none !important;
     }
 
-    /* ── Ultra-compact table layout ── */
-    table {
-        width: 100% !important;
-        page-break-inside: avoid !important;
-        font-size: 6.8px !important;
-        border-collapse: collapse !important;
-    }
-    td, th {
-        padding: 0px 2px !important;
-        font-size: 6.8px !important;
-        line-height: 1.05 !important;
-    }
-    .text-\[9px\] {
-        font-size: 6px !important;
-    }
-    .py-3 { padding-top: 0.15rem !important; padding-bottom: 0.15rem !important; }
-    .px-6 { padding-left: 0.3rem !important; padding-right: 0.3rem !important; }
-    
     /* Ocultar botones e interfaces no deseadas en impresión */
     .print\:hidden {
         display: none !important;
     }
 
-    /* ── Extremely compact rows ── */
+    /* ── Remove main container constraints for full-width portrait ── */
+    main, main.max-w-7xl {
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    /* ══════════════════════════════════════════════════
+       TABLE LAYOUT — Optimized for portrait Letter
+       ══════════════════════════════════════════════════ */
+    table {
+        width: 100% !important;
+        min-width: 0 !important;
+        page-break-inside: avoid !important;
+        font-size: 9.5px !important;
+        border-collapse: collapse !important;
+        table-layout: fixed !important;
+    }
+    td, th {
+        padding: 1px 3px !important;
+        font-size: 9.5px !important;
+        line-height: 1.2 !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+    }
+    .text-\[9px\] {
+        font-size: 8px !important;
+    }
+    .py-3 { padding-top: 0.15rem !important; padding-bottom: 0.15rem !important; }
+    .px-6 { padding-left: 0.3rem !important; padding-right: 0.3rem !important; }
+
+    /* ── Row height optimization ── */
     tr {
         page-break-inside: avoid;
         height: auto !important;
         min-height: 0 !important;
-        line-height: 1.05 !important;
+        line-height: 1.2 !important;
     }
-    /* Compact spacer rows — nearly invisible */
+    /* Compact spacer rows */
     tr[style*="height: 16px"], tr[style*="height: 18px"] {
-        height: 1.5px !important;
+        height: 2px !important;
     }
-    /* Compact data and header rows */
+    /* Data and header rows */
     tr[style*="height: 26px"], tr[style*="height: 28px"],
     tr[style*="height: 32px"] {
-        height: 11px !important;
+        height: 18px !important;
     }
     tr[style*="height: 22px"] {
-        height: 9px !important;
+        height: 15px !important;
     }
-    /* Larger spacers */
+    /* Section spacers */
     tr[style*="height: 30px"],
     tr[style*="height: 20px"] {
-        height: 3px !important;
+        height: 4px !important;
     }
     tr[style*="height: 6px"] {
         height: 1px !important;
     }
-    /* Thin signature lines */
+    /* Signature line rows */
     tr[style*="height: 2px"] {
         height: 1.5px !important;
     }
@@ -291,7 +317,7 @@ tr.invoice-row.invoice-row-highlighted {
     th.drag-handle, td.drag-handle {
         display: none !important;
     }
-    /* Hide unselected rows — scoped to facturas table only, NOT relaciones */
+    /* Hide unselected rows — scoped to facturas table only */
     .print-selected-only tr.invoice-row:not(.is-selected) {
         display: none !important;
     }
@@ -299,7 +325,14 @@ tr.invoice-row.invoice-row-highlighted {
         display: none !important;
     }
 
-    /* ── Relaciones table: force all content visible ── */
+    /* ══════════════════════════════════════════════════
+       RELACIONES TABLE — Portrait-optimized layout
+       ══════════════════════════════════════════════════ */
+    #relaciones-table {
+        table-layout: fixed !important;
+        width: 100% !important;
+        min-width: 0 !important;
+    }
     #relaciones-table,
     #relaciones-table thead,
     #relaciones-table tbody,
@@ -315,24 +348,107 @@ tr.invoice-row.invoice-row-highlighted {
     #relaciones-table tfoot {
         display: table-footer-group !important;
     }
-    /* Compact the relaciones table specifically */
+    /* Relaciones cells for portrait */
     #relaciones-table td,
     #relaciones-table th {
-        padding: 0px 1.5px !important;
-        font-size: 6.8px !important;
-        line-height: 1.02 !important;
+        padding: 1px 3px !important;
+        font-size: 9.5px !important;
+        line-height: 1.2 !important;
+    }
+    /* Title row — keep large */
+    #relaciones-table thead tr:first-child td[colspan="5"] {
+        font-size: 16px !important;
+        font-weight: bold !important;
+        padding: 4px !important;
+    }
+    /* Document code (QB-IT-VE-01-F06) */
+    #relaciones-table thead tr:first-child td[colspan="2"]:last-child {
+        font-size: 10px !important;
+    }
+    /* Section headers (Fecha row, Crédito y Cobranza, Almacén y Logística) */
+    #relaciones-table thead tr:nth-child(3) td {
+        font-size: 9px !important;
     }
     /* Shrink signature images in footer */
     #relaciones-table tfoot img {
-        max-height: 18px !important;
+        max-height: 22px !important;
+    }
+    /* Signature box labels */
+    #relaciones-table tfoot div[style*="font-size: 12px"] {
+        font-size: 9px !important;
+        padding: 4px !important;
+    }
+    /* Signature cursive name */
+    #relaciones-table tfoot span[style*="cursive"] {
+        font-size: 12px !important;
+    }
+    /* Signature area height */
+    #relaciones-table tfoot div[style*="height: 70px"] {
+        height: 40px !important;
+    }
+    /* Signature flex gap */
+    #relaciones-table tfoot div[style*="gap: 40px"] {
+        gap: 12px !important;
+    }
+    /* Strip all min-width constraints from columns */
+    #relaciones-table td,
+    #relaciones-table th {
+        min-width: 0 !important;
+        width: auto !important;
+    }
+    /* Portrait column proportions via colgroup — definitive with table-layout:fixed */
+    .rel-col-extra      { width: 7% !important; }
+    .rel-col-factura    { width: 14% !important; }
+    .rel-col-cliente    { width: 27% !important; }
+    .rel-col-importe    { width: 13% !important; }
+    .rel-col-observacion { width: 15% !important; }
+    .rel-col-credito    { width: 6% !important; }
+    .rel-col-contado    { width: 6% !important; }
+    .rel-col-recibido   { width: 6% !important; }
+    .rel-col-entregado  { width: 6% !important; }
+
+    /* Signature underline black line & department boxes in print */
+    #relaciones-table tfoot .sig-line {
+        display: block !important;
+        width: 100% !important;
+        height: 2px !important;
+        background-color: #000000 !important;
+        margin-top: 4px !important;
+        visibility: visible !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+    #relaciones-table tfoot .sig-box {
+        display: block !important;
+        width: 100% !important;
+        text-align: center !important;
+        font-weight: bold !important;
+        font-size: 9px !important;
+        padding: 3px 2px !important;
+        margin-top: 4px !important;
+        border: 1px solid #808080 !important;
+        visibility: visible !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+    /* Also hide table outer border in print */
+    #relaciones-table {
+        border: none !important;
     }
 
-    /* Remove shadows, rounded corners */
+    /* ── Layout cleanup ── */
     .rounded-xl, .shadow-sm {
         border-radius: 0 !important;
         box-shadow: none !important;
     }
-    /* Remove all outer spacing */
+    /* Kill ALL container borders and outlines in print */
+    .border,
+    .border-slate-200,
+    .border-slate-100,
+    [class*="border"] {
+        border-width: 0 !important;
+        border-style: none !important;
+    }
     .space-y-3 {
         margin: 0 !important;
         padding: 0 !important;
@@ -347,14 +463,13 @@ tr.invoice-row.invoice-row-highlighted {
         margin-top: 0 !important;
         margin-bottom: 0 !important;
     }
-    /* Compact the relación container */
     .overflow-x-auto {
         overflow: visible !important;
     }
     .overflow-hidden {
         overflow: visible !important;
     }
-    .bg-white.rounded-xl.shadow-sm.border {
+    .bg-white.rounded-xl.shadow-sm {
         border: none !important;
         padding: 0 !important;
     }

@@ -58,6 +58,18 @@
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div class="overflow-x-auto">
             <table id="relaciones-table" class="w-full border-collapse" style="min-width: 800px; font-family: 'Calibri', 'Segoe UI', sans-serif; font-size: 13px; border: 1px solid #999;">
+                <!-- Column widths — print CSS overrides these via .rel-col-* classes -->
+                <colgroup>
+                    <col class="rel-col-extra">
+                    <col class="rel-col-factura">
+                    <col class="rel-col-cliente">
+                    <col class="rel-col-importe">
+                    <col class="rel-col-observacion">
+                    <col class="rel-col-credito">
+                    <col class="rel-col-contado">
+                    <col class="rel-col-recibido">
+                    <col class="rel-col-entregado">
+                </colgroup>
 
                 <thead>
                     <!-- Row 1: Title -->
@@ -303,17 +315,17 @@
                             <div style="display: flex; justify-content: space-between; gap: 40px; width: 100%;">
                                 <!-- Facturación Box -->
                                 <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;">
-                                    <div style="height: 40px; display: flex; align-items: flex-end; justify-content: center; width: 100%; cursor: pointer;"
+                                    <div style="height: 70px; display: flex; align-items: flex-end; justify-content: center; width: 100%; cursor: pointer;"
                                          @click="toggleSignature('facturacion')">
                                         <template x-if="signatures.facturacion?.signature_path">
-                                            <img :src="'/static/' + signatures.facturacion.signature_path" style="max-height: 36px; object-fit: contain;" />
+                                            <img :src="'/static/' + signatures.facturacion.signature_path" style="max-height: 60px; max-width: 90%; object-fit: contain;" />
                                         </template>
                                         <template x-if="!signatures.facturacion?.signature_path">
-                                            <span x-show="signatures.facturacion" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 14px; color: #1a3c7a;" x-text="signatures.facturacion?.name || ''"></span>
+                                            <span x-show="signatures.facturacion" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 16px; color: #1a3c7a;" x-text="signatures.facturacion?.name || ''"></span>
                                         </template>
                                     </div>
-                                    <div style="width: 100%; height: 2px; background-color: #000000; margin-top: 4px;"></div>
-                                    <div style="width: 100%; text-align: center; font-weight: bold; font-size: 12px; background-color: #A6A6A6; border: 1px solid #808080; padding: 5px; margin-top: 6px; cursor: pointer; color: #000000;"
+                                    <div class="sig-line" style="width: 100%; height: 2px; background-color: #000000; margin-top: 4px;"></div>
+                                    <div class="sig-box" style="width: 100%; text-align: center; font-weight: bold; font-size: 12px; background-color: #A6A6A6; border: 1px solid #808080; padding: 5px; margin-top: 6px; cursor: pointer; color: #000000;"
                                          @click="toggleSignature('facturacion')"
                                          :style="signatures.facturacion ? { backgroundColor: '#7CB342', color: '#fff' } : { backgroundColor: '#A6A6A6' }">
                                         Facturación
@@ -322,17 +334,17 @@
 
                                 <!-- Crédito y Cobranza Box -->
                                 <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;">
-                                    <div style="height: 40px; display: flex; align-items: flex-end; justify-content: center; width: 100%; cursor: pointer;"
+                                    <div style="height: 70px; display: flex; align-items: flex-end; justify-content: center; width: 100%; cursor: pointer;"
                                          @click="toggleSignature('credito')">
                                         <template x-if="signatures.credito?.signature_path">
-                                            <img :src="'/static/' + signatures.credito.signature_path" style="max-height: 36px; object-fit: contain;" />
+                                            <img :src="'/static/' + signatures.credito.signature_path" style="max-height: 60px; max-width: 90%; object-fit: contain;" />
                                         </template>
                                         <template x-if="!signatures.credito?.signature_path">
-                                            <span x-show="signatures.credito" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 14px; color: #1a3c7a;" x-text="signatures.credito?.name || ''"></span>
+                                            <span x-show="signatures.credito" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 16px; color: #1a3c7a;" x-text="signatures.credito?.name || ''"></span>
                                         </template>
                                     </div>
-                                    <div style="width: 100%; height: 2px; background-color: #000000; margin-top: 4px;"></div>
-                                    <div style="width: 100%; text-align: center; font-weight: bold; font-size: 12px; background-color: #A6A6A6; border: 1px solid #808080; padding: 5px; margin-top: 6px; cursor: pointer; color: #000000;"
+                                    <div class="sig-line" style="width: 100%; height: 2px; background-color: #000000; margin-top: 4px;"></div>
+                                    <div class="sig-box" style="width: 100%; text-align: center; font-weight: bold; font-size: 12px; background-color: #A6A6A6; border: 1px solid #808080; padding: 5px; margin-top: 6px; cursor: pointer; color: #000000;"
                                          @click="toggleSignature('credito')"
                                          :style="signatures.credito ? { backgroundColor: '#7CB342', color: '#fff' } : { backgroundColor: '#A6A6A6' }">
                                         Crédito y Cobranza
@@ -341,17 +353,17 @@
 
                                 <!-- Almacén Box -->
                                 <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;">
-                                    <div style="height: 40px; display: flex; align-items: flex-end; justify-content: center; width: 100%; cursor: pointer;"
+                                    <div style="height: 70px; display: flex; align-items: flex-end; justify-content: center; width: 100%; cursor: pointer;"
                                          @click="toggleSignature('almacen')">
                                         <template x-if="signatures.almacen?.signature_path">
-                                            <img :src="'/static/' + signatures.almacen.signature_path" style="max-height: 36px; object-fit: contain;" />
+                                            <img :src="'/static/' + signatures.almacen.signature_path" style="max-height: 60px; max-width: 90%; object-fit: contain;" />
                                         </template>
                                         <template x-if="!signatures.almacen?.signature_path">
-                                            <span x-show="signatures.almacen" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 14px; color: #1a3c7a;" x-text="signatures.almacen?.name || ''"></span>
+                                            <span x-show="signatures.almacen" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 16px; color: #1a3c7a;" x-text="signatures.almacen?.name || ''"></span>
                                         </template>
                                     </div>
-                                    <div style="width: 100%; height: 2px; background-color: #000000; margin-top: 4px;"></div>
-                                    <div style="width: 100%; text-align: center; font-weight: bold; font-size: 12px; background-color: #A6A6A6; border: 1px solid #808080; padding: 5px; margin-top: 6px; cursor: pointer; color: #000000;"
+                                    <div class="sig-line" style="width: 100%; height: 2px; background-color: #000000; margin-top: 4px;"></div>
+                                    <div class="sig-box" style="width: 100%; text-align: center; font-weight: bold; font-size: 12px; background-color: #A6A6A6; border: 1px solid #808080; padding: 5px; margin-top: 6px; cursor: pointer; color: #000000;"
                                          @click="toggleSignature('almacen')"
                                          :style="signatures.almacen ? { backgroundColor: '#7CB342', color: '#fff' } : { backgroundColor: '#A6A6A6' }">
                                         Almacén

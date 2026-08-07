@@ -128,6 +128,14 @@ class FacturaMetadataManager:
                     BEGIN
                         ALTER TABLE {self.TABLE_NAME} ADD sent_to_credito BIT NULL;
                     END
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('{self.TABLE_NAME}') AND name = 'observaciones')
+                    BEGIN
+                        ALTER TABLE {self.TABLE_NAME} ADD observaciones VARCHAR(MAX) NULL;
+                    END
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('{self.TABLE_NAME}') AND name = 'almacen_notes')
+                    BEGIN
+                        ALTER TABLE {self.TABLE_NAME} ADD almacen_notes VARCHAR(MAX) NULL;
+                    END
                 END
                 
                 IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='factura_daily_order' and xtype='U')
@@ -258,7 +266,7 @@ class FacturaMetadataManager:
         auths = {}
         # 1. Load from local fallback
         for k, v in self.local_metadata.items():
-            if isinstance(v, dict) and (v.get("credito_authorized") is not None or v.get("sent_to_credito") is not None):
+            if isinstance(v, dict) and (v.get("credito_authorized") is not None or v.get("sent_to_credito") is not None or v.get("credito_notes") is not None or v.get("credito_revoked_from_relacion") is not None):
                 auths[int(k)] = {
                     "credito_authorized": v.get("credito_authorized"),
                     "credito_authorized_by": v.get("credito_authorized_by"),
@@ -434,6 +442,116 @@ class FacturaMetadataManager:
                     conn.exec_driver_sql(query, (notes, invoice_number, invoice_number, notes))
             except Exception as e:
                 logger.error(f"Error saving credito notes: {e}")
+        return True
+
+    def get_observaciones(self):
+        observaciones = {}
+        # 1. Load from local fallback first
+        for k, v in self.local_metadata.items():
+            try:
+                if isinstance(v, dict) and v.get("observaciones"):
+                    observaciones[int(k)] = v.get("observaciones")
+            except ValueError:
+                pass
+                
+        # 2. SQL Server load
+        if self.db_client.engine:
+            try:
+                with self.db_client.engine.connect() as conn:
+                    query = f"SELECT invoice_number, observaciones FROM {self.TABLE_NAME} WHERE observaciones IS NOT NULL AND observaciones != ''"
+                    result = conn.exec_driver_sql(query).fetchall()
+                    for row in result:
+                        inv, obs = row[0], row[1]
+                        if obs:
+                            observaciones[inv] = obs
+                            if str(inv) not in self.local_metadata or not isinstance(self.local_metadata[str(inv)], dict):
+                                self.local_metadata[str(inv)] = {"category": "", "color": "", "custom_customer_name": ""}
+                            self.local_metadata[str(inv)]["observaciones"] = obs
+                    self._save_fallback()
+            except Exception as e:
+                logger.error(f"Error fetching observaciones from SQL: {e}")
+                
+        return observaciones
+
+    def save_observaciones(self, invoice_number: int, observaciones: str):
+        inv_str = str(invoice_number)
+        if inv_str not in self.local_metadata or not isinstance(self.local_metadata[inv_str], dict):
+            self.local_metadata[inv_str] = {"category": "", "color": "", "custom_customer_name": ""}
+        self.local_metadata[inv_str]["observaciones"] = observaciones
+        self._save_fallback()
+
+        if self.db_client.engine:
+            try:
+                with self.db_client.engine.begin() as conn:
+                    query = f"""
+                        UPDATE {self.TABLE_NAME}
+                        SET observaciones = ?
+                        WHERE invoice_number = ?;
+
+                        IF @@ROWCOUNT = 0
+                        BEGIN
+                            INSERT INTO {self.TABLE_NAME} (invoice_number, observaciones)
+                            VALUES (?, ?);
+                        END
+                    """
+                    conn.exec_driver_sql(query, (observaciones, invoice_number, invoice_number, observaciones))
+            except Exception as e:
+                logger.error(f"Error saving observaciones to SQL: {e}")
+        return True
+
+    def get_almacen_notes(self):
+        notes_map = {}
+        # 1. Load from local fallback first
+        for k, v in self.local_metadata.items():
+            try:
+                if isinstance(v, dict) and v.get("almacen_notes"):
+                    notes_map[int(k)] = v.get("almacen_notes")
+            except ValueError:
+                pass
+                
+        # 2. SQL Server load
+        if self.db_client.engine:
+            try:
+                with self.db_client.engine.connect() as conn:
+                    query = f"SELECT invoice_number, almacen_notes FROM {self.TABLE_NAME} WHERE almacen_notes IS NOT NULL AND almacen_notes != ''"
+                    result = conn.exec_driver_sql(query).fetchall()
+                    for row in result:
+                        inv, note = row[0], row[1]
+                        if note:
+                            notes_map[inv] = note
+                            if str(inv) not in self.local_metadata or not isinstance(self.local_metadata[str(inv)], dict):
+                                self.local_metadata[str(inv)] = {"category": "", "color": "", "custom_customer_name": ""}
+                            self.local_metadata[str(inv)]["almacen_notes"] = note
+                    self._save_fallback()
+            except Exception as e:
+                logger.error(f"Error fetching almacen_notes from SQL: {e}")
+                
+        return notes_map
+
+    def save_almacen_notes(self, invoice_number: int, notes: str):
+        inv_str = str(invoice_number)
+        if inv_str not in self.local_metadata or not isinstance(self.local_metadata[inv_str], dict):
+            self.local_metadata[inv_str] = {"category": "", "color": "", "custom_customer_name": ""}
+        self.local_metadata[inv_str]["almacen_notes"] = notes
+        self._save_fallback()
+
+        if self.db_client.engine:
+            try:
+                with self.db_client.engine.begin() as conn:
+                    query = f"""
+                        UPDATE {self.TABLE_NAME}
+                        SET almacen_notes = ?
+                        WHERE invoice_number = ?;
+
+                        IF @@ROWCOUNT = 0
+                        BEGIN
+                            INSERT INTO {self.TABLE_NAME} (invoice_number, almacen_notes)
+                            VALUES (?, ?);
+                        END
+                    """
+                    conn.exec_driver_sql(query, (notes, invoice_number, invoice_number, notes))
+            except Exception as e:
+                logger.error(f"Error saving almacen_notes to SQL: {e}")
         return True
 
     def get_daily_order(self, date_str: str):
