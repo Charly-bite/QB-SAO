@@ -407,13 +407,29 @@ tr.invoice-row.invoice-row-highlighted {
     .rel-col-recibido   { width: 6% !important; }
     .rel-col-entregado  { width: 6% !important; }
 
-    /* Hide signature underline black bar in print */
-    #relaciones-table tfoot div[style*="height: 2px"],
-    #relaciones-table tfoot div[style*="background-color"],
-    #relaciones-table tfoot div[style*="background-color: #000"] {
-        display: none !important;
-        height: 0 !important;
-        visibility: hidden !important;
+    /* Signature underline black line & department boxes in print */
+    #relaciones-table tfoot .sig-line {
+        display: block !important;
+        width: 100% !important;
+        height: 2px !important;
+        background-color: #000000 !important;
+        margin-top: 4px !important;
+        visibility: visible !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+    #relaciones-table tfoot .sig-box {
+        display: block !important;
+        width: 100% !important;
+        text-align: center !important;
+        font-weight: bold !important;
+        font-size: 9px !important;
+        padding: 3px 2px !important;
+        margin-top: 4px !important;
+        border: 1px solid #808080 !important;
+        visibility: visible !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
     }
     /* Also hide table outer border in print */
     #relaciones-table {
