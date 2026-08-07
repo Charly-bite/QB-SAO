@@ -228,7 +228,8 @@ class TestReyesMPermissions:
         "nav.monitor",
         "facturas.tab.relaciones",
         "facturas.tab.pendientes",
-        "facturas.tab.almacen"
+        "facturas.tab.almacen",
+        "facturas.sign.almacen"
     ])
     def test_reyesm_has_required_permissions(self, permission):
         u = _make_user(username="ReyesM", role="viewer")
@@ -239,7 +240,8 @@ class TestReyesMPermissions:
         "nav.monitor",
         "facturas.tab.relaciones",
         "facturas.tab.pendientes",
-        "facturas.tab.almacen"
+        "facturas.tab.almacen",
+        "facturas.sign.almacen"
     ])
     def test_reyesm_case_insensitive_has_required_permissions(self, permission):
         u = _make_user(username="reyesm", role="viewer")

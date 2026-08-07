@@ -303,13 +303,13 @@
                             <div style="display: flex; justify-content: space-between; gap: 40px; width: 100%;">
                                 <!-- Facturación Box -->
                                 <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;">
-                                    <div style="height: 40px; display: flex; align-items: flex-end; justify-content: center; width: 100%; cursor: pointer;"
+                                    <div style="height: 70px; display: flex; align-items: flex-end; justify-content: center; width: 100%; cursor: pointer;"
                                          @click="toggleSignature('facturacion')">
                                         <template x-if="signatures.facturacion?.signature_path">
-                                            <img :src="'/static/' + signatures.facturacion.signature_path" style="max-height: 36px; object-fit: contain;" />
+                                            <img :src="'/static/' + signatures.facturacion.signature_path" style="max-height: 60px; max-width: 90%; object-fit: contain;" />
                                         </template>
                                         <template x-if="!signatures.facturacion?.signature_path">
-                                            <span x-show="signatures.facturacion" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 14px; color: #1a3c7a;" x-text="signatures.facturacion?.name || ''"></span>
+                                            <span x-show="signatures.facturacion" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 16px; color: #1a3c7a;" x-text="signatures.facturacion?.name || ''"></span>
                                         </template>
                                     </div>
                                     <div style="width: 100%; height: 2px; background-color: #000000; margin-top: 4px;"></div>
@@ -322,13 +322,13 @@
 
                                 <!-- Crédito y Cobranza Box -->
                                 <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;">
-                                    <div style="height: 40px; display: flex; align-items: flex-end; justify-content: center; width: 100%; cursor: pointer;"
+                                    <div style="height: 70px; display: flex; align-items: flex-end; justify-content: center; width: 100%; cursor: pointer;"
                                          @click="toggleSignature('credito')">
                                         <template x-if="signatures.credito?.signature_path">
-                                            <img :src="'/static/' + signatures.credito.signature_path" style="max-height: 36px; object-fit: contain;" />
+                                            <img :src="'/static/' + signatures.credito.signature_path" style="max-height: 60px; max-width: 90%; object-fit: contain;" />
                                         </template>
                                         <template x-if="!signatures.credito?.signature_path">
-                                            <span x-show="signatures.credito" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 14px; color: #1a3c7a;" x-text="signatures.credito?.name || ''"></span>
+                                            <span x-show="signatures.credito" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 16px; color: #1a3c7a;" x-text="signatures.credito?.name || ''"></span>
                                         </template>
                                     </div>
                                     <div style="width: 100%; height: 2px; background-color: #000000; margin-top: 4px;"></div>
@@ -341,13 +341,13 @@
 
                                 <!-- Almacén Box -->
                                 <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;">
-                                    <div style="height: 40px; display: flex; align-items: flex-end; justify-content: center; width: 100%; cursor: pointer;"
+                                    <div style="height: 70px; display: flex; align-items: flex-end; justify-content: center; width: 100%; cursor: pointer;"
                                          @click="toggleSignature('almacen')">
                                         <template x-if="signatures.almacen?.signature_path">
-                                            <img :src="'/static/' + signatures.almacen.signature_path" style="max-height: 36px; object-fit: contain;" />
+                                            <img :src="'/static/' + signatures.almacen.signature_path" style="max-height: 60px; max-width: 90%; object-fit: contain;" />
                                         </template>
                                         <template x-if="!signatures.almacen?.signature_path">
-                                            <span x-show="signatures.almacen" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 14px; color: #1a3c7a;" x-text="signatures.almacen?.name || ''"></span>
+                                            <span x-show="signatures.almacen" style="font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 16px; color: #1a3c7a;" x-text="signatures.almacen?.name || ''"></span>
                                         </template>
                                     </div>
                                     <div style="width: 100%; height: 2px; background-color: #000000; margin-top: 4px;"></div>
