@@ -1905,6 +1905,7 @@ function facturasApp() {
                     this.signatures = {
                         facturacion: data.signatures.facturacion || null,
                         credito: data.signatures.credito || null,
+                        almacen: data.signatures.almacen || null,
                     };
                 }
             } else if (data.type === 'dia_cerrado') {
@@ -2914,9 +2915,10 @@ function facturasApp() {
                     this.signatures = {
                         facturacion: sigs.facturacion || null,
                         credito: sigs.credito || null,
+                        almacen: sigs.almacen || null,
                     };
                 } else {
-                    this.signatures = { facturacion: null, credito: null };
+                    this.signatures = { facturacion: null, credito: null, almacen: null };
                 }
             } catch (e) {
                 console.error('Error fetching relacion:', e);
