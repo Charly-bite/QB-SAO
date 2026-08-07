@@ -396,29 +396,28 @@ tr.invoice-row.invoice-row-highlighted {
         min-width: 0 !important;
         width: auto !important;
     }
-    /* Portrait column proportions — more space for content, less for checkboxes */
-    #relaciones-table th:nth-child(1),
-    #relaciones-table td:nth-child(1) { width: 8% !important; }    /* Extra */
-    #relaciones-table th:nth-child(2),
-    #relaciones-table td:nth-child(2) { width: 15% !important; }   /* No. Factura */
-    #relaciones-table th:nth-child(3),
-    #relaciones-table td:nth-child(3) { width: 30% !important; }   /* Cliente */
-    #relaciones-table th:nth-child(4),
-    #relaciones-table td:nth-child(4) { width: 14% !important; }   /* Importe */
-    #relaciones-table th:nth-child(5),
-    #relaciones-table td:nth-child(5) { width: 17% !important; }   /* Observación */
-    #relaciones-table th:nth-child(6),
-    #relaciones-table td:nth-child(6) { width: 5% !important; }    /* Crédito */
-    #relaciones-table th:nth-child(7),
-    #relaciones-table td:nth-child(7) { width: 5% !important; }    /* Contado */
-    #relaciones-table th:nth-child(8),
-    #relaciones-table td:nth-child(8) { width: 3% !important; }    /* Recibido */
-    #relaciones-table th:nth-child(9),
-    #relaciones-table td:nth-child(9) { width: 3% !important; }    /* Entregado */
+    /* Portrait column proportions via colgroup — definitive with table-layout:fixed */
+    .rel-col-extra      { width: 8% !important; }
+    .rel-col-factura    { width: 15% !important; }
+    .rel-col-cliente    { width: 30% !important; }
+    .rel-col-importe    { width: 14% !important; }
+    .rel-col-observacion { width: 17% !important; }
+    .rel-col-credito    { width: 5% !important; }
+    .rel-col-contado    { width: 5% !important; }
+    .rel-col-recibido   { width: 3% !important; }
+    .rel-col-entregado  { width: 3% !important; }
 
     /* Hide signature underline black bar in print */
-    #relaciones-table tfoot div[style*="background-color: #000000"] {
+    #relaciones-table tfoot div[style*="height: 2px"],
+    #relaciones-table tfoot div[style*="background-color"],
+    #relaciones-table tfoot div[style*="background-color: #000"] {
         display: none !important;
+        height: 0 !important;
+        visibility: hidden !important;
+    }
+    /* Also hide table outer border in print */
+    #relaciones-table {
+        border: none !important;
     }
 
     /* ── Layout cleanup ── */

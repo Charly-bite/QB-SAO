@@ -58,6 +58,18 @@
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div class="overflow-x-auto">
             <table id="relaciones-table" class="w-full border-collapse" style="min-width: 800px; font-family: 'Calibri', 'Segoe UI', sans-serif; font-size: 13px; border: 1px solid #999;">
+                <!-- Column widths — print CSS overrides these via .rel-col-* classes -->
+                <colgroup>
+                    <col class="rel-col-extra">
+                    <col class="rel-col-factura">
+                    <col class="rel-col-cliente">
+                    <col class="rel-col-importe">
+                    <col class="rel-col-observacion">
+                    <col class="rel-col-credito">
+                    <col class="rel-col-contado">
+                    <col class="rel-col-recibido">
+                    <col class="rel-col-entregado">
+                </colgroup>
 
                 <thead>
                     <!-- Row 1: Title -->
