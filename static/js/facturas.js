@@ -1027,7 +1027,7 @@ function facturasApp() {
 
         async addManualInvoiceDirectly() {
             this.addManualInvoiceToList();
-            if (this.addInvoiceMode === 'manual' && this.addInvoiceManualList.length > 0) {
+            if (this.addInvoiceManualList.length > 0) {
                 await this.addSelectedInvoices();
             }
         },
