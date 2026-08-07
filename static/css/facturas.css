@@ -363,7 +363,7 @@ tr.invoice-row.invoice-row-highlighted {
     }
     /* Document code (QB-IT-VE-01-F06) */
     #relaciones-table thead tr:first-child td[colspan="2"]:last-child {
-        font-size: 8px !important;
+        font-size: 10px !important;
     }
     /* Section headers (Fecha row, Crédito y Cobranza, Almacén y Logística) */
     #relaciones-table thead tr:nth-child(3) td {
@@ -397,15 +397,15 @@ tr.invoice-row.invoice-row-highlighted {
         width: auto !important;
     }
     /* Portrait column proportions via colgroup — definitive with table-layout:fixed */
-    .rel-col-extra      { width: 8% !important; }
-    .rel-col-factura    { width: 15% !important; }
-    .rel-col-cliente    { width: 30% !important; }
-    .rel-col-importe    { width: 14% !important; }
-    .rel-col-observacion { width: 17% !important; }
-    .rel-col-credito    { width: 5% !important; }
-    .rel-col-contado    { width: 5% !important; }
-    .rel-col-recibido   { width: 3% !important; }
-    .rel-col-entregado  { width: 3% !important; }
+    .rel-col-extra      { width: 7% !important; }
+    .rel-col-factura    { width: 14% !important; }
+    .rel-col-cliente    { width: 27% !important; }
+    .rel-col-importe    { width: 13% !important; }
+    .rel-col-observacion { width: 15% !important; }
+    .rel-col-credito    { width: 6% !important; }
+    .rel-col-contado    { width: 6% !important; }
+    .rel-col-recibido   { width: 6% !important; }
+    .rel-col-entregado  { width: 6% !important; }
 
     /* Hide signature underline black bar in print */
     #relaciones-table tfoot div[style*="height: 2px"],
