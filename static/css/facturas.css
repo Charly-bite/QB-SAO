@@ -355,6 +355,20 @@ tr.invoice-row.invoice-row-highlighted {
         font-size: 9.5px !important;
         line-height: 1.2 !important;
     }
+    /* Title row — keep large */
+    #relaciones-table thead tr:first-child td[colspan="5"] {
+        font-size: 16px !important;
+        font-weight: bold !important;
+        padding: 4px !important;
+    }
+    /* Document code (QB-IT-VE-01-F06) */
+    #relaciones-table thead tr:first-child td[colspan="2"]:last-child {
+        font-size: 8px !important;
+    }
+    /* Section headers (Fecha row, Crédito y Cobranza, Almacén y Logística) */
+    #relaciones-table thead tr:nth-child(3) td {
+        font-size: 9px !important;
+    }
     /* Shrink signature images in footer */
     #relaciones-table tfoot img {
         max-height: 22px !important;
@@ -382,25 +396,30 @@ tr.invoice-row.invoice-row-highlighted {
         min-width: 0 !important;
         width: auto !important;
     }
-    /* Portrait column proportions — redistribute for narrower page */
+    /* Portrait column proportions — more space for content, less for checkboxes */
     #relaciones-table th:nth-child(1),
-    #relaciones-table td:nth-child(1) { width: 6% !important; }    /* Extra */
+    #relaciones-table td:nth-child(1) { width: 7% !important; }    /* Extra */
     #relaciones-table th:nth-child(2),
     #relaciones-table td:nth-child(2) { width: 14% !important; }   /* No. Factura */
     #relaciones-table th:nth-child(3),
-    #relaciones-table td:nth-child(3) { width: 26% !important; }   /* Cliente */
+    #relaciones-table td:nth-child(3) { width: 28% !important; }   /* Cliente */
     #relaciones-table th:nth-child(4),
-    #relaciones-table td:nth-child(4) { width: 12% !important; }   /* Importe */
+    #relaciones-table td:nth-child(4) { width: 13% !important; }   /* Importe */
     #relaciones-table th:nth-child(5),
     #relaciones-table td:nth-child(5) { width: 18% !important; }   /* Observación */
     #relaciones-table th:nth-child(6),
-    #relaciones-table td:nth-child(6) { width: 6% !important; }    /* Crédito */
+    #relaciones-table td:nth-child(6) { width: 5% !important; }    /* Crédito */
     #relaciones-table th:nth-child(7),
-    #relaciones-table td:nth-child(7) { width: 6% !important; }    /* Contado */
+    #relaciones-table td:nth-child(7) { width: 5% !important; }    /* Contado */
     #relaciones-table th:nth-child(8),
-    #relaciones-table td:nth-child(8) { width: 6% !important; }    /* Recibido */
+    #relaciones-table td:nth-child(8) { width: 5% !important; }    /* Recibido */
     #relaciones-table th:nth-child(9),
-    #relaciones-table td:nth-child(9) { width: 6% !important; }    /* Entregado */
+    #relaciones-table td:nth-child(9) { width: 5% !important; }    /* Entregado */
+
+    /* Hide signature underline black bar in print */
+    #relaciones-table tfoot div[style*="background-color: #000000"] {
+        display: none !important;
+    }
 
     /* ── Layout cleanup ── */
     .rounded-xl, .shadow-sm {
