@@ -2371,6 +2371,10 @@ def api_facturas_pending_summary():  # pragma: no cover
                 if order.get('factura_number')
             }
             
+        overrides = getattr(current_app, "factura_metadata_mgr", None)
+        obs_overrides = overrides.get_observaciones() if overrides and hasattr(overrides, "get_observaciones") else {}
+        almacen_notes_map = overrides.get_almacen_notes() if overrides and hasattr(overrides, "get_almacen_notes") else {}
+
         # Group invoices by date
         days_map = {}
         for inv in all_invoices:
@@ -2387,14 +2391,22 @@ def api_facturas_pending_summary():  # pragma: no cover
                 
             days_map[inv_date]["total_invoices"] += 1
             inv_num_str = str(inv.get("invoice_number"))
+            inv_num_int = int(inv.get("invoice_number")) if inv_num_str.isdigit() else 0
             
-            # Attach observaciones
+            # Attach observaciones and almacen_notes
             order = factura_to_order.get(inv_num_str)
-            if order:
+            meta_obs = obs_overrides.get(inv_num_int)
+            if meta_obs:
+                inv['observaciones'] = meta_obs
+            elif order:
                 inv['observaciones'] = order.get('observaciones', '')
-                inv['related_order_id'] = order.get('order_id')
             else:
                 inv['observaciones'] = ''
+            inv['almacen_notes'] = almacen_notes_map.get(inv_num_int, '')
+
+            if order:
+                inv['related_order_id'] = order.get('order_id')
+            else:
                 inv['related_order_id'] = None
             
             if inv_num_str in invoices_in_relacion:
@@ -2451,6 +2463,8 @@ def api_facturas():
         # Fetch category overrides
         category_overrides, color_overrides, custom_names = overrides.get_overrides() if overrides else ({}, {}, {})
         credito_auths = overrides.get_credito_authorizations() if overrides else {}
+        obs_overrides = overrides.get_observaciones() if overrides and hasattr(overrides, "get_observaciones") else {}
+        almacen_notes_map = overrides.get_almacen_notes() if overrides and hasattr(overrides, "get_almacen_notes") else {}
 
         for inv in invoices:
             inv_num_str = str(inv['invoice_number'])
@@ -2482,12 +2496,20 @@ def api_facturas():
                 inv['credito_notes'] = ''
                 inv['sent_to_credito'] = False
             order = factura_to_order.get(inv_num_str)
+            meta_obs = obs_overrides.get(inv_num_int)
+            if meta_obs:
+                inv['observaciones'] = meta_obs
+            elif order:
+                inv['observaciones'] = order.get('observaciones', '')
+            else:
+                inv['observaciones'] = ''
+            inv['almacen_notes'] = almacen_notes_map.get(inv_num_int, '')
+
             if order:  # pragma: no cover
                 status = order.get('status')
                 inv['recibido'] = status in [OrderStatus.READY.value, OrderStatus.SHIPPED.value]
                 inv['entrega'] = status == OrderStatus.SHIPPED.value
                 inv['related_order_id'] = order.get('order_id')
-                inv['observaciones'] = order.get('observaciones', '')
                 inv['rebote'] = order.get('rebote', False)
                 inv['order_status'] = status
                 inv['order_sap_status'] = order.get('sap_status')
@@ -2495,7 +2517,6 @@ def api_facturas():
                 inv['recibido'] = False
                 inv['entrega'] = False
                 inv['related_order_id'] = None
-                inv['observaciones'] = ''
                 inv['rebote'] = False
                 inv['order_status'] = None
                 inv['order_sap_status'] = None
@@ -2837,7 +2858,7 @@ def api_facturas_export():  # pragma: no cover
 
         def apply_page_settings(ws_obj):
             from openpyxl.worksheet.page import PageMargins
-            ws_obj.page_setup.orientation = "landscape"
+            ws_obj.page_setup.orientation = "portrait"
             ws_obj.page_setup.paperSize = 1  # 1 = Letter
             ws_obj.page_setup.fitToWidth = 1
             ws_obj.page_setup.fitToHeight = 0
@@ -3054,7 +3075,7 @@ def api_facturas_export_custom():  # pragma: no cover
         ws.title = "Relacion de Envios"
         
         from openpyxl.worksheet.page import PageMargins
-        ws.page_setup.orientation = "landscape"
+        ws.page_setup.orientation = "portrait"
         ws.page_setup.paperSize = 1  # 1 = Letter
         ws.page_setup.fitToWidth = 1
         ws.page_setup.fitToHeight = 0
@@ -3628,7 +3649,7 @@ def api_export_relacion(folio):  # pragma: no cover
         ws.title = "Relacion de Envios"
 
         from openpyxl.worksheet.page import PageMargins
-        ws.page_setup.orientation = "landscape"
+        ws.page_setup.orientation = "portrait"
         ws.page_setup.paperSize = 1
         ws.page_setup.fitToWidth = 1
         ws.page_setup.fitToHeight = 0
@@ -4032,7 +4053,7 @@ def api_cerrar_dia():  # pragma: no cover
 @login_required
 def api_update_signature(folio):  # pragma: no cover
     """Sign or unsign a specific area of the relación."""
-    if not current_user.can_edit_facturas():
+    if not (current_user.can_edit_facturas() or current_user.can_sign_almacen() or current_user.can_sign_credito() or current_user.can_sign_facturacion()):
         return jsonify({"error": "Sin permisos"}), 403
 
     data = request.get_json() or {}
@@ -4042,20 +4063,22 @@ def api_update_signature(folio):  # pragma: no cover
     if not area or not action:
         return jsonify({"error": "Se requieren 'area' y 'action'"}), 400
 
-    # Validate role-based permissions for signing
-    if action == "sign":
-        permission_map = {
-            "facturacion": current_user.can_sign_facturacion(),
-            "credito": current_user.can_sign_credito(),
+    # Validate role-based permissions for signing / unsigning
+    permission_map = {
+        "facturacion": current_user.can_sign_facturacion(),
+        "credito": current_user.can_sign_credito(),
+        "almacen": current_user.can_sign_almacen(),
+    }
+    if area in permission_map and not permission_map[area]:
+        area_labels = {
+            "facturacion": "Facturación",
+            "credito": "Crédito y Cobranza",
+            "almacen": "Almacén",
         }
-        if area in permission_map and not permission_map[area]:
-            area_labels = {
-                "facturacion": "Facturación",
-                "credito": "Crédito y Cobranza",
-            }
-            return jsonify({
-                "error": f"No tienes permiso para firmar el área de {area_labels.get(area, area)}."
-            }), 403
+        verb = "firmar" if action == "sign" else "desfirmar"
+        return jsonify({
+            "error": f"No tienes permiso para {verb} el área de {area_labels.get(area, area)}."
+        }), 403
 
     mgr = getattr(current_app, "relacion_mgr", None)
     if not mgr:
@@ -4063,8 +4086,9 @@ def api_update_signature(folio):  # pragma: no cover
 
     try:
         full_name = current_user.full_name or current_user.username
+        sig_path = getattr(current_user, "signature_path", "") or ""
         signatures = mgr.save_signatures(
-            folio, area, action, current_user.username, full_name
+            folio, area, action, current_user.username, full_name, signature_path=sig_path
         )
         _publish_event({
             "type": "relacion_signature_changed",
@@ -4280,7 +4304,7 @@ def api_factura_authorize(invoice_number):  # pragma: no cover
 @orders_bp.route("/api/facturas/<int:invoice_number>/credito-notes", methods=["POST"])
 @login_required
 def api_factura_credito_notes(invoice_number):  # pragma: no cover
-    if not current_user.can_authorize_credito():
+    if not (current_user.can_authorize_credito() or current_user.can_edit_facturas()):
         return jsonify({"error": "Sin permisos"}), 403
 
     data = request.get_json() or {}
@@ -4296,12 +4320,57 @@ def api_factura_credito_notes(invoice_number):  # pragma: no cover
         _publish_event({
             "type": "factura_credito_notes_changed",
             "invoice_number": str(invoice_number),
-            "notes": notes
+            "notes": notes,
+            "client_id": data.get("client_id")
         })
+
+        if hasattr(current_app, "audit_mgr"):
+            current_app.audit_mgr.log_action(
+                username=current_user.username if current_user.is_authenticated else "system",
+                action_type="UPDATE_FACTURA_CREDITO_NOTES",
+                entity_id=str(invoice_number),
+                details={"credito_notes": notes}
+            )
 
         return jsonify({"success": True, "notes": notes})
     except Exception as e:
         logging.error(f"Error saving credito notes {invoice_number}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@orders_bp.route("/api/facturas/<int:invoice_number>/almacen-notes", methods=["POST"])
+@login_required
+def api_factura_almacen_notes(invoice_number):  # pragma: no cover
+    if not (current_user.can_edit_facturas() or (current_user.username and current_user.username.lower() == "reyesm")):
+        return jsonify({"error": "Sin permisos"}), 403
+
+    data = request.get_json() or {}
+    notes = data.get("notes", "")
+
+    try:
+        mgr = getattr(current_app, "factura_metadata_mgr", None)
+        if not mgr:
+            return jsonify({"error": "Metadata manager not found"}), 500
+
+        mgr.save_almacen_notes(invoice_number, notes)
+
+        _publish_event({
+            "type": "factura_almacen_notes_changed",
+            "invoice_number": str(invoice_number),
+            "notes": notes,
+            "client_id": data.get("client_id")
+        })
+
+        if hasattr(current_app, "audit_mgr"):
+            current_app.audit_mgr.log_action(
+                username=current_user.username if current_user.is_authenticated else "system",
+                action_type="UPDATE_FACTURA_ALMACEN_NOTES",
+                entity_id=str(invoice_number),
+                details={"almacen_notes": notes}
+            )
+
+        return jsonify({"success": True, "notes": notes})
+    except Exception as e:
+        logging.error(f"Error saving almacen notes {invoice_number}: {e}")
         return jsonify({"error": str(e)}), 500
 
 @orders_bp.route("/api/facturas/<int:invoice_number>/send-to-credito", methods=["POST"])
@@ -4353,6 +4422,30 @@ def toggle_factura_status(invoice_number):  # pragma: no cover
     # Find related order
     related_order = next((o for o in order_mgr.orders.values() if o.get("factura_number") == str(invoice_number)), None)
 
+    if field == 'observaciones':
+        metadata_mgr = getattr(current_app, "factura_metadata_mgr", None)
+        if metadata_mgr:
+            metadata_mgr.save_observaciones(invoice_number, str(value or ""))
+
+        if related_order:
+            related_order['observaciones'] = str(value or "")
+            order_mgr._save_order(related_order['order_id'])
+
+        _publish_event({
+            "type": "factura_observaciones_changed",
+            "invoice_number": invoice_number,
+            "observaciones": str(value or ""),
+            "client_id": data.get("client_id"),
+        })
+        if hasattr(current_app, "audit_mgr"):
+            current_app.audit_mgr.log_action(
+                username=current_user.username if current_user.is_authenticated else "system",
+                action_type="UPDATE_FACTURA_OBSERVACIONES",
+                entity_id=str(invoice_number),
+                details={"observaciones": str(value or "")}
+            )
+        return jsonify({"success": True})
+
     if not related_order:
         return jsonify({"error": "No se encontró un pedido local vinculado a esta factura"}), 404
 
@@ -4367,23 +4460,6 @@ def toggle_factura_status(invoice_number):  # pragma: no cover
             new_status = OrderStatus.SHIPPED.value
         else:
             new_status = OrderStatus.READY.value
-    elif field == 'observaciones':
-        related_order['observaciones'] = str(value)
-        order_mgr._save_order(order_id)
-        _publish_event({
-            "type": "factura_observaciones_changed",
-            "invoice_number": invoice_number,
-            "observaciones": str(value),
-            "client_id": data.get("client_id"),
-        })
-        if hasattr(current_app, "audit_mgr"):
-            current_app.audit_mgr.log_action(
-                username=current_user.username if current_user.is_authenticated else "system",
-                action_type="UPDATE_FACTURA_OBSERVACIONES",
-                entity_id=str(invoice_number),
-                details={"observaciones": str(value)}
-            )
-        return jsonify({"success": True})
     elif field == 'rebote':
         try:
             related_order['rebote'] = bool(value)

@@ -176,7 +176,8 @@ class TestReyesMLoginLoader:
                 "nav.monitor",
                 "facturas.tab.relaciones",
                 "facturas.tab.pendientes",
-                "facturas.tab.almacen"
+                "facturas.tab.almacen",
+                "facturas.sign.almacen"
             ]:
                 assert user.has_permission(perm) is True
 
