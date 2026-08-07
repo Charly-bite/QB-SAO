@@ -342,8 +342,11 @@ tr.invoice-row.invoice-row-highlighted {
     #relaciones-table th {
         visibility: visible !important;
     }
-    #relaciones-table tbody {
-        display: table-row-group !important;
+    #relaciones-table tbody[style*="display: none"],
+    #relaciones-table tbody[style*="display:none"],
+    #relaciones-table tr[style*="display: none"],
+    #relaciones-table tr[style*="display:none"] {
+        display: none !important;
     }
     #relaciones-table tfoot {
         display: table-footer-group !important;
