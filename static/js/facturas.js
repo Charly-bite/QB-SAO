@@ -1887,6 +1887,18 @@ function facturasApp() {
                         this.invoices = [...this.invoices];
                     }
                 }
+            } else if (data.type === 'factura_almacen_notes_changed') {
+                if (data.client_id !== this.clientId) {
+                    const inv = this.invoices.find(i => String(i.invoice_number) === String(data.invoice_number));
+                    if (inv) {
+                        inv.almacen_notes = data.notes;
+                        this.invoices = [...this.invoices];
+                    }
+                    if (this.currentRelacion && this.currentRelacion.invoices) {
+                        const rInv = this.currentRelacion.invoices.find(i => String(i.invoice_number) === String(data.invoice_number));
+                        if (rInv) rInv.almacen_notes = data.notes;
+                    }
+                }
             } else if (data.type === 'relacion_signature_changed') {
                 if (this.currentRelacion && this.currentRelacion.folio === data.folio) {
                     this.currentRelacion.signatures = data.signatures;
@@ -2722,7 +2734,7 @@ function facturasApp() {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': csrfToken
                     },
-                    body: JSON.stringify({ notes: inv.credito_notes })
+                    body: JSON.stringify({ notes: inv.credito_notes, client_id: this.clientId })
                 });
                 if (!res.ok) {
                     const data = await res.json();
@@ -2733,6 +2745,44 @@ function facturasApp() {
                 console.error(e);
                 alert('Error de conexión al guardar notas de crédito');
                 inv.credito_notes = oldVal;
+            }
+        },
+
+        editAlmacenNotes(inv) {
+            inv._temp_almacen_notes = inv.almacen_notes || '';
+            inv._editing_almacen_notes = true;
+        },
+
+        async saveAlmacenNotes(inv) {
+            if (!inv._editing_almacen_notes) return;
+            inv._editing_almacen_notes = false;
+            
+            if (inv._temp_almacen_notes === (inv.almacen_notes || '')) {
+                return;
+            }
+
+            const oldVal = inv.almacen_notes;
+            inv.almacen_notes = inv._temp_almacen_notes;
+
+            try {
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+                const res = await fetch(`${cfg.ordersIndexUrl}api/facturas/${inv.invoice_number}/almacen-notes`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({ notes: inv.almacen_notes, client_id: this.clientId })
+                });
+                if (!res.ok) {
+                    const data = await res.json();
+                    alert(data.error || 'Error al guardar notas de almacén');
+                    inv.almacen_notes = oldVal;
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Error de conexión al guardar notas de almacén');
+                inv.almacen_notes = oldVal;
             }
         },
 

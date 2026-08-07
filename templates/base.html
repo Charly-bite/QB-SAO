@@ -373,6 +373,17 @@
             .text-slate-900, .text-gray-900, .text-slate-800, .text-gray-800 { color: var(--text-strong) !important; }
             .text-slate-700, .text-gray-700, .text-slate-600, .text-gray-600 { color: var(--text-primary) !important; }
             .text-slate-500, .text-gray-500, .text-slate-400, .text-gray-400 { color: var(--text-muted) !important; }
+
+            /* ── Print: hide navigation, user greeting, system alerts ── */
+            @media print {
+                .qb-nav, nav.qb-nav, .qb-breadcrumbs, .qb-user-btn,
+                .qb-avatar, .qb-dropdown, .qb-flash, .qb-page-title {
+                    display: none !important;
+                    visibility: hidden !important;
+                    height: 0 !important;
+                    overflow: hidden !important;
+                }
+            }
         </style>
 
         {% block extra_head %}{% endblock %}
