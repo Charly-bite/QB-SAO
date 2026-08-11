@@ -42,6 +42,7 @@
                     <tr>
                         <th class="text-left" style="width: 40px;">#</th>
                         <th class="text-center w-36">Notas Facturación</th>
+                        <th class="text-left w-28">No. Pedido</th>
                         <th class="text-left">No. Factura</th>
                         <th class="text-left">Cliente</th>
                         <th class="text-right">Importe</th>
@@ -57,7 +58,7 @@
                     <!-- Empty filtered state -->
                     <template x-if="filteredAlmacenInvoices().length === 0">
                         <tr>
-                            <td colspan="11" class="text-center py-8">
+                            <td colspan="12" class="text-center py-8">
                                 <div class="flex flex-col items-center gap-2">
                                     <svg class="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                                     <p class="text-sm text-slate-400 font-medium"
@@ -71,17 +72,27 @@
                         </tr>
                     </template>
                     <template x-for="(inv, idx) in filteredAlmacenInvoices()" :key="inv.invoice_number || idx">
-                        <tr class="pendientes-row transition-opacity duration-300" x-show="true" :style="idx % 2 === 0 ? '' : 'background-color: #f8fafc;'">
+                        <tr class="pendientes-row transition-opacity duration-300"
+                            :class="isMatch(inv) ? 'bg-amber-50 ring-2 ring-amber-300 match-row' : ''"
+                            :style="isMatch(inv) ? '' : (idx % 2 === 0 ? '' : 'background-color: #f8fafc;')">
                             <!-- # -->
                             <td style="color: #94a3b8; font-size: 12px; font-weight: 600;" x-text="idx + 1"></td>
                             <!-- Notas Facturación -->
                             <td class="text-center">
-                                <span class="text-slate-600 text-xs font-medium" x-text="inv.nota || inv.observaciones || '-'"></span>
+                                <span class="text-slate-600 text-xs font-medium" x-html="highlightText(inv.nota || inv.observaciones || '-')"></span>
+                            </td>
+                            <!-- No. Pedido -->
+                            <td>
+                                <span class="text-slate-700 font-mono text-xs font-bold transition-colors"
+                                    :class="inv.order_number ? 'cursor-pointer hover:text-indigo-600 hover:underline' : 'text-slate-400'"
+                                    @click="if (inv.order_number) openOrderDetail(inv.order_number)"
+                                    :title="inv.order_number ? 'Clic para ver detalle de pedido #' + inv.order_number : 'Sin número de pedido'"
+                                    x-html="highlightText(inv.order_number || '—')"></span>
                             </td>
                             <!-- No. Factura -->
-                            <td><span class="pendientes-invoice-num" x-text="inv.invoice_number || ''"></span></td>
+                            <td><span class="pendientes-invoice-num" x-html="highlightText(inv.invoice_number || '')"></span></td>
                             <!-- Cliente -->
-                            <td style="color: #334155; font-size: 12px; font-weight: 500;" x-text="inv.customer_name || ''"></td>
+                            <td style="color: #334155; font-size: 12px; font-weight: 500;" x-html="highlightText(inv.customer_name || '')"></td>
                             <!-- Importe -->
                             <td class="text-right">
                                 <span class="pendientes-amount" x-text="'$' + Number(inv.total || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})"></span>
@@ -91,7 +102,7 @@
                             <td class="text-center">
                                 <span class="inline-flex items-center gap-1"
                                     :class="(inv.shipping_type || 'LOCAL').toUpperCase().includes('FOR') ? 'pendientes-badge-foraneo' : 'pendientes-badge-local'"
-                                    x-text="inv.shipping_type || 'LOCAL'">
+                                    x-html="highlightText(inv.shipping_type || 'LOCAL')">
                                 </span>
                             </td>
                             <!-- Notas de Crédito -->
@@ -103,7 +114,7 @@
                                 <div class="mt-0.5" @click.stop="if(canEditFacturas || (currentUserUsername || '').toLowerCase() === 'reyesm') editAlmacenNotes(inv)" title="Clic para editar nota de almacén">
                                     <template x-if="!inv._editing_almacen_notes">
                                         <div class="w-full min-h-[1.5rem] px-1 py-0.5 bg-sky-50 border border-sky-200 rounded text-[11px] cursor-pointer" :class="!inv.almacen_notes ? 'text-slate-400 italic bg-slate-50 border-transparent' : 'text-slate-800'">
-                                            <span x-text="inv.almacen_notes || 'Clic para añadir nota'"></span>
+                                            <span x-html="highlightText(inv.almacen_notes || 'Clic para añadir nota')"></span>
                                         </div>
                                     </template>
                                     <template x-if="inv._editing_almacen_notes">
@@ -161,15 +172,16 @@
                 <!-- Totals footer -->
                 <tfoot>
                     <tr class="pendientes-footer">
-                        <td colspan="3" class="text-right">
+                        <td colspan="4" class="text-right">
                             <span class="pendientes-footer-label">Total</span>
                         </td>
+                        <td colspan="1"></td>
                         <td class="text-right">
                             <span class="pendientes-footer-total"
                                 x-text="'$' + filteredAlmacenInvoices().reduce((s, i) => s + Number(i.total || 0), 0).toLocaleString('es-MX', {minimumFractionDigits: 2})">
                             </span>
                         </td>
-                        <td colspan="3"></td>
+                        <td colspan="5"></td>
                         <td class="text-center">
                             <span class="text-xs font-bold"
                                 :class="filteredAlmacenInvoices().filter(i => i.entrega).length === filteredAlmacenInvoices().length ? 'text-green-600' : 'text-slate-400'"
