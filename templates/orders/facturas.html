@@ -291,6 +291,7 @@
         canAuthorizarCredito: {{ 'true' if current_user.can_authorize_credito() else 'false' }},
         apiFacturasUrl: "{{ url_for('orders.api_facturas') }}",
         apiFacturasPendingSummaryUrl: "{{ url_for('orders.api_facturas_pending_summary') }}",
+        apiFacturasSearchUrl: "{{ url_for('orders.api_facturas_search') }}",
         apiFacturasExportUrl: "{{ url_for('orders.api_facturas_export_custom') }}",
         ordersIndexUrl: "{{ url_for('orders.index') }}",
         // Tab visibility — controlled by PermissionManager (admin checkbox UI)
