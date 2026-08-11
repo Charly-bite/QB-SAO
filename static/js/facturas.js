@@ -318,6 +318,8 @@ function facturasApp() {
         addInvoiceOtherDaysPending: [], // [{date, label, invoices: [...]}]
         addInvoiceMode: 'all',
         liveSearchOpen: false,
+        remoteSearchResults: [],
+        _manualSearchTimer: null,
 
         showContextMenu(event, inv) {
             if (this.activeTab !== 'facturas' && this.activeTab !== 'credito') return;
@@ -876,6 +878,8 @@ function facturasApp() {
             })();
 
             if (isManualMode) {
+                // Await pending data so liveSearchResults has invoices to match against
+                await fetchPendingPromise;
                 this.addInvoiceLoading = false;
                 this.$nextTick(() => {
                     setTimeout(() => {
@@ -901,6 +905,8 @@ function facturasApp() {
             this.addInvoiceManualNum = '';
             this.addInvoiceManualList = [];
             this.addInvoiceOtherDaysPending = [];
+            this.remoteSearchResults = [];
+            clearTimeout(this._manualSearchTimer);
         },
 
         /**
@@ -1066,6 +1072,20 @@ function facturasApp() {
                 }
             }
 
+            // Merge backend search results (finds invoices already in a relacion)
+            for (const inv of (this.remoteSearchResults || [])) {
+                if (inv && inv.invoice_number && !allMap.has(String(inv.invoice_number))) {
+                    allMap.set(String(inv.invoice_number), {
+                        invoice_number: inv.invoice_number,
+                        customer_name: inv.customer_name || 'Cliente desconocido',
+                        date: inv.invoice_date || inv.date || '',
+                        total: inv.total || 0,
+                        currency: inv.currency || 'MXN',
+                        payment_terms: inv.payment_terms || ''
+                    });
+                }
+            }
+
             const results = [];
             for (const inv of allMap.values()) {
                 const numStr = String(inv.invoice_number).toLowerCase();
@@ -1089,9 +1109,26 @@ function facturasApp() {
             return results.slice(0, 10);
         },
 
-        selectLiveSearchResult(inv) {
-            this.addInvoiceManualNum = String(inv.invoice_number);
-            this.liveSearchOpen = false;
+        async selectLiveSearchResult(inv) {
+            const numInt = parseInt(inv.invoice_number, 10);
+
+            // Guard: already in today's list
+            if (this.invoices.some(i => i.invoice_number === numInt)) {
+                alert('Esa factura ya está en la lista del día.');
+                return;
+            }
+            // Guard: already an extra
+            if (this.extraInvoices.includes(numInt)) {
+                alert('Esa factura ya está en las facturas extras.');
+                return;
+            }
+
+            // Add directly as extra invoice
+            this.extraInvoices.push(numInt);
+            await this.saveExtraInvoices();
+            this.closeAddInvoiceModal();
+            this.fetchInvoices();
+            alert(`✅ Factura #${numInt} agregada exitosamente.`);
         },
 
         async addSelectedInvoices() {
@@ -1130,6 +1167,7 @@ function facturasApp() {
             // Refresh to pick up any new invoices from SAP
             if (added > 0) {
                 this.fetchInvoices();
+                alert(`✅ ${added} factura(s) agregada(s) exitosamente.`);
             }
         },
 
@@ -1609,6 +1647,26 @@ function facturasApp() {
 
             this.$watch('almacenSubTab', (value) => {
                 localStorage.setItem('qb_facturas_almacen_subtab', value);
+            });
+
+            // Debounced backend search for the Añadir Factura Extra input
+            this.$watch('addInvoiceManualNum', (value) => {
+                clearTimeout(this._manualSearchTimer);
+                const q = String(value || '').trim();
+                if (!q) { this.remoteSearchResults = []; return; }
+                this._manualSearchTimer = setTimeout(async () => {
+                    try {
+                        const res = await fetch(
+                            `${cfg.apiFacturasSearchUrl}?q=${encodeURIComponent(q)}&_=${Date.now()}`,
+                            { cache: 'no-store' }
+                        );
+                        const data = await res.json();
+                        this.remoteSearchResults = data.results || [];
+                    } catch (e) {
+                        console.error('Remote invoice search error:', e);
+                        this.remoteSearchResults = [];
+                    }
+                }, 300);
             });
 
             if (this.activeTab === 'relaciones') {
