@@ -103,8 +103,8 @@
             
             <!-- Left Side: Search & Filter Pills -->
             <div class="flex flex-wrap items-center gap-2 flex-1">
-                <!-- Search Input (Only shown on Facturas and Crédito tab, except in Estado de Cuenta) -->
-                <div x-show="activeTab === 'facturas' || (activeTab === 'credito' && creditoSubTab !== 'EstadoCuenta')" x-transition class="relative min-w-[200px] max-w-xs flex-1">
+                <!-- Search Input (Shown on Facturas, Crédito, and Almacén tabs, except in Estado de Cuenta) -->
+                <div x-show="['facturas', 'credito', 'almacen'].includes(activeTab) && creditoSubTab !== 'EstadoCuenta'" x-transition class="relative min-w-[200px] max-w-xs flex-1">
                     <div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
                         <svg class="h-3.5 w-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
@@ -210,7 +210,7 @@
             <!-- Right Side: Coincidences Count & Actions -->
             <div class="flex items-center gap-2.5 shrink-0 justify-end">
                 <!-- Coincidences count badge -->
-                <div x-show="['facturas', 'credito'].includes(activeTab)" x-transition class="text-xs text-slate-500 font-semibold flex items-center gap-1">
+                <div x-show="['facturas', 'credito', 'almacen'].includes(activeTab)" x-transition class="text-xs text-slate-500 font-semibold flex items-center gap-1">
                     <span>Total:</span>
                     <template x-if="activeTab === 'facturas'">
                         <span class="px-1.5 py-0.5 bg-slate-100 rounded-md font-bold text-slate-700 text-[10px]"
@@ -220,11 +220,24 @@
                         <span class="px-1.5 py-0.5 bg-slate-100 rounded-md font-bold text-slate-700 text-[10px]"
                             x-text="searchQuery ? creditoTabFilteredInvoices.length + ' / ' + creditoTabInvoices.filter(i => creditoSubTab === 'Todas' ? true : (creditoSubTab === 'Crédito' ? isCredito(i) : isContado(i))).length : creditoTabFilteredInvoices.length"></span>
                     </template>
+                    <template x-if="activeTab === 'almacen'">
+                        <span class="px-1.5 py-0.5 bg-slate-100 rounded-md font-bold text-slate-700 text-[10px]"
+                            x-text="searchQuery ? filteredAlmacenInvoices().length + ' / ' + (currentRelacion?.invoices?.length || 0) : (currentRelacion?.invoices?.length || 0)"></span>
+                    </template>
                 </div>
 
                 <!-- Facturas Tab Actions -->
                 <div x-show="activeTab === 'facturas'" x-transition class="flex items-center gap-1.5">
                     <button x-show="canEditFacturas" @click="showAddInvoiceModal('manual')" :disabled="loading" 
+                        class="btn-style-facturas-pendientes" title="Agregar factura manual">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+                        + Agregar Factura
+                    </button>
+                </div>
+
+                <!-- Almacén Tab Actions -->
+                <div x-show="activeTab === 'almacen'" x-transition class="flex items-center gap-1.5">
+                    <button x-show="canEditFacturas || (currentUserUsername || '').toLowerCase() === 'reyesm'" @click="showAddInvoiceModal('manual')" :disabled="loading" 
                         class="btn-style-facturas-pendientes" title="Agregar factura manual">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
                         + Agregar Factura
