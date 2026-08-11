@@ -257,6 +257,11 @@ function facturasApp() {
         allPendingExpanded: false,
         
         currentRelacion: null,
+        // Delivery Note Modal state (Almacén tab)
+        showEntregaNoteModal: false,
+        entregaNoteInv: null,
+        entregaNoteText: '',
+        savingEntregaNote: false,
         relaciones: [],
         relacionLoading: false,
         relacionDateFrom: new Date(Date.now() - 30*86400000).toISOString().split('T')[0],
@@ -2503,6 +2508,78 @@ function facturasApp() {
             if (status === 'Cancelada') return 'bg-red-100 text-red-700';
             if (status === 'Cerrada') return 'bg-green-100 text-green-700';
             return 'bg-blue-100 text-blue-700';
+        },
+
+        handleEntregaCheckboxChange(inv, checked) {
+            if (checked) {
+                inv.entrega = true;
+                this.openEntregaNoteModal(inv);
+            } else {
+                inv.entrega = false;
+                this.toggleFactura(inv.invoice_number, 'entrega', false);
+            }
+        },
+
+        openEntregaNoteModal(inv) {
+            this.entregaNoteInv = inv;
+            this.entregaNoteText = inv.almacen_notes || '';
+            this.showEntregaNoteModal = true;
+        },
+
+        cancelEntregaNoteModal() {
+            if (this.entregaNoteInv) {
+                this.entregaNoteInv.entrega = false;
+                if (this.currentRelacion && this.currentRelacion.invoices) {
+                    const relInv = this.currentRelacion.invoices.find(i => String(i.invoice_number) === String(this.entregaNoteInv.invoice_number));
+                    if (relInv) relInv.entrega = false;
+                }
+            }
+            this.showEntregaNoteModal = false;
+            this.entregaNoteInv = null;
+            this.entregaNoteText = '';
+            this.savingEntregaNote = false;
+        },
+
+        async confirmEntregaNoteModal() {
+            if (!this.entregaNoteInv || this.savingEntregaNote) return;
+            this.savingEntregaNote = true;
+            const inv = this.entregaNoteInv;
+            const note = (this.entregaNoteText || '').trim();
+
+            // Toggle delivery status
+            inv.entrega = true;
+            if (this.currentRelacion && this.currentRelacion.invoices) {
+                const relInv = this.currentRelacion.invoices.find(i => String(i.invoice_number) === String(inv.invoice_number));
+                if (relInv) relInv.entrega = true;
+            }
+            await this.toggleFactura(inv.invoice_number, 'entrega', true);
+
+            // Save notes if changed
+            if (note !== (inv.almacen_notes || '')) {
+                inv.almacen_notes = note;
+                if (this.currentRelacion && this.currentRelacion.invoices) {
+                    const relInv = this.currentRelacion.invoices.find(i => String(i.invoice_number) === String(inv.invoice_number));
+                    if (relInv) relInv.almacen_notes = note;
+                }
+                try {
+                    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+                    await fetch(`${cfg.ordersIndexUrl}api/facturas/${inv.invoice_number}/almacen-notes`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        },
+                        body: JSON.stringify({ notes: note, client_id: this.clientId })
+                    });
+                } catch (e) {
+                    console.error('Error saving almacen note from modal:', e);
+                }
+            }
+
+            this.savingEntregaNote = false;
+            this.showEntregaNoteModal = false;
+            this.entregaNoteInv = null;
+            this.entregaNoteText = '';
         },
 
         async toggleFactura(invoiceNum, field, value) {
