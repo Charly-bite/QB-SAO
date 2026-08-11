@@ -1584,12 +1584,16 @@ function facturasApp() {
         isMatch(i) {
             if (!this.searchQuery || this.searchQuery.trim() === '') return false;
             const q = this.searchQuery.toLowerCase().trim();
-            const custName = this.getDisplayCustomerName(i) || '';
-            return String(i.invoice_number).includes(q) ||
-                   custName.toLowerCase().includes(q) ||
-                   (i.customer_code && i.customer_code.toLowerCase().includes(q)) ||
-                   (i.seller_name && i.seller_name.toLowerCase().includes(q)) ||
-                   (i.order_number && String(i.order_number).toLowerCase().includes(q));
+            const custName = (this.getDisplayCustomerName(i) || i.customer_name || '').toLowerCase();
+            return String(i.invoice_number || '').toLowerCase().includes(q) ||
+                   custName.includes(q) ||
+                   (i.customer_code && String(i.customer_code).toLowerCase().includes(q)) ||
+                   (i.seller_name && String(i.seller_name).toLowerCase().includes(q)) ||
+                   (i.order_number && String(i.order_number).toLowerCase().includes(q)) ||
+                   (i.almacen_notes && String(i.almacen_notes).toLowerCase().includes(q)) ||
+                   (i.nota && String(i.nota).toLowerCase().includes(q)) ||
+                   (i.observaciones && String(i.observaciones).toLowerCase().includes(q)) ||
+                   (i.shipping_type && String(i.shipping_type).toLowerCase().includes(q));
         },
 
         escapeHTML(str) {
@@ -3062,15 +3066,24 @@ function facturasApp() {
 
         filteredAlmacenInvoices() {
             if (!this.currentRelacion || !this.currentRelacion.invoices) return [];
-            const invoices = this.currentRelacion.invoices;
+            let invoices = this.currentRelacion.invoices;
             if (this.almacenSubTab === 'entregados') {
-                return invoices.filter(i => i.entrega);
+                invoices = invoices.filter(i => i.entrega);
+            } else if (this.almacenSubTab === 'sin_entregar') {
+                invoices = invoices.filter(i => !i.entrega && !i.rebote);
+            } else if (this.almacenSubTab === 'rebotados') {
+                invoices = invoices.filter(i => i.rebote);
             }
-            if (this.almacenSubTab === 'sin_entregar') {
-                return invoices.filter(i => !i.entrega && !i.rebote);
-            }
-            if (this.almacenSubTab === 'rebotados') {
-                return invoices.filter(i => i.rebote);
+            if (this.searchQuery && this.searchQuery.trim() !== '') {
+                const q = this.searchQuery.toLowerCase().trim();
+                invoices = invoices.filter(i => 
+                    String(i.invoice_number || '').toLowerCase().includes(q) ||
+                    String(i.order_number || i.so_number || i.base_entry || i.sales_order || '').toLowerCase().includes(q) ||
+                    String(i.customer_name || '').toLowerCase().includes(q) ||
+                    String(i.almacen_notes || '').toLowerCase().includes(q) ||
+                    String(i.nota || i.observaciones || '').toLowerCase().includes(q) ||
+                    String(i.shipping_type || '').toLowerCase().includes(q)
+                );
             }
             return invoices;
         },
