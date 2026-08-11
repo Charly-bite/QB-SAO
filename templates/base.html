@@ -92,16 +92,12 @@
                 background: var(--bg-nav);
                 backdrop-filter: blur(12px);
                 -webkit-backdrop-filter: blur(12px);
-                border-bottom: 1px solid var(--border-color);
+                border-bottom: none;
                 position: relative;
                 z-index: 9999;
             }
             .qb-nav::before {
-                content: '';
-                position: absolute;
-                top: 0; left: 0; right: 0;
-                height: 3px;
-                background: linear-gradient(90deg, #3b82f6, #06b6d4, #6366f1);
+                display: none;
             }
 
             .qb-nav-link {
@@ -158,11 +154,10 @@
 
             .qb-dropdown {
                 position: absolute; right: 0; margin-top: 8px; width: 200px;
-                background: var(--bg-panel);
-                backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+                background: #ffffff !important;
                 border: 1px solid var(--border-color);
                 border-radius: 12px;
-                box-shadow: 0 16px 48px var(--shadow-color);
+                box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15);
                 padding: 4px; z-index: 99999;
             }
             .qb-dropdown-header {
@@ -516,12 +511,7 @@
                         </div>
                         {% endif %}
 
-                        
-                        <!-- Theme Toggle -->
-                        <button @click="toggleTheme()" class="qb-user-btn" style="padding: 6px; border-radius: 50%;" title="Toggle Light/Dark Theme">
-                            <svg x-show="theme === 'dark'" class="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
-                            <svg x-show="theme === 'light'" x-cloak class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
-                        </button>
+
 
                         <div class="flex items-center" x-data="{ open: false }">
                             <div class="relative">

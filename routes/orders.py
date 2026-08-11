@@ -2427,6 +2427,47 @@ def api_facturas_pending_summary():  # pragma: no cover
         return jsonify({"error": str(e), "days": []}), 500
 
 
+@orders_bp.route("/api/facturas/search")
+@login_required
+def api_facturas_search():  # pragma: no cover
+    """Search SAP for invoices by number — no date or relacion restrictions.
+
+    Used by the 'Añadir Factura Extra' live-search so that invoices already
+    in a relacion (excluded from the pending-summary endpoint) can still
+    be found and previewed before being added as extras.
+    """
+    if not current_app.sap_available:
+        return jsonify({"results": []}), 503
+
+    q = request.args.get("q", "").strip()
+    if not q or not q.isdigit():
+        return jsonify({"results": []})
+
+    try:
+        sap = _get_sap_connector()
+        # Reuse the existing query with extra_invoice_numbers — it fetches
+        # by DocNum regardless of date.  We pass an impossible date so only
+        # the OR-branch (DocNum IN …) returns rows.
+        invoices = sap.get_todays_invoices(
+            date_str="1900-01-01",
+            extra_invoice_numbers=[int(q)],
+        )
+        # Return lightweight results for the dropdown
+        results = []
+        for inv in invoices:
+            results.append({
+                "invoice_number": inv["invoice_number"],
+                "customer_name": inv.get("customer_name", ""),
+                "invoice_date": inv.get("invoice_date", ""),
+                "total": inv.get("total", 0),
+                "currency": inv.get("currency", "MXN"),
+                "payment_terms": inv.get("payment_terms", ""),
+            })
+        return jsonify({"results": results})
+    except Exception as e:
+        logging.error(f"Facturas search API error: {e}")
+        return jsonify({"results": [], "error": str(e)}), 500
+
 
 @orders_bp.route("/api/facturas")
 @login_required

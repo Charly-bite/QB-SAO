@@ -300,6 +300,7 @@ class RelacionManager:
             "is_closed": False,
             "rolled_from": existing.get("rolled_from") if existing else None,
             "notes": notes or (existing.get("notes", "") if existing else ""),
+            "signatures": existing.get("signatures", {}) if existing else {},
         }
 
         # Save to SQL
