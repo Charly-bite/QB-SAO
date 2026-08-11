@@ -257,6 +257,11 @@ function facturasApp() {
         allPendingExpanded: false,
         
         currentRelacion: null,
+        // Delivery Note Modal state (Almacén tab)
+        showEntregaNoteModal: false,
+        entregaNoteInv: null,
+        entregaNoteText: '',
+        savingEntregaNote: false,
         relaciones: [],
         relacionLoading: false,
         relacionDateFrom: new Date(Date.now() - 30*86400000).toISOString().split('T')[0],
@@ -318,6 +323,8 @@ function facturasApp() {
         addInvoiceOtherDaysPending: [], // [{date, label, invoices: [...]}]
         addInvoiceMode: 'all',
         liveSearchOpen: false,
+        remoteSearchResults: [],
+        _manualSearchTimer: null,
 
         showContextMenu(event, inv) {
             if (this.activeTab !== 'facturas' && this.activeTab !== 'credito') return;
@@ -876,6 +883,8 @@ function facturasApp() {
             })();
 
             if (isManualMode) {
+                // Await pending data so liveSearchResults has invoices to match against
+                await fetchPendingPromise;
                 this.addInvoiceLoading = false;
                 this.$nextTick(() => {
                     setTimeout(() => {
@@ -901,6 +910,8 @@ function facturasApp() {
             this.addInvoiceManualNum = '';
             this.addInvoiceManualList = [];
             this.addInvoiceOtherDaysPending = [];
+            this.remoteSearchResults = [];
+            clearTimeout(this._manualSearchTimer);
         },
 
         /**
@@ -1066,6 +1077,20 @@ function facturasApp() {
                 }
             }
 
+            // Merge backend search results (finds invoices already in a relacion)
+            for (const inv of (this.remoteSearchResults || [])) {
+                if (inv && inv.invoice_number && !allMap.has(String(inv.invoice_number))) {
+                    allMap.set(String(inv.invoice_number), {
+                        invoice_number: inv.invoice_number,
+                        customer_name: inv.customer_name || 'Cliente desconocido',
+                        date: inv.invoice_date || inv.date || '',
+                        total: inv.total || 0,
+                        currency: inv.currency || 'MXN',
+                        payment_terms: inv.payment_terms || ''
+                    });
+                }
+            }
+
             const results = [];
             for (const inv of allMap.values()) {
                 const numStr = String(inv.invoice_number).toLowerCase();
@@ -1089,9 +1114,26 @@ function facturasApp() {
             return results.slice(0, 10);
         },
 
-        selectLiveSearchResult(inv) {
-            this.addInvoiceManualNum = String(inv.invoice_number);
-            this.liveSearchOpen = false;
+        async selectLiveSearchResult(inv) {
+            const numInt = parseInt(inv.invoice_number, 10);
+
+            // Guard: already in today's list
+            if (this.invoices.some(i => i.invoice_number === numInt)) {
+                alert('Esa factura ya está en la lista del día.');
+                return;
+            }
+            // Guard: already an extra
+            if (this.extraInvoices.includes(numInt)) {
+                alert('Esa factura ya está en las facturas extras.');
+                return;
+            }
+
+            // Add directly as extra invoice
+            this.extraInvoices.push(numInt);
+            await this.saveExtraInvoices();
+            this.closeAddInvoiceModal();
+            this.fetchInvoices();
+            alert(`✅ Factura #${numInt} agregada exitosamente.`);
         },
 
         async addSelectedInvoices() {
@@ -1130,6 +1172,7 @@ function facturasApp() {
             // Refresh to pick up any new invoices from SAP
             if (added > 0) {
                 this.fetchInvoices();
+                alert(`✅ ${added} factura(s) agregada(s) exitosamente.`);
             }
         },
 
@@ -1541,12 +1584,16 @@ function facturasApp() {
         isMatch(i) {
             if (!this.searchQuery || this.searchQuery.trim() === '') return false;
             const q = this.searchQuery.toLowerCase().trim();
-            const custName = this.getDisplayCustomerName(i) || '';
-            return String(i.invoice_number).includes(q) ||
-                   custName.toLowerCase().includes(q) ||
-                   (i.customer_code && i.customer_code.toLowerCase().includes(q)) ||
-                   (i.seller_name && i.seller_name.toLowerCase().includes(q)) ||
-                   (i.order_number && String(i.order_number).toLowerCase().includes(q));
+            const custName = (this.getDisplayCustomerName(i) || i.customer_name || '').toLowerCase();
+            return String(i.invoice_number || '').toLowerCase().includes(q) ||
+                   custName.includes(q) ||
+                   (i.customer_code && String(i.customer_code).toLowerCase().includes(q)) ||
+                   (i.seller_name && String(i.seller_name).toLowerCase().includes(q)) ||
+                   (i.order_number && String(i.order_number).toLowerCase().includes(q)) ||
+                   (i.almacen_notes && String(i.almacen_notes).toLowerCase().includes(q)) ||
+                   (i.nota && String(i.nota).toLowerCase().includes(q)) ||
+                   (i.observaciones && String(i.observaciones).toLowerCase().includes(q)) ||
+                   (i.shipping_type && String(i.shipping_type).toLowerCase().includes(q));
         },
 
         escapeHTML(str) {
@@ -1609,6 +1656,26 @@ function facturasApp() {
 
             this.$watch('almacenSubTab', (value) => {
                 localStorage.setItem('qb_facturas_almacen_subtab', value);
+            });
+
+            // Debounced backend search for the Añadir Factura Extra input
+            this.$watch('addInvoiceManualNum', (value) => {
+                clearTimeout(this._manualSearchTimer);
+                const q = String(value || '').trim();
+                if (!q) { this.remoteSearchResults = []; return; }
+                this._manualSearchTimer = setTimeout(async () => {
+                    try {
+                        const res = await fetch(
+                            `${cfg.apiFacturasSearchUrl}?q=${encodeURIComponent(q)}&_=${Date.now()}`,
+                            { cache: 'no-store' }
+                        );
+                        const data = await res.json();
+                        this.remoteSearchResults = data.results || [];
+                    } catch (e) {
+                        console.error('Remote invoice search error:', e);
+                        this.remoteSearchResults = [];
+                    }
+                }, 300);
             });
 
             if (this.activeTab === 'relaciones') {
@@ -1905,6 +1972,7 @@ function facturasApp() {
                     this.signatures = {
                         facturacion: data.signatures.facturacion || null,
                         credito: data.signatures.credito || null,
+                        almacen: data.signatures.almacen || null,
                     };
                 }
             } else if (data.type === 'dia_cerrado') {
@@ -2446,6 +2514,78 @@ function facturasApp() {
             return 'bg-blue-100 text-blue-700';
         },
 
+        handleEntregaCheckboxChange(inv, checked) {
+            if (checked) {
+                inv.entrega = true;
+                this.openEntregaNoteModal(inv);
+            } else {
+                inv.entrega = false;
+                this.toggleFactura(inv.invoice_number, 'entrega', false);
+            }
+        },
+
+        openEntregaNoteModal(inv) {
+            this.entregaNoteInv = inv;
+            this.entregaNoteText = inv.almacen_notes || '';
+            this.showEntregaNoteModal = true;
+        },
+
+        cancelEntregaNoteModal() {
+            if (this.entregaNoteInv) {
+                this.entregaNoteInv.entrega = false;
+                if (this.currentRelacion && this.currentRelacion.invoices) {
+                    const relInv = this.currentRelacion.invoices.find(i => String(i.invoice_number) === String(this.entregaNoteInv.invoice_number));
+                    if (relInv) relInv.entrega = false;
+                }
+            }
+            this.showEntregaNoteModal = false;
+            this.entregaNoteInv = null;
+            this.entregaNoteText = '';
+            this.savingEntregaNote = false;
+        },
+
+        async confirmEntregaNoteModal() {
+            if (!this.entregaNoteInv || this.savingEntregaNote) return;
+            this.savingEntregaNote = true;
+            const inv = this.entregaNoteInv;
+            const note = (this.entregaNoteText || '').trim();
+
+            // Toggle delivery status
+            inv.entrega = true;
+            if (this.currentRelacion && this.currentRelacion.invoices) {
+                const relInv = this.currentRelacion.invoices.find(i => String(i.invoice_number) === String(inv.invoice_number));
+                if (relInv) relInv.entrega = true;
+            }
+            await this.toggleFactura(inv.invoice_number, 'entrega', true);
+
+            // Save notes if changed
+            if (note !== (inv.almacen_notes || '')) {
+                inv.almacen_notes = note;
+                if (this.currentRelacion && this.currentRelacion.invoices) {
+                    const relInv = this.currentRelacion.invoices.find(i => String(i.invoice_number) === String(inv.invoice_number));
+                    if (relInv) relInv.almacen_notes = note;
+                }
+                try {
+                    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+                    await fetch(`${cfg.ordersIndexUrl}api/facturas/${inv.invoice_number}/almacen-notes`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        },
+                        body: JSON.stringify({ notes: note, client_id: this.clientId })
+                    });
+                } catch (e) {
+                    console.error('Error saving almacen note from modal:', e);
+                }
+            }
+
+            this.savingEntregaNote = false;
+            this.showEntregaNoteModal = false;
+            this.entregaNoteInv = null;
+            this.entregaNoteText = '';
+        },
+
         async toggleFactura(invoiceNum, field, value) {
             try {
                 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -2914,9 +3054,10 @@ function facturasApp() {
                     this.signatures = {
                         facturacion: sigs.facturacion || null,
                         credito: sigs.credito || null,
+                        almacen: sigs.almacen || null,
                     };
                 } else {
-                    this.signatures = { facturacion: null, credito: null };
+                    this.signatures = { facturacion: null, credito: null, almacen: null };
                 }
             } catch (e) {
                 console.error('Error fetching relacion:', e);
@@ -2925,15 +3066,24 @@ function facturasApp() {
 
         filteredAlmacenInvoices() {
             if (!this.currentRelacion || !this.currentRelacion.invoices) return [];
-            const invoices = this.currentRelacion.invoices;
+            let invoices = this.currentRelacion.invoices;
             if (this.almacenSubTab === 'entregados') {
-                return invoices.filter(i => i.entrega);
+                invoices = invoices.filter(i => i.entrega);
+            } else if (this.almacenSubTab === 'sin_entregar') {
+                invoices = invoices.filter(i => !i.entrega && !i.rebote);
+            } else if (this.almacenSubTab === 'rebotados') {
+                invoices = invoices.filter(i => i.rebote);
             }
-            if (this.almacenSubTab === 'sin_entregar') {
-                return invoices.filter(i => !i.entrega && !i.rebote);
-            }
-            if (this.almacenSubTab === 'rebotados') {
-                return invoices.filter(i => i.rebote);
+            if (this.searchQuery && this.searchQuery.trim() !== '') {
+                const q = this.searchQuery.toLowerCase().trim();
+                invoices = invoices.filter(i => 
+                    String(i.invoice_number || '').toLowerCase().includes(q) ||
+                    String(i.order_number || i.so_number || i.base_entry || i.sales_order || '').toLowerCase().includes(q) ||
+                    String(i.customer_name || '').toLowerCase().includes(q) ||
+                    String(i.almacen_notes || '').toLowerCase().includes(q) ||
+                    String(i.nota || i.observaciones || '').toLowerCase().includes(q) ||
+                    String(i.shipping_type || '').toLowerCase().includes(q)
+                );
             }
             return invoices;
         },
