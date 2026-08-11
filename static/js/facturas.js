@@ -1584,12 +1584,16 @@ function facturasApp() {
         isMatch(i) {
             if (!this.searchQuery || this.searchQuery.trim() === '') return false;
             const q = this.searchQuery.toLowerCase().trim();
-            const custName = this.getDisplayCustomerName(i) || '';
-            return String(i.invoice_number).includes(q) ||
-                   custName.toLowerCase().includes(q) ||
-                   (i.customer_code && i.customer_code.toLowerCase().includes(q)) ||
-                   (i.seller_name && i.seller_name.toLowerCase().includes(q)) ||
-                   (i.order_number && String(i.order_number).toLowerCase().includes(q));
+            const custName = (this.getDisplayCustomerName(i) || i.customer_name || '').toLowerCase();
+            return String(i.invoice_number || '').toLowerCase().includes(q) ||
+                   custName.includes(q) ||
+                   (i.customer_code && String(i.customer_code).toLowerCase().includes(q)) ||
+                   (i.seller_name && String(i.seller_name).toLowerCase().includes(q)) ||
+                   (i.order_number && String(i.order_number).toLowerCase().includes(q)) ||
+                   (i.almacen_notes && String(i.almacen_notes).toLowerCase().includes(q)) ||
+                   (i.nota && String(i.nota).toLowerCase().includes(q)) ||
+                   (i.observaciones && String(i.observaciones).toLowerCase().includes(q)) ||
+                   (i.shipping_type && String(i.shipping_type).toLowerCase().includes(q));
         },
 
         escapeHTML(str) {
