@@ -147,7 +147,7 @@
                             <td class="text-center">
                                 <label class="inline-flex items-center gap-2 cursor-pointer select-none group">
                                     <input type="checkbox" :checked="inv.entrega"
-                                        @change="inv.entrega = $event.target.checked; toggleFactura(inv.invoice_number, 'entrega', inv.entrega)"
+                                        @change="handleEntregaCheckboxChange(inv, $event.target.checked)"
                                         :disabled="(!canEditFacturas && (currentUserUsername || '').toLowerCase() !== 'reyesm') || inv.rebote"
                                         class="w-5 h-5 rounded border-slate-300 text-green-500 focus:ring-green-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all">
                                     <span class="text-xs font-medium transition-colors"
