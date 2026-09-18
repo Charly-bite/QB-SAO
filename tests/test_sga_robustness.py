@@ -84,7 +84,12 @@ class TestSgaRobustness:
             mock_conn
         ]
         
-        with patch.dict(os.environ, {"SQL_PASSWORD": "test_pass"}, clear=False), \
+        with patch.dict(os.environ, {
+            "SQL_SERVER": "test-server",
+            "SQL_DATABASE": "test-db",
+            "SQL_USER": "test-user",
+            "SQL_PASSWORD": "test_pass",
+        }, clear=False), \
              patch("core.database_client.create_engine") as mock_create_engine:
              
             result = db.connect(max_retries=5, retry_delay=1)
