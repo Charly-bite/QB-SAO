@@ -924,10 +924,17 @@ function facturasApp() {
          * Returns all other-day pending invoices as a flat array
          */
         get addInvoiceOtherDaysFlat() {
+            const invoicesMap = new Map();
+            for (const i of this.invoices) {
+                invoicesMap.set(String(i.invoice_number), i);
+            }
+
             const result = [];
             for (const day of this.addInvoiceOtherDaysPending) {
                 for (const inv of day.invoices) {
-                    result.push({ ...inv, _fromDate: day.date, _fromLabel: day.label });
+                    const liveInv = invoicesMap.get(String(inv.invoice_number));
+                    const resolvedInv = liveInv ? { ...inv, ...liveInv } : inv;
+                    result.push({ ...resolvedInv, _fromDate: day.date, _fromLabel: day.label });
                 }
             }
             return result;
@@ -1338,9 +1345,18 @@ function facturasApp() {
             const col = this.sortColumn;
             
             if (col === 'manual' && this.manualOrder.length > 0) {
+                // Pre-compute index map for O(1) lookups to avoid O(N*M) time complexity
+                const manualIndexMap = new Map();
+                for (let i = 0; i < this.manualOrder.length; i++) {
+                    manualIndexMap.set(String(this.manualOrder[i]), i);
+                }
+
                 return [...arr].sort((a, b) => {
-                    const idxA = this.manualOrder.indexOf(String(a.invoice_number));
-                    const idxB = this.manualOrder.indexOf(String(b.invoice_number));
+                    let idxA = manualIndexMap.get(String(a.invoice_number));
+                    let idxB = manualIndexMap.get(String(b.invoice_number));
+                    if (idxA === undefined) idxA = -1;
+                    if (idxB === undefined) idxB = -1;
+
                     if (idxA === -1 && idxB === -1) return 0;
                     if (idxA === -1) return 1;
                     if (idxB === -1) return -1;
